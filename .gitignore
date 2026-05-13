@@ -1,0 +1,33 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# XcodeGen output (regenerable from project.yml)
+Shrunk.xcodeproj
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods (not used here)
+Pods/
+
+# Carthage (not used here)
+Carthage/Build/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Secrets
+*.p8
+*.p12
+*.mobileprovision
+GoogleService-Info.plist

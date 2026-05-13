@@ -1,0 +1,35 @@
+{
+  "identifier" : "D6839475-8E1B-41E8-8E82-C2737ACEFB5A",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "E7873C27-21EC-4942-A1C5-96B0557AFDD8",
+      "localizations" : [
+        {
+          "description" : "Unlock unlimited watchlist, alerts, ranked alternatives, and the savings dashboard. One payment, yours forever.",
+          "displayName" : "Shrunk Pro",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.shrunk.pro.lifetime",
+      "referenceName" : "Shrunk Pro Lifetime",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

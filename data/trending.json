@@ -1,0 +1,263 @@
+{
+  "version": 1,
+  "updated": "2026-05-13T00:00:00Z",
+  "source_repo": "https://github.com/stackcurious/shrunk",
+  "license": "CC-BY-4.0 — data fields are facts; the curation/commentary is licensed Creative Commons Attribution.",
+  "trending": [
+    {
+      "barcode": "0052000133417",
+      "name": "Gatorade Thirst Quencher",
+      "brand": "Gatorade",
+      "category": "Beverages",
+      "image_url": "https://images.openfoodfacts.org/images/products/005/200/013/3417/front_en.6.400.jpg",
+      "history": [
+        { "date": "2018-01-01", "quantity": 32, "unit": "fl oz" },
+        { "date": "2021-06-01", "quantity": 28, "unit": "fl oz" }
+      ],
+      "current_price": 1.89,
+      "currency": "USD",
+      "evidence_url": "https://www.bbb.org/article/news-releases/27063-bbb-tip-shrinkflation",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0028400064057",
+      "name": "Doritos Nacho Cheese",
+      "brand": "Doritos",
+      "category": "Snacks",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/840/006/4057/front_en.4.400.jpg",
+      "history": [
+        { "date": "2019-03-01", "quantity": 9.75, "unit": "oz" },
+        { "date": "2022-01-01", "quantity": 9.25, "unit": "oz" }
+      ],
+      "current_price": 4.99,
+      "currency": "USD",
+      "evidence_url": "https://www.cnn.com/2022/06/15/business/shrinkflation-food-companies",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0025500050009",
+      "name": "Folgers Classic Roast",
+      "brand": "Folgers",
+      "category": "Beverages",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/550/005/0009/front_en.5.400.jpg",
+      "history": [
+        { "date": "2020-01-01", "quantity": 51, "unit": "oz" },
+        { "date": "2022-06-01", "quantity": 43.5, "unit": "oz" }
+      ],
+      "current_price": 12.99,
+      "currency": "USD",
+      "evidence_url": "https://www.cbsnews.com/news/shrinkflation-folgers-coffee-can-size/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0030400003215",
+      "name": "Charmin Ultra Strong Mega Roll",
+      "brand": "Charmin",
+      "category": "Paper products",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 264, "unit": "count" },
+        { "date": "2022-08-01", "quantity": 244, "unit": "count" }
+      ],
+      "current_price": null,
+      "currency": "USD",
+      "evidence_url": "https://www.bloomberg.com/news/articles/2022-07-19/p-g-charmin-mega-roll-shrinks-sheet-count",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0036000114683",
+      "name": "Cottonelle Ultra Clean Care",
+      "brand": "Cottonelle",
+      "category": "Paper products",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 312, "unit": "count" },
+        { "date": "2022-05-01", "quantity": 268, "unit": "count" }
+      ],
+      "current_price": null,
+      "currency": "USD",
+      "evidence_url": "https://www.consumerreports.org/shrinkflation/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0030521010013",
+      "name": "Domino Pure Cane Sugar 4lb",
+      "brand": "Domino",
+      "category": "Sugar",
+      "image_url": null,
+      "history": [
+        { "date": "2019-01-01", "quantity": 4,    "unit": "lb" },
+        { "date": "2022-09-01", "quantity": 3.75, "unit": "lb" }
+      ],
+      "current_price": 3.49,
+      "currency": "USD",
+      "evidence_url": "https://www.washingtonpost.com/business/2022/04/26/shrinkflation-prices/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0037000513889",
+      "name": "Crest 3D White Toothpaste",
+      "brand": "Crest",
+      "category": "Personal care",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 4.1, "unit": "oz" },
+        { "date": "2022-01-01", "quantity": 3.8, "unit": "oz" }
+      ],
+      "current_price": 4.99,
+      "currency": "USD",
+      "evidence_url": "https://www.consumerreports.org/shrinkflation/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0036000452228",
+      "name": "Bounty Select-A-Size Paper Towels",
+      "brand": "Bounty",
+      "category": "Paper products",
+      "image_url": null,
+      "history": [
+        { "date": "2019-01-01", "quantity": 117, "unit": "count" },
+        { "date": "2022-08-01", "quantity": 105, "unit": "count" }
+      ],
+      "current_price": null,
+      "currency": "USD",
+      "evidence_url": "https://www.bloomberg.com/news/articles/2022-07-19/p-g-charmin-mega-roll-shrinks-sheet-count",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0044000026165",
+      "name": "Wheat Thins Original",
+      "brand": "Nabisco",
+      "category": "Snacks",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 14, "unit": "oz" },
+        { "date": "2022-01-01", "quantity": 13.5, "unit": "oz" }
+      ],
+      "current_price": 4.49,
+      "currency": "USD",
+      "evidence_url": "https://www.consumerreports.org/shrinkflation/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0072830061100",
+      "name": "Tillamook Ice Cream Vanilla",
+      "brand": "Tillamook",
+      "category": "Dairy",
+      "image_url": null,
+      "history": [
+        { "date": "2019-01-01", "quantity": 56, "unit": "fl oz" },
+        { "date": "2021-06-01", "quantity": 48, "unit": "fl oz" }
+      ],
+      "current_price": 5.99,
+      "currency": "USD",
+      "evidence_url": "https://www.cnn.com/2022/06/15/business/shrinkflation-food-companies",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0048001354067",
+      "name": "Hellmann's Real Mayonnaise",
+      "brand": "Hellmann's",
+      "category": "Condiments",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 30, "unit": "oz" },
+        { "date": "2023-03-01", "quantity": 27, "unit": "oz" }
+      ],
+      "current_price": 6.49,
+      "currency": "USD",
+      "evidence_url": "https://www.reuters.com/business/retail-consumer/unilever-cuts-jar-sizes-2023-03/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0048500200506",
+      "name": "Tropicana Pure Premium Orange Juice",
+      "brand": "Tropicana",
+      "category": "Beverages",
+      "image_url": null,
+      "history": [
+        { "date": "2018-01-01", "quantity": 64, "unit": "fl oz" },
+        { "date": "2021-01-01", "quantity": 52, "unit": "fl oz" }
+      ],
+      "current_price": 5.99,
+      "currency": "USD",
+      "evidence_url": "https://www.nytimes.com/2021/02/26/business/tropicana-orange-juice-shrinks.html",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0030000311783",
+      "name": "Quaker Chewy Granola Bars (8 ct)",
+      "brand": "Quaker",
+      "category": "Snacks",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 9.84, "unit": "oz" },
+        { "date": "2022-06-01", "quantity": 8.4,  "unit": "oz" }
+      ],
+      "current_price": 3.69,
+      "currency": "USD",
+      "evidence_url": "https://www.consumerreports.org/shrinkflation/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0028400052108",
+      "name": "Lay's Classic Family Size",
+      "brand": "Lay's",
+      "category": "Snacks",
+      "image_url": null,
+      "history": [
+        { "date": "2019-01-01", "quantity": 10, "unit": "oz" },
+        { "date": "2022-03-01", "quantity": 9.5, "unit": "oz" }
+      ],
+      "current_price": 4.99,
+      "currency": "USD",
+      "evidence_url": "https://www.cnn.com/2022/06/15/business/shrinkflation-food-companies",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0014100078739",
+      "name": "Pepperidge Farm Goldfish Family Size",
+      "brand": "Pepperidge Farm",
+      "category": "Snacks",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 8,    "unit": "oz" },
+        { "date": "2022-08-01", "quantity": 7.2,  "unit": "oz" }
+      ],
+      "current_price": 4.49,
+      "currency": "USD",
+      "evidence_url": "https://www.consumerreports.org/shrinkflation/",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0074570089604",
+      "name": "Häagen-Dazs Vanilla Ice Cream",
+      "brand": "Häagen-Dazs",
+      "category": "Dairy",
+      "image_url": null,
+      "history": [
+        { "date": "2008-01-01", "quantity": 16, "unit": "fl oz" },
+        { "date": "2009-06-01", "quantity": 14, "unit": "fl oz" }
+      ],
+      "current_price": 5.99,
+      "currency": "USD",
+      "evidence_url": "https://www.nytimes.com/2008/03/28/business/28haagen.html",
+      "added_at": "2025-09-15"
+    },
+    {
+      "barcode": "0016000487871",
+      "name": "Honey Nut Cheerios Family Size",
+      "brand": "General Mills",
+      "category": "Snacks",
+      "image_url": null,
+      "history": [
+        { "date": "2020-01-01", "quantity": 19.5, "unit": "oz" },
+        { "date": "2022-04-01", "quantity": 18.8, "unit": "oz" }
+      ],
+      "current_price": 5.49,
+      "currency": "USD",
+      "evidence_url": "https://www.consumerreports.org/shrinkflation/",
+      "added_at": "2025-09-15"
+    }
+  ]
+}

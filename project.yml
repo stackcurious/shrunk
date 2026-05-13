@@ -1,0 +1,66 @@
+name: Shrunk
+options:
+  bundleIdPrefix: com.shrunk
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+    ENABLE_BITCODE: NO
+
+targets:
+  Shrunk:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shrunk
+        excludes:
+          - "**/*.md"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shrunk.app
+        PRODUCT_NAME: Shrunk
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Shrunk/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        DEVELOPMENT_ASSET_PATHS: ""
+        SWIFT_EMIT_LOC_STRINGS: YES
+
+  ShrunkTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: ShrunkTests
+    dependencies:
+      - target: Shrunk
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shrunk.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Shrunk.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Shrunk
+        BUNDLE_LOADER: $(TEST_HOST)
+
+schemes:
+  Shrunk:
+    build:
+      targets:
+        Shrunk: all
+        ShrunkTests: [test]
+    run:
+      storeKitConfiguration: Shrunk/Resources/Shrunk.storekit
+    test:
+      targets:
+        - ShrunkTests
