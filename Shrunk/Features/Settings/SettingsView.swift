@@ -33,10 +33,10 @@ struct SettingsView: View {
                     sectionGroup(title: "About", subtitle: nil) {
                         SettingsValueRow(icon: "info.circle.fill", iconTint: .smoke, label: "Version", value: versionString)
                         SettingsRow(icon: "hand.raised.fill", iconTint: .smoke, label: "Privacy policy", isLink: true) {
-                            if let url = URL(string: "https://shrunk.app/privacy") { openURL(url) }
+                            if let url = URL(string: "https://stackcurious.com/shrunk/privacy") { openURL(url) }
                         }
                         SettingsRow(icon: "doc.text.fill", iconTint: .smoke, label: "Terms of service", isLink: true) {
-                            if let url = URL(string: "https://shrunk.app/terms") { openURL(url) }
+                            if let url = URL(string: "https://stackcurious.com/shrunk/terms") { openURL(url) }
                         }
                         SettingsRow(icon: "star.fill", iconTint: .verdictWarn, label: "Rate Shrunk") {
                             requestReview()
@@ -278,7 +278,7 @@ private struct SettingsValueRow: View {
 
 private struct SettingsShareRow: View {
     var body: some View {
-        ShareLink(item: URL(string: "https://shrunk.app")!) {
+        ShareLink(item: URL(string: "https://stackcurious.com/shrunk")!) {
             HStack(spacing: ShrunkTheme.Spacing.md) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)

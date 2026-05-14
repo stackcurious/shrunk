@@ -171,7 +171,7 @@ enum ShareCardRenderer {
             ]
         )
 
-        let url = "shrunk.app"
+        let url = "stackcurious.com/shrunk"
         let urlSize = (url as NSString).size(withAttributes: [
             .font: UIFont.systemFont(ofSize: 12, weight: .medium)
         ])
