@@ -44,7 +44,7 @@ final class BrowseViewModel: ObservableObject {
             case .beverages:    return ["Beverages", "beverages", "Drinks"]
             case .dairy:        return ["Dairy", "Dairies"]
             case .cleaning:     return ["Cleaning", "Cleaning products"]
-            case .personalCare: return ["Personal care", "Cosmetics", "Personal", "Condiments"]
+            case .personalCare: return ["Personal care", "Cosmetics", "Personal"]
             case .paper:        return ["Paper products", "Paper"]
             }
         }
