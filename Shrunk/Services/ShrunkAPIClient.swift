@@ -28,10 +28,45 @@ actor ShrunkAPIClient {
         if let locationId {
             components.queryItems = [URLQueryItem(name: "locationId", value: locationId)]
         }
+        let dto: ProductDTO = try await get(components.url!)
+        return dto.toProduct()
+    }
+
+    /// Live Kroger stores near a zip (spec §6.1).
+    func locations(zip: String) async throws -> [StoreLocation] {
+        var components = URLComponents(url: baseURL.appending(path: "v1/kroger/locations"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "zip", value: zip)]
+        let dto: LocationsResponseDTO = try await get(components.url!)
+        return dto.locations.map { $0.toModel() }
+    }
+
+    /// Live price/size/stock for one product at the user's store.
+    func liveProduct(barcode: String, locationId: String) async throws -> LivePrice {
+        var components = URLComponents(url: baseURL.appending(path: "v1/kroger/product/\(barcode)"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "locationId", value: locationId)]
+        let dto: LiveProductDTO = try await get(components.url!)
+        return dto.toModel()
+    }
+
+    /// Same-category candidates at the user's store, cheapest per unit first.
+    func search(term: String, locationId: String) async throws -> [StoreSearchResult] {
+        var components = URLComponents(url: baseURL.appending(path: "v1/kroger/search"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [
+            URLQueryItem(name: "term", value: term),
+            URLQueryItem(name: "locationId", value: locationId)
+        ]
+        let dto: SearchResponseDTO = try await get(components.url!)
+        return dto.results.map { $0.toModel() }
+    }
+
+    /// One GET, one status mapping, one decode — every endpoint goes through here.
+    private func get<T: Decodable>(_ url: URL) async throws -> T {
+        var request = URLRequest(url: url)
+        request.setValue(DeviceIdentity.current, forHTTPHeaderField: "X-Device-Id")
 
         let data: Data
         do {
-            let (received, response) = try await session.data(from: components.url!)
+            let (received, response) = try await session.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             switch status {
             case 200: data = received
@@ -44,13 +79,11 @@ actor ShrunkAPIClient {
             throw ShrunkError.network(error)
         }
 
-        let dto: ProductDTO
         do {
-            dto = try decoder.decode(ProductDTO.self, from: data)
+            return try decoder.decode(T.self, from: data)
         } catch {
             throw ShrunkError.decoding(error)
         }
-        return dto.toProduct()
     }
 
     /// Uploads a crowd label observation. The server recomputes the confidence
