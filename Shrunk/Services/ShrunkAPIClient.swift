@@ -170,6 +170,7 @@ struct ProductDTO: Decodable {
     let category: String
     let image_url: String?
     let unit_kind: String?
+    let needs_confirmation: Bool?
     let observations: [ObservationDTO]
     let price_snapshots: [PriceSnapshotDTO]
 
@@ -210,11 +211,20 @@ struct ProductDTO: Decodable {
                 source: $0.source
             )
         }
-        let latestSnapshot = price_snapshots.max { $0.observed_at < $1.observed_at }
-        let price: Double? = latestSnapshot.flatMap { snap in
-            if let promo = snap.promo, promo > 0 { return promo }
-            return snap.regular
-        }
+
+        // Snapshots arrive newest-first; PricePoint keeps them oldest-first.
+        let prices: [PricePoint] = price_snapshots
+            .sorted { $0.observed_at < $1.observed_at }
+            .compactMap { snap in
+                let price: Double? = (snap.promo ?? 0) > 0 ? snap.promo : snap.regular
+                guard let price, price > 0 else { return nil }
+                return PricePoint(
+                    date: Date(timeIntervalSince1970: TimeInterval(snap.observed_at)),
+                    price: price,
+                    perUnitEstimate: snap.per_unit_estimate
+                )
+            }
+
         return ShrunkProduct(
             id: gtin,
             name: name,
@@ -222,8 +232,10 @@ struct ProductDTO: Decodable {
             category: category.isEmpty ? "Uncategorized" : category,
             imageURL: image_url.flatMap(URL.init),
             sizeHistory: history,
-            currentPrice: price,
-            currency: "USD"
+            currentPrice: prices.last?.price,
+            currency: "USD",
+            needsConfirmation: needs_confirmation ?? false,
+            priceHistory: prices
         )
     }
 }

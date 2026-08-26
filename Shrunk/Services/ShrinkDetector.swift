@@ -17,6 +17,11 @@ struct ShrinkDetector {
             return sorted.filter { $0.unitKind == latestKind }
         }()
 
+        // The two most recent store snapshots, oldest first.
+        let prices = product.priceHistory.sorted { $0.date < $1.date }
+        let priceNow = prices.last?.price ?? product.currentPrice
+        let priceThen = prices.count >= 2 ? prices[prices.count - 2].price : nil
+
         guard sameKind.count >= 2 else {
             return ShrinkRecord(
                 product: product,
@@ -24,7 +29,7 @@ struct ShrinkDetector {
                 currentSize: sorted.last,
                 shrinkPercent: 0,
                 priceThen: nil,
-                priceNow: product.currentPrice,
+                priceNow: priceNow,
                 costPerUnitThen: nil,
                 costPerUnitNow: nil,
                 verdict: .insufficientData
@@ -42,19 +47,20 @@ struct ShrinkDetector {
                 previousSize: sameKind[sameKind.count - 2],
                 currentSize: sameKind.last!,
                 shrinkPercent: 0,
-                priceThen: nil,
-                priceNow: product.currentPrice,
+                priceThen: priceThen,
+                priceNow: priceNow,
                 costPerUnitThen: nil,
-                costPerUnitNow: product.currentPrice.map { $0 / max(current.quantity, 0.0001) },
+                costPerUnitNow: priceNow.map { $0 / max(current.quantity, 0.0001) },
                 verdict: .insufficientData
             )
         }
 
         let percentChange = ((current.quantity - previous.quantity) / previous.quantity) * 100
 
-        let costPerUnitNow: Double? = product.currentPrice.map { $0 / current.quantity }
-        // Historical pricing arrives with Kroger snapshots in week 3 — nil until then.
-        let costPerUnitThen: Double? = nil
+        // "Now" is today's price over today's size; "then" is the older snapshot
+        // over the older size — the cost this shopper used to pay.
+        let costPerUnitNow: Double? = priceNow.map { $0 / current.quantity }
+        let costPerUnitThen: Double? = priceThen.map { $0 / previous.quantity }
 
         let verdict: ShrinkRecord.ShrinkVerdict = {
             switch percentChange {
@@ -71,8 +77,8 @@ struct ShrinkDetector {
             previousSize: sameKind[sameKind.count - 2],
             currentSize: sameKind.last!,
             shrinkPercent: percentChange,
-            priceThen: nil,
-            priceNow: product.currentPrice,
+            priceThen: priceThen,
+            priceNow: priceNow,
             costPerUnitThen: costPerUnitThen,
             costPerUnitNow: costPerUnitNow,
             verdict: verdict

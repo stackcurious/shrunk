@@ -225,5 +225,48 @@ final class ShrinkDetectorTests: XCTestCase {
             currency: "USD"
         )
     }
+
+    // MARK: - Price history
+
+    private func makePriced(sizes: [(Double, String)], prices: [(TimeInterval, Double)]) -> ShrunkProduct {
+        let base = Date(timeIntervalSince1970: 1_600_000_000)
+        let history = sizes.enumerated().map { idx, s in
+            SizeRecord(date: base.addingTimeInterval(TimeInterval(idx) * 86_400),
+                       quantity: s.0, unit: s.1, source: "test")
+        }
+        let points = prices.map { PricePoint(date: base.addingTimeInterval($0.0), price: $0.1, perUnitEstimate: nil) }
+        return ShrunkProduct(
+            id: "test", name: "Test", brand: "Brand", category: "Beverages",
+            imageURL: nil, sizeHistory: history, currentPrice: points.last?.price, currency: "USD",
+            needsConfirmation: false, priceHistory: points
+        )
+    }
+
+    func test_priceHistory_fillsThenAndNow() {
+        // 32oz at $1.79 became 28oz at $1.89.
+        let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(0, 1.79), (86_400, 1.89)])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitThen ?? 0, 1.79 / 32, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
+    }
+
+    func test_priceHistory_singleSnapshotHasNoThen() {
+        let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(86_400, 1.89)])
+        let record = detector.analyze(product: product)
+
+        XCTAssertNil(record.priceThen)
+        XCTAssertNil(record.costPerUnitThen)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
+    }
+
+    func test_priceHistory_isSortedByDate() {
+        let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(86_400, 1.89), (0, 1.79)])
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
+    }
 }
 

@@ -13,6 +13,15 @@ struct ShrunkProduct: Identifiable, Codable, Hashable {
     /// non-Kroger observation (spec §4 step 4). Drives the "Confirm with a
     /// label photo" card on ResultView.
     var needsConfirmation: Bool = false
+    /// Store price snapshots, oldest first. Empty unless a store is set.
+    var priceHistory: [PricePoint] = []
+}
+
+/// One observed shelf price at the user's store.
+struct PricePoint: Codable, Hashable {
+    let date: Date
+    let price: Double            // promo when there was one, else regular
+    let perUnitEstimate: Double? // Kroger's own $/unit estimate — display only
 }
 
 struct SizeRecord: Codable, Hashable {
