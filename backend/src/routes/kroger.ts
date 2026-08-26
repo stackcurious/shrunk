@@ -4,6 +4,7 @@ import { normalizeGTIN } from "../gtin";
 import { KROGER_ATTRIBUTION, KrogerClient, KrogerError } from "../kroger/client";
 import { krogerProductId } from "../kroger/ids";
 import { toLiveProduct } from "../kroger/map";
+import { persistKrogerProduct } from "../kroger/persist";
 import { deviceKey, hitRateLimit } from "../ratelimit";
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -69,7 +70,15 @@ krogerRoute.get("/v1/kroger/product/:gtin", async (c) => {
     if (!data) return c.json({ error: "not_found" }, 404);
 
     const live = toLiveProduct(data);
-    // PERSISTENCE HOOK — Task 7 inserts the snapshot/observation write here.
+    if (c.env.KROGER_PERSIST === "on") {
+      // Best-effort: a D1 write failure must never turn a successful
+      // upstream lookup into an error response (spec §9).
+      try {
+        await persistKrogerProduct(c.env, gtin, locationId, live);
+      } catch {
+        // swallowed — the proxied response below still succeeds.
+      }
+    }
     c.header("Cache-Control", cacheControl ?? "no-store");
     return c.json({ ...live, gtin, location_id: locationId, attribution: KROGER_ATTRIBUTION });
   } catch (err) {
