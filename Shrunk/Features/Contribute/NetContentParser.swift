@@ -74,9 +74,25 @@ enum NetContentParser {
     /// "12 oz/340 g" and "NET WT 12 OZ (340g)" both split into comparable segments.
     private static let segmentSplit = try! NSRegularExpression(pattern: #"\s*/\s*|\s*\(|\)\s*"#)
 
-    /// Spec §6.3 — the lines a label uses to announce net content.
-    private static let netContentMarker = try! NSRegularExpression(
-        pattern: #"NET\s*(WT|WEIGHT|CONTENTS?)|e\s*\d"#,
+    /// Spec §6.3 — the lines a label uses to announce net content. Tightened per
+    /// phase-2 review finding I3: applied case-insensitively, the raw `e\s*\d`
+    /// branch matched the trailing "e" of any word (e.g. "SIZE") followed by a
+    /// digit, so nutrition-panel serving-size lines outscored the real net
+    /// weight. Three rules, checked in order:
+    ///   1. The announcement itself ("NET WT"/"WEIGHT"/"CONTENTS") is case-insensitive.
+    ///   2. The EU estimated-sign "e" ("e 500 g") must be a standalone lowercase
+    ///      token — anchored to start-of-line/whitespace — never a letter buried
+    ///      inside a word.
+    ///   3. A line containing "SERVING" never counts, even if 1 or 2 would match.
+    private static let netWeightAnnouncement = try! NSRegularExpression(
+        pattern: #"NET\s*(WT|WEIGHT|CONTENTS?)"#,
+        options: [.caseInsensitive]
+    )
+    private static let estimatedSignToken = try! NSRegularExpression(
+        pattern: #"(^|\s)e\s*\d"#
+    )
+    private static let servingSizeGuard = try! NSRegularExpression(
+        pattern: #"SERVING"#,
         options: [.caseInsensitive]
     )
 
@@ -118,7 +134,10 @@ enum NetContentParser {
     }
 
     static func isNetContentLine(_ line: String) -> Bool {
-        netContentMarker.firstMatch(in: line, range: fullRange(of: line)) != nil
+        let range = fullRange(of: line)
+        guard servingSizeGuard.firstMatch(in: line, range: range) == nil else { return false }
+        if netWeightAnnouncement.firstMatch(in: line, range: range) != nil { return true }
+        return estimatedSignToken.firstMatch(in: line, range: range) != nil
     }
 
     /// Picks the OCR line to submit.

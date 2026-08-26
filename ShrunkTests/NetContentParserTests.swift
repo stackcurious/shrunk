@@ -105,6 +105,32 @@ final class NetContentParserTests: XCTestCase {
         XCTAssertFalse(NetContentParser.isNetContentLine("12 – 12 FL OZ CANS"))
     }
 
+    // MARK: - I3 regression: serving-size lines and word-internal e-signs (spec §6.3)
+
+    func test_isNetContentLine_rejectsServingSizeLines() {
+        // "SERVING SIZE 1 OZ (28g)" case-insensitively matched the old `e\s*\d`
+        // branch via the trailing "e" in "SIZE" — the serving size (28g), not the
+        // net weight, would win. A SERVING guard must reject it outright.
+        XCTAssertFalse(NetContentParser.isNetContentLine("SERVING SIZE 1 OZ (28g)"))
+        XCTAssertFalse(NetContentParser.isNetContentLine("SERVING SIZE 2/3 CUP (55g)"))
+        XCTAssertFalse(NetContentParser.isNetContentLine("Serving Size 12 fl oz"))
+    }
+
+    func test_isNetContentLine_ignoresWordInternalESign() {
+        // The estimated-sign "e" must be a standalone token, not any letter "e"
+        // that happens to precede a digit inside a word like "Maine".
+        XCTAssertFalse(NetContentParser.isNetContentLine("Made in Maine 5 miles from the coast"))
+    }
+
+    func test_firstNetContent_prefersNetWtOverServingSizeLine() {
+        let lines = ["NUTRITION FACTS", "SERVING SIZE 1 OZ (28g)", "NET WT 12 OZ (340g)"]
+        let match = NetContentParser.firstNetContent(in: lines)
+        XCTAssertEqual(match?.lineIndex, 2)
+        XCTAssertEqual(match?.line, "NET WT 12 OZ (340g)")
+        XCTAssertEqual(match?.parsed.unitKind, .mass)
+        XCTAssertEqual(match?.parsed.quantity ?? 0, 340.194, accuracy: 0.01)
+    }
+
     func test_firstNetContent_prefersTheNetContentLine() {
         let lines = ["DORITOS", "12 CT", "NET WT 9.75 OZ (276g)", "INGREDIENTS: CORN"]
         let match = NetContentParser.firstNetContent(in: lines)
