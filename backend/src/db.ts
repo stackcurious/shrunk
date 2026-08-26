@@ -130,24 +130,24 @@ export async function setObservationStatus(db: D1Database, id: number, status: s
 
 export async function getLatestAcceptedObservation(
   db: D1Database, gtin: string, unitKind: string
-): Promise<{ id: number; quantity: number } | null> {
+): Promise<{ id: number; quantity: number; observed_at: number } | null> {
   return db
     .prepare(
-      "SELECT id, quantity FROM observations WHERE gtin = ? AND unit_kind = ? AND status = 'accepted' ORDER BY observed_at DESC, id DESC LIMIT 1"
+      "SELECT id, quantity, observed_at FROM observations WHERE gtin = ? AND unit_kind = ? AND status = 'accepted' ORDER BY observed_at DESC, id DESC LIMIT 1"
     )
     .bind(gtin, unitKind)
-    .first<{ id: number; quantity: number }>();
+    .first<{ id: number; quantity: number; observed_at: number }>();
 }
 
 export async function getObservationBySubmission(
   db: D1Database, submissionId: string
-): Promise<{ id: number; gtin: string; quantity: number; unit_kind: string; status: string } | null> {
+): Promise<{ id: number; gtin: string; quantity: number; unit_kind: string; status: string; observed_at: number } | null> {
   return db
     .prepare(
-      "SELECT id, gtin, quantity, unit_kind, status FROM observations WHERE source = 'crowd' AND source_ref = ? LIMIT 1"
+      "SELECT id, gtin, quantity, unit_kind, status, observed_at FROM observations WHERE source = 'crowd' AND source_ref = ? LIMIT 1"
     )
     .bind(submissionId)
-    .first<{ id: number; gtin: string; quantity: number; unit_kind: string; status: string }>();
+    .first<{ id: number; gtin: string; quantity: number; unit_kind: string; status: string; observed_at: number }>();
 }
 
 /** Statement builder (I1) — see buildInsertObservation. */

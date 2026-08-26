@@ -194,6 +194,30 @@ describe("POST /v1/admin/review/:id", () => {
     expect((await env.DB.prepare("SELECT unit_kind FROM products WHERE gtin = ?").bind(GTIN).first<any>()).unit_kind).toBe("mass");
   });
 
+  it("skips the size_drop when a newer accepted observation superseded the row before it was reviewed (I6)", async () => {
+    // seedPending() leaves an incumbent 907.184 g accepted @ 1517443200 and a
+    // pending 793.786 g crowd row submitted "now". While it sat in the
+    // queue, a fresher accepted observation (850 g) landed for the same
+    // gtin/kind — smaller than the incumbent, but *larger* than the pending
+    // row. Naively comparing the pending row against "the latest accepted
+    // observation" (850 g) would call 793.786 g a fresh shrink and queue a
+    // size_drop, even though that comparison is stale: the pending row
+    // predates the 850 g observation it would be compared against.
+    const { submissionId, observationId } = await seedPending();
+    const futureObservedAt = Math.floor(Date.now() / 1000) + 100000;
+    await env.DB.prepare(
+      "INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 850, 'mass', 'newer', ?, 'fdc', 'newer-1', 0.9, 'accepted', ?)"
+    ).bind(GTIN, futureObservedAt, futureObservedAt).run();
+
+    const res = await decide(submissionId, "accept");
+    expect(await res.json()).toEqual({ ok: true, id: submissionId, status: "accepted", alerted: false });
+
+    // The row still flips to accepted...
+    expect((await env.DB.prepare("SELECT status FROM observations WHERE id = ?").bind(observationId).first<any>()).status).toBe("accepted");
+    // ...but no size_drop is queued for a comparison the newer row already superseded.
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_jobs").first<{ n: number }>())!.n).toBe(0);
+  });
+
   it("rejects: flips the observation, deletes the photo, queues nothing", async () => {
     const { submissionId, observationId, photoKey } = await seedPending();
 

@@ -12,6 +12,10 @@ export interface AcceptanceInput {
   unitKind: string;
   /** Latest accepted same-kind quantity as it stood *before* this row was accepted. */
   previousQuantity: number | null;
+  /** `observed_at` of that same incumbent row, or null when there is none. */
+  previousObservedAt: number | null;
+  /** `observed_at` of the row being accepted. */
+  observedAt: number;
   brand: string | null;
   now: number;
 }
@@ -28,6 +32,14 @@ export async function finalizeAcceptance(db: D1Database, input: AcceptanceInput)
 
   const previous = input.previousQuantity;
   if (previous === null || previous <= 0) return false;
+
+  // I6: a row that sat pending can be accepted after a newer same-kind
+  // observation has already landed and become the incumbent. Comparing the
+  // stale row against that newer incumbent would describe a change that
+  // isn't the product's current state — skip the alert rather than queue a
+  // false size_drop a Pro user's cron push would surface.
+  if (input.previousObservedAt !== null && input.previousObservedAt > input.observedAt) return false;
+
   if (input.quantity >= previous * (1 - SAME_SIZE_TOLERANCE)) return false;
 
   const percentChange = ((input.quantity - previous) / previous) * 100;

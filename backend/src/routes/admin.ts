@@ -93,6 +93,8 @@ adminRoute.post("/v1/admin/review/:id", async (c) => {
       quantity: observation.quantity,
       unitKind: observation.unit_kind,
       previousQuantity: previous?.quantity ?? null,
+      previousObservedAt: previous?.observed_at ?? null,
+      observedAt: observation.observed_at,
       brand: product?.brand ?? null,
       now,
     });

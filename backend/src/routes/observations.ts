@@ -168,6 +168,8 @@ observationsRoute.post("/v1/observations", async (c) => {
       quantity,
       unitKind,
       previousQuantity: latest?.quantity ?? null,
+      previousObservedAt: latest?.observed_at ?? null,
+      observedAt: now,
       brand: product.brand,
       now,
     });
