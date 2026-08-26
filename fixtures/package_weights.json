@@ -26,5 +26,8 @@
   { "input": "12", "quantity": null, "unit_kind": null, "note": "number without unit" },
   { "input": "0 oz", "quantity": null, "unit_kind": null, "note": "zero quantity" },
   { "input": "300 g e", "quantity": 300, "unit_kind": "mass", "note": "EU estimated sign suffix" },
-  { "input": "1 lb 4 oz", "quantity": 566.99, "unit_kind": "mass", "note": "compound imperial: 20 oz" }
+  { "input": "1 lb 4 oz", "quantity": 566.99, "unit_kind": "mass", "note": "compound imperial: 20 oz" },
+  { "input": "1/2 Gallon", "quantity": 1892.705, "unit_kind": "volume", "note": "leading simple fraction: half gallon" },
+  { "input": "1/4 lb", "quantity": 113.398, "unit_kind": "mass", "note": "leading simple fraction: quarter pound" },
+  { "input": "12/12 fl oz", "quantity": 354.882, "unit_kind": "volume", "note": "not a fraction: numerator equals denominator (12-pack of 12 fl oz)" }
 ]

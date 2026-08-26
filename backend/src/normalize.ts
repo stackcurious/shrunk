@@ -25,6 +25,21 @@ const QTY_UNIT = new RegExp(`${NUM}\\s*(fl\\s?oz|${UNIT_ALT})\\b`, "g");
 const SEGMENT_SPLIT = /\s*\/\s*|\s*\(|\)\s*/;
 const TOLERANCE = 0.02;
 
+// "1/2 Gallon" is a fraction; "12/12 fl oz" is a 12-pack of 12 fl oz. Only a
+// proper fraction with a household denominator is expanded, and only when it
+// leads the string — everything else stays a "/"-separated segment list.
+const LEADING_FRACTION = /^\s*(\d+)\s*\/\s*(\d+)\s+([a-zA-Z].*)$/;
+const FRACTION_DENOMINATORS = new Set([2, 3, 4, 8]);
+
+function expandLeadingFraction(text: string): string {
+  const match = LEADING_FRACTION.exec(text);
+  if (!match) return text;
+  const numerator = parseInt(match[1], 10);
+  const denominator = parseInt(match[2], 10);
+  if (!FRACTION_DENOMINATORS.has(denominator) || numerator === 0 || numerator >= denominator) return text;
+  return `${numerator / denominator} ${match[3]}`;
+}
+
 const toFloat = (t: string) => parseFloat(t.replace(",", "."));
 const unit = (t: string) => UNITS[t.toLowerCase().replace(/\s/g, "")];
 
@@ -54,8 +69,9 @@ function parseSegment(segment: string): [number, UnitKind] | null {
 
 export function parsePackageWeight(raw: string | null | undefined): ParsedQuantity | null {
   if (!raw) return null;
-  const text = raw.trim();
-  if (!text) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const text = expandLeadingFraction(trimmed);
 
   const parsed = text.split(SEGMENT_SPLIT).map(parseSegment).filter((p): p is [number, UnitKind] => p !== null);
   if (parsed.length === 0) return null;

@@ -42,6 +42,22 @@ _QTY_UNIT = re.compile(rf"{_NUM}\s*(fl\s?oz|{_UNIT_ALTERNATION})\b")
 _SEGMENT_SPLIT = re.compile(r"\s*/\s*|\s*\(|\)\s*")
 _TOLERANCE = 0.02
 
+# "1/2 Gallon" is a fraction; "12/12 fl oz" is a 12-pack of 12 fl oz. Only a
+# proper fraction with a household denominator is expanded, and only when it
+# leads the string — everything else stays a "/"-separated segment list.
+_LEADING_FRACTION = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s+([a-zA-Z].*)$")
+_FRACTION_DENOMINATORS = {2, 3, 4, 8}
+
+
+def _expand_leading_fraction(text: str) -> str:
+    match = _LEADING_FRACTION.match(text)
+    if not match:
+        return text
+    numerator, denominator = int(match.group(1)), int(match.group(2))
+    if denominator not in _FRACTION_DENOMINATORS or numerator == 0 or numerator >= denominator:
+        return text
+    return f"{numerator / denominator} {match.group(3)}"
+
 
 @dataclass(frozen=True)
 class ParsedQuantity:
@@ -92,6 +108,7 @@ def parse_package_weight(raw: str) -> ParsedQuantity | None:
     text = raw.strip()
     if not text:
         return None
+    text = _expand_leading_fraction(text)
 
     parsed = [p for p in (_parse_segment(s) for s in _SEGMENT_SPLIT.split(text)) if p]
     if not parsed:

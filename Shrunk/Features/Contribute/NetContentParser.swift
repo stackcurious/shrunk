@@ -82,11 +82,20 @@ enum NetContentParser {
 
     private static let tolerance = 0.02
 
+    /// "1/2 Gallon" is a fraction; "12/12 fl oz" is a 12-pack of 12 fl oz. Only a
+    /// proper fraction with a household denominator is expanded, and only when it
+    /// leads the string — everything else stays a "/"-separated segment list.
+    private static let leadingFraction = try! NSRegularExpression(
+        pattern: #"^\s*(\d+)\s*/\s*(\d+)\s+([a-zA-Z].*)$"#
+    )
+    private static let fractionDenominators: Set<Int> = [2, 3, 4, 8]
+
     // MARK: - Public API
 
     static func parse(_ raw: String) -> ParsedQuantity? {
-        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let text = expandLeadingFraction(trimmed)
 
         let parsed = segments(of: text).compactMap(parseSegment)
         guard !parsed.isEmpty else { return nil }
@@ -140,6 +149,16 @@ enum NetContentParser {
 
     private static func fullRange(of text: String) -> NSRange {
         NSRange(location: 0, length: (text as NSString).length)
+    }
+
+    private static func expandLeadingFraction(_ text: String) -> String {
+        let ns = text as NSString
+        guard let match = leadingFraction.firstMatch(in: text, range: fullRange(of: text)) else { return text }
+        guard let numerator = Int(ns.substring(with: match.range(at: 1))),
+              let denominator = Int(ns.substring(with: match.range(at: 2))) else { return text }
+        guard fractionDenominators.contains(denominator), numerator != 0, numerator < denominator else { return text }
+        let rest = ns.substring(with: match.range(at: 3))
+        return "\(Double(numerator) / Double(denominator)) \(rest)"
     }
 
     private static func segments(of text: String) -> [String] {
