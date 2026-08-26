@@ -69,3 +69,98 @@ describe("KrogerClient.token", () => {
     expect(new KrogerError(429)).toBeInstanceOf(Error);
   });
 });
+
+const PRODUCT = {
+  productId: "0002840064225",
+  upc: "0002840064225",
+  brand: "Gatorade",
+  description: "Gatorade Thirst Quencher Lemon-Lime",
+  categories: ["Beverages"],
+  images: [{ perspective: "front", sizes: [{ size: "large", url: "https://img/large.jpg" }] }],
+  items: [
+    {
+      itemId: "0001",
+      size: "28 fl oz",
+      soldBy: "UNIT",
+      price: { regular: 1.89, promo: 1.5, regularPerUnitEstimate: 0.07, promoPerUnitEstimate: 0.05 },
+      fulfillment: { instore: true, curbside: true, delivery: false, shiptohome: false },
+      inventory: { stockLevel: "HIGH" },
+    },
+  ],
+};
+
+describe("KrogerClient calls", () => {
+  it("fetches locations near a zip and forwards Cache-Control", async () => {
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/locations") return undefined;
+      expect(url.search).toBe("?filter.zipCode.near=45044&filter.radiusInMiles=15&filter.limit=20");
+      return jsonResponse(
+        { data: [{ locationId: "01400943", chain: "KROGER", name: "Hyde Park", address: { addressLine1: "3760 Paxton Ave", city: "Cincinnati", state: "OH", zipCode: "45209" }, geolocation: { latitude: 39.14, longitude: -84.42 } }] },
+        200,
+        { "cache-control": "public, max-age=3600" },
+      );
+    });
+
+    const result = await new KrogerClient(env).locations("45044");
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].locationId).toBe("01400943");
+    expect(result.cacheControl).toBe("public, max-age=3600");
+  });
+
+  it("fetches one product at a location", async () => {
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      expect(url.search).toBe("?filter.locationId=01400943");
+      return jsonResponse({ data: PRODUCT }, 200, { "cache-control": "private, max-age=1800" });
+    });
+
+    const result = await new KrogerClient(env).product("0002840064225", "01400943");
+    expect(result.data?.items?.[0].price?.regular).toBe(1.89);
+    expect(result.cacheControl).toBe("private, max-age=1800");
+  });
+
+  it("batches at most 50 product ids into one call", async () => {
+    const ids = Array.from({ length: 60 }, (_, i) => String(i).padStart(13, "0"));
+    let requestedIds = "";
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      requestedIds = decodeURIComponent(url.searchParams.get("filter.productId")!);
+      return jsonResponse({ data: [PRODUCT] });
+    });
+
+    const result = await new KrogerClient(env).products(ids, "01400943");
+    expect(requestedIds.split(",")).toHaveLength(50);
+    expect(result.data).toHaveLength(1);
+  });
+
+  it("searches by term at a location", async () => {
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      expect(url.search).toBe("?filter.term=Beverages&filter.locationId=01400943&filter.limit=50");
+      return jsonResponse({ data: [PRODUCT] });
+    });
+
+    const result = await new KrogerClient(env).search("Beverages", "01400943");
+    expect(result.data[0].productId).toBe("0002840064225");
+  });
+
+  it("drops the cached token on 401 and surfaces the status", async () => {
+    await env.KV.put("kroger:token", "stale-token");
+    stubFetch((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      return jsonResponse({ error: "unauthorized" }, 401);
+    });
+
+    await expect(new KrogerClient(env).product("0002840064225", "01400943")).rejects.toMatchObject({ status: 401 });
+    expect(await env.KV.get("kroger:token")).toBeNull();
+  });
+
+  it("surfaces 429 so the route can pass it through", async () => {
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      return jsonResponse({ error: "quota" }, 429);
+    });
+
+    await expect(new KrogerClient(env).search("Snacks", "01400943")).rejects.toMatchObject({ status: 429 });
+  });
+});
