@@ -38,7 +38,7 @@ ls backend/src/routes/devices.ts                       # Phase 4: POST /v1/devic
 grep -n "transaction_jws"  backend/src/routes/devices.ts
 grep -rn "CREATE TABLE devices" backend/migrations/     # Phase 4: devices table
 ls backend/migrations/                                  # note the highest migration number
-grep -rn "struct StorePicker" Shrunk                    # Phase 3: store picker view
+grep -rn "struct StorePickerView" Shrunk                # Phase 3: store picker view
 grep -rn "storeLocationId" Shrunk                       # Phase 3: @AppStorage key
 grep -rn "device_id" Shrunk --include=*.swift           # Phase 2: device id helper, if any
 grep -n "func syncDevice" Shrunk/Services/ShrunkAPIClient.swift   # Phase 4: may already exist
@@ -46,14 +46,16 @@ grep -n "func syncDevice" Shrunk/Services/ShrunkAPIClient.swift   # Phase 4: may
 
 Reconciliation rules:
 
-- **Migration number.** This plan writes `backend/migrations/0005_devices_appstore.sql`. If `0005_` is already taken, use the next unused number and rename every reference to it in Task 3.
-- **`StorePicker`.** Task 9 constructs it as `StorePicker()`. If Phase 3 gave it required initializer arguments, pass them at that call site; nothing else in this plan depends on its shape.
+- **Migration number.** This plan writes `backend/migrations/0005_devices_appstore.sql`. If `0005_` is already taken, use the next unused number and rename every reference to it in Task 3. Phase 4's own migration is `0004_devices_watches.sql`, which already creates `devices` (including `transaction_jws`) and `watches` per spec §5 plus the deviation above — Phase 5's `0005` adds only the `devices_app_account_token` index.
+- **`StorePickerView`.** Task 9 constructs it as `StorePickerView(embedded: true)`. If Phase 3 changed its signature, adjust that call site to match; nothing else in this plan depends on its shape.
 - **`device_id`.** If Phase 2 already persists a device id **and the stored value is a UUID string**, Task 5 keeps that helper and only adds the alias described there. If Phase 2 stored a non-UUID (e.g. a random hex string), Task 5's `DeviceIdentity` becomes the single source and Phase 2's helper must be pointed at it — `appAccountToken` is a `UUID` and StoreKit accepts nothing else.
 - **`syncDevice`.** If Phase 4 already added `ShrunkAPIClient.syncDevice(...)` with more parameters (apns token, location, categories, watches), give every extra parameter a default so `syncDevice(deviceId:transactionJWS:)` stays callable with exactly those two arguments. Task 5 shows the minimal version to write if it does not exist.
 
 ## Interface this phase requires from Phase 4
 
 If Phase 4 has not been written yet, it **must** honour this, because Phase 5 tasks 4 and 5 are written against it:
+
+**Deviation from spec §5, deliberate.** `devices` gains a `transaction_jws TEXT` column beyond the spec's printed schema (`id, apns_token, location_id, categories, pro_until, app_account_token, updated_at`), so the Worker can re-verify a previously-stored transaction on a retry (spec §8) without the device re-sending it. Phase 4's migration `backend/migrations/0004_devices_watches.sql` creates `devices` — including this column — and `watches`, both per spec §5 plus this one deviation. Phase 5 does not create or alter either table: its own migration, `0005_devices_appstore.sql` (Task 3), only adds the `devices_app_account_token` index.
 
 - `POST /v1/devices` accepts JSON `{ device_id: string, apns_token?: string|null, location_id?: string|null, categories?: string[], watches?: [...], transaction_jws?: string|null }` and upserts into `devices(id, apns_token, location_id, categories, pro_until, app_account_token, transaction_jws, updated_at)` keyed on `id = device_id`. Phase 4 stores `transaction_jws` raw without verifying it; Phase 5 adds the verification.
 - The route module is `backend/src/routes/devices.ts` and exports a Hono sub-app named `devicesRoute`, mounted in `backend/src/index.ts`.
@@ -63,7 +65,7 @@ If Phase 4 has not been written yet, it **must** honour this, because Phase 5 ta
 
 ```
 backend/
-  migrations/0005_devices_appstore.sql   devices/watches IF NOT EXISTS + app_account_token index
+  migrations/0005_devices_appstore.sql   devices_app_account_token index only (devices/transaction_jws/watches: Phase 4's 0004)
   src/appstore/asn1.ts                   minimal DER reader (TLV, children, OID, time)
   src/appstore/x509.ts                   certificate parse, ECDSA sig conversion, key import
   src/appstore/root.ts                   Apple Root CA - G3 PEM + DER constant
@@ -79,7 +81,7 @@ backend/
   test/devices-pro.test.ts               /v1/devices sets and refuses to set pro_until
 
 Shrunk/
-  Services/DeviceIdentity.swift          NEW — stable per-install UUID
+  Services/DeviceIdentity.swift          MODIFIED (Phase 2) — adds storageKey/currentUUID alias
   Services/ShrunkAPIClient.swift         MODIFIED — syncDevice + DeviceSyncing
   Services/StoreKitService.swift         REWRITTEN — subscriptions, appAccountToken, sync
   Services/SavingsLedger.swift           REWRITTEN — real observed math
@@ -950,7 +952,7 @@ git commit -m "feat(backend): verify App Store JWS chains against a pinned Apple
   - `trustAnchor(env: { APPSTORE_ROOT_CA_B64?: string }): Uint8Array`
 - Produces: `Env.APPSTORE_ROOT_CA_B64?: string` in `src/env.ts`.
 - Produces: `appstoreRoute` (Hono sub-app) exported from `src/routes/appstore.ts`.
-- Produces: `devices` and `watches` tables (spec §5) if Phase 4 has not already created them, plus the index `devices_app_account_token`.
+- Produces: the index `devices_app_account_token` on `devices(app_account_token)`. `devices` (including `transaction_jws`) and `watches` are already created by Phase 4's migration `0004_devices_watches.sql`; Phase 5 creates or alters neither table.
 
 **Token casing rule (applies to Tasks 3, 4 and 5):** Apple emits `appAccountToken` as a lowercase UUID; `UUID.uuidString` on iOS is uppercase. Every write and every lookup of `devices.app_account_token` lowercases the value first, so the two always meet.
 
@@ -958,28 +960,9 @@ git commit -m "feat(backend): verify App Store JWS chains against a pinned Apple
 
 - [ ] **Step 1: Write the migration**
 
-`backend/migrations/0005_devices_appstore.sql` — `IF NOT EXISTS` throughout, so this is a no-op when Phase 4 already created the tables and creates them when it has not:
+`backend/migrations/0005_devices_appstore.sql` — Phase 4's `0004_devices_watches.sql` already creates `devices` (including `transaction_jws`, the deviation noted above) and `watches`, both per spec §5. This migration adds only the one thing Phase 5 itself needs and Phase 4 has no reason to have created — the lookup index the notifications route and `/v1/devices` use to find a device by its App Store `app_account_token`:
 
 ```sql
-CREATE TABLE IF NOT EXISTS devices (
-  id                TEXT PRIMARY KEY,   -- app-generated UUID
-  apns_token        TEXT,
-  location_id       TEXT,
-  categories        TEXT,               -- JSON array
-  pro_until         INTEGER,            -- unix seconds, from a verified transaction
-  app_account_token TEXT,               -- lowercase UUID passed to StoreKit at purchase
-  transaction_jws   TEXT,               -- last JWS the device sent, re-verified on each upsert
-  updated_at        INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS watches (
-  device_id     TEXT NOT NULL,
-  gtin          TEXT NOT NULL,
-  brand         TEXT,
-  alert_enabled INTEGER NOT NULL DEFAULT 1,
-  PRIMARY KEY (device_id, gtin)
-);
-
 CREATE INDEX IF NOT EXISTS devices_app_account_token ON devices(app_account_token);
 ```
 
@@ -1248,8 +1231,7 @@ npx wrangler d1 migrations apply shrunk --local
 npx wrangler d1 migrations apply shrunk --remote
 npx wrangler d1 execute shrunk --remote --command "PRAGMA table_info(devices);"
 ```
-Expected: the last command lists `id, apns_token, location_id, categories, pro_until, app_account_token, transaction_jws, updated_at`. If `transaction_jws` is missing because Phase 4 created the table without it, add it now:
-`npx wrangler d1 execute shrunk --remote --command "ALTER TABLE devices ADD COLUMN transaction_jws TEXT;"` (and the same with `--local`), then add that `ALTER TABLE` to `0005_devices_appstore.sql` below the `CREATE TABLE`s.
+Expected: the last command lists `id, apns_token, location_id, categories, pro_until, app_account_token, transaction_jws, updated_at` — all of it from Phase 4's `0004_devices_watches.sql`; `0005` only adds the `devices_app_account_token` index and touches no columns. If `transaction_jws` is missing, Phase 4 was implemented against the spec's printed schema without the deviation noted above — land that fix in a new migration (e.g. `0006_devices_backfill_transaction_jws.sql` containing `ALTER TABLE devices ADD COLUMN transaction_jws TEXT;`), never by hand-editing an already-applied migration file.
 
 - [ ] **Step 7: Commit**
 
@@ -1392,7 +1374,7 @@ and make the upsert write `pro_until` / `app_account_token` only when `entitleme
   app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
 ```
 
-For reference, the complete statement the handler should end up running (merge this with whatever other columns Phase 4 upserts — `apns_token`, `location_id`, `categories`, `transaction_jws`):
+Merge only the two `COALESCE` lines and the `entitlement`-derived bind values (`entitlement?.proUntil ?? null`, `entitlement?.appAccountToken ?? null`) into Phase 4's existing prepared statement and bind list — do not paste the block below over Phase 4's statement if its local variable names differ. For reference only, here is what the complete statement looks like once merged (merge this with whatever other columns Phase 4 upserts — `apns_token`, `location_id`, `categories`, `transaction_jws`):
 
 ```ts
   await c.env.DB.prepare(
@@ -1446,12 +1428,12 @@ git commit -m "feat(backend): /v1/devices verifies the transaction JWS before gr
 ### Task 5: `DeviceIdentity` and `ShrunkAPIClient.syncDevice`
 
 **Files:**
-- Create: `Shrunk/Services/DeviceIdentity.swift`
+- Modify: `Shrunk/Services/DeviceIdentity.swift` (Phase 2 already created this file — append an extension, do not replace it)
 - Modify: `Shrunk/Services/ShrunkAPIClient.swift`
 - Test: `ShrunkTests/DeviceSyncTests.swift`
 
 **Interfaces:**
-- Produces: `enum DeviceIdentity { static let storageKey = "shrunk.device_id"; static var current: UUID }` — a UUID minted once and kept in `UserDefaults` forever. It is simultaneously the `device_id` sent to `/v1/devices` and the `appAccountToken` passed to StoreKit, which is what lets the Worker match an App Store notification to a device row.
+- Produces: `extension DeviceIdentity { static var storageKey: String { key }; static var currentUUID: UUID }` — an alias layered over Phase 2's `key`/`current: String` (`Shrunk/Services/DeviceIdentity.swift`), so the one persisted install id can also be read as a `UUID` for StoreKit's `appAccountToken`. It is simultaneously the `device_id` sent to `/v1/devices` and the `appAccountToken` passed to StoreKit, which is what lets the Worker match an App Store notification to a device row.
 - Produces: `protocol DeviceSyncing: Sendable { @discardableResult func syncDevice(deviceId: String, transactionJWS: String) async -> Bool }`, with `extension ShrunkAPIClient: DeviceSyncing`.
 - Produces: `ShrunkAPIClient.syncDevice(deviceId:transactionJWS:) async -> Bool` — `POST {baseURL}/v1/devices`, JSON body `{"device_id": ..., "transaction_jws": ...}`, returns `true` on a 2xx. **Never throws** (spec §8: a sync failure must not disturb the UI).
 - Consumes: `ShrunkAPIClient.init(baseURL:session:)` and its `baseURL` / `session` properties (Phase 1, Task 11).
@@ -1469,31 +1451,33 @@ import XCTest
 final class DeviceIdentityTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        UserDefaults.standard.removeObject(forKey: DeviceIdentity.storageKey)
+        UserDefaults.standard.removeObject(forKey: DeviceIdentity.key)
     }
 
     override func tearDown() {
-        UserDefaults.standard.removeObject(forKey: DeviceIdentity.storageKey)
+        UserDefaults.standard.removeObject(forKey: DeviceIdentity.key)
         super.tearDown()
     }
 
-    func test_current_isStableAcrossCalls() {
-        let first = DeviceIdentity.current
-        let second = DeviceIdentity.current
+    func test_storageKey_aliasesKey() {
+        XCTAssertEqual(DeviceIdentity.storageKey, DeviceIdentity.key)
+    }
+
+    func test_currentUUID_isStableAcrossCalls() {
+        let first = DeviceIdentity.currentUUID
+        let second = DeviceIdentity.currentUUID
         XCTAssertEqual(first, second)
-        XCTAssertEqual(UserDefaults.standard.string(forKey: DeviceIdentity.storageKey), first.uuidString)
     }
 
-    func test_current_reusesAPersistedUUID() {
+    func test_currentUUID_matchesCurrentAsAUUID() {
+        // Phase 2's `current` always mints UUID().uuidString, so the two never diverge.
+        XCTAssertEqual(DeviceIdentity.currentUUID.uuidString, DeviceIdentity.current)
+    }
+
+    func test_currentUUID_reusesAPersistedUUID() {
         let stored = UUID()
-        UserDefaults.standard.set(stored.uuidString, forKey: DeviceIdentity.storageKey)
-        XCTAssertEqual(DeviceIdentity.current, stored)
-    }
-
-    func test_current_replacesAStoredValueThatIsNotAUUID() {
-        UserDefaults.standard.set("not-a-uuid", forKey: DeviceIdentity.storageKey)
-        let minted = DeviceIdentity.current
-        XCTAssertEqual(UserDefaults.standard.string(forKey: DeviceIdentity.storageKey), minted.uuidString)
+        UserDefaults.standard.set(stored.uuidString, forKey: DeviceIdentity.key)
+        XCTAssertEqual(DeviceIdentity.currentUUID, stored)
     }
 }
 
@@ -1571,35 +1555,29 @@ xcodegen generate >/dev/null && xcodebuild test -scheme Shrunk \
   -destination 'platform=iOS Simulator,name=BabSnap iPhone 17' \
   -only-testing:ShrunkTests/DeviceIdentityTests -only-testing:ShrunkTests/SyncDeviceTests -quiet 2>&1 | tail -20
 ```
-Expected: compile error `cannot find 'DeviceIdentity' in scope`.
+Expected: compile error `type 'DeviceIdentity' has no member 'storageKey'` (Phase 2's `DeviceIdentity` already exists; this task only adds the alias).
 
-- [ ] **Step 3: Implement `DeviceIdentity`**
+- [ ] **Step 3: Extend Phase 2's `DeviceIdentity` — do not replace it**
+
+Phase 2 (`docs/superpowers/plans/2026-08-26-shrunk-v2-phase2-crowd-observations.md`, Task 7) already ships `Shrunk/Services/DeviceIdentity.swift` with `static let key = "device_id"` and `static var current: String`, minting `UUID().uuidString` into `@AppStorage("device_id")`. Leave that file's existing `enum DeviceIdentity` untouched and append this extension below it:
 
 `Shrunk/Services/DeviceIdentity.swift`:
 
 ```swift
-import Foundation
+extension DeviceIdentity {
+    /// Alias for Phase 5's naming; both refer to the one persisted install id.
+    static var storageKey: String { key }
 
-/// The one stable identifier this install has.
-///
-/// It is sent to the Worker as `device_id` and handed to StoreKit as the
-/// purchase's `appAccountToken`, so an App Store Server Notification carrying
-/// that token can be matched back to a `devices` row. StoreKit requires a
-/// `UUID`, so anything else previously stored under this key is replaced.
-///
-/// Not a user identifier: it never leaves the device except as an opaque UUID
-/// on our own API, and it is not tied to any account (there is none).
-enum DeviceIdentity {
-    static let storageKey = "shrunk.device_id"
-
-    static var current: UUID {
-        let defaults = UserDefaults.standard
-        if let raw = defaults.string(forKey: storageKey), let existing = UUID(uuidString: raw) {
-            return existing
-        }
-        let minted = UUID()
-        defaults.set(minted.uuidString, forKey: storageKey)
-        return minted
+    /// `current` as a `UUID` — what StoreKit's `appAccountToken` requires.
+    /// `current` is always minted as `UUID().uuidString` (Phase 2), so the
+    /// fallback below never fires in practice; if it ever did, it re-mints
+    /// and persists a fresh UUID under the same key so `current` and
+    /// `currentUUID` can never diverge.
+    static var currentUUID: UUID {
+        if let uuid = UUID(uuidString: current) { return uuid }
+        let fresh = UUID()
+        UserDefaults.standard.set(fresh.uuidString, forKey: key)
+        return fresh
     }
 }
 ```
@@ -1654,7 +1632,7 @@ extension ShrunkAPIClient: DeviceSyncing {}
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run the command from Step 2.
-Expected: `Executed 5 tests, with 0 failures`.
+Expected: `Executed 6 tests, with 0 failures`.
 
 - [ ] **Step 6: Commit**
 
@@ -1672,7 +1650,7 @@ git commit -m "feat(ios): stable device UUID and /v1/devices entitlement sync"
 - Test: `ShrunkTests/ProEntitlementTests.swift`
 
 **Interfaces:**
-- Consumes: `DeviceIdentity.current`, `DeviceSyncing`, `ShrunkAPIClient.shared` (Task 5).
+- Consumes: `DeviceIdentity.currentUUID`, `DeviceSyncing`, `ShrunkAPIClient.shared` (Task 5).
 - Produces:
   - `enum ShrunkProProduct { static let monthly = "com.shrunk.pro.monthly"; static let yearly = "com.shrunk.pro.yearly"; static let all: [String] }`
   - `enum ProEntitlement { struct Snapshot: Equatable { let productID: String; let expirationDate: Date?; let revocationDate: Date? }; static func isActive(_ snapshots: [Snapshot], now: Date) -> Bool }`
@@ -1859,7 +1837,7 @@ final class StoreKitService: ObservableObject {
 
         // The appAccountToken is how the Worker links an App Store Server
         // Notification back to this install's `devices` row (spec §5).
-        let result = try await product.purchase(options: [.appAccountToken(DeviceIdentity.current)])
+        let result = try await product.purchase(options: [.appAccountToken(DeviceIdentity.currentUUID)])
         switch result {
         case .success(let verification):
             let transaction = try checkVerified(verification)
@@ -1914,7 +1892,7 @@ final class StoreKitService: ObservableObject {
             break
         }
         guard let jws else { return }
-        await syncer.syncDevice(deviceId: DeviceIdentity.current.uuidString, transactionJWS: jws)
+        await syncer.syncDevice(deviceId: DeviceIdentity.currentUUID.uuidString, transactionJWS: jws)
     }
 
     // MARK: - Internals
@@ -2040,7 +2018,7 @@ This is the spec §10 requirement "StoreKit configuration file for trial/monthly
 
 - [ ] **Step 1: Wire the test target**
 
-In `project.yml`, replace the `ShrunkTests` target's `sources` and `dependencies` blocks with:
+In `project.yml`, add to the `ShrunkTests` target's `sources` and `dependencies` blocks — keep Phase 2's `fixtures/package_weights.json` resource entry, which `NetContentParserTests` needs — so the whole target reads:
 
 ```yaml
   ShrunkTests:
@@ -2048,6 +2026,9 @@ In `project.yml`, replace the `ShrunkTests` target's `sources` and `dependencies
     platform: iOS
     sources:
       - path: ShrunkTests
+      - path: fixtures/package_weights.json
+        type: file
+        buildPhase: resources
       - path: Shrunk/Resources/Shrunk.storekit
         buildPhase: resources
     dependencies:
@@ -2148,7 +2129,7 @@ final class StoreKitConfigurationTests: XCTestCase {
         try await service.purchase(yearly)
 
         XCTAssertTrue(service.isProUser)
-        XCTAssertEqual(spy.deviceIds.last, DeviceIdentity.current.uuidString)
+        XCTAssertEqual(spy.deviceIds.last, DeviceIdentity.currentUUID.uuidString)
         let jws = try XCTUnwrap(spy.jwsValues.last)
         XCTAssertEqual(jws.split(separator: ".").count, 3, "expected a three-segment JWS")
     }
@@ -2868,7 +2849,7 @@ git commit -m "feat(ios): subscription paywall with trial, two plans and yearly 
 - Test: `ShrunkTests/OnboardingViewModelTests.swift`
 
 **Interfaces:**
-- Consumes: `ProPaywallContent(skipTitle:onSkip:)` (Task 8); `StorePicker` (Phase 3); `StoreKitService.isProUser` (Task 6).
+- Consumes: `ProPaywallContent(skipTitle:onSkip:)` (Task 8); `StorePickerView(embedded:)` (Phase 3); `StoreKitService.isProUser` (Task 6).
 - Produces: `OnboardingViewModel.Step` with exactly four cases — `welcome`, `categories`, `store`, `paywall`; `@Published var step`, `@Published var profile`; `canAdvance`, `progressFraction`, `advance()`, `back()`, `skipStore()`, `toggleCategory(_:)`, `selectFrequency(_:)`.
 - Produces: `OnboardingProfile { var categories: Set<GroceryCategory>; var shopFrequency: ShopFrequency }` — `shopFrequency` is now **non-optional, defaulting to `.biweekly`**, and `encoded()`/`decoded(_:)` keep working.
 - Deleted: `HouseholdSize`, `OnboardingProfile.householdSize`, `.monthlySpend`, `.defaultSpend`, `.minSpend`, `.maxSpend`, `GroceryCategory.basketShare`, `GroceryCategory.shrinkRate`, `SavingsForecast`, and the `problem`/`household`/`frequency`/`spend`/`socialProof`/`analyzing`/`reveal` steps with their views.
@@ -3526,7 +3507,7 @@ private struct StoreStep: View {
             .padding(.horizontal, ShrunkTheme.Spacing.lg)
 
             // Phase 3. Writes @AppStorage("storeLocationId").
-            StorePicker()
+            StorePickerView(embedded: true)
         }
     }
 }
@@ -4270,7 +4251,7 @@ git commit -m "feat(ios): savings dashboard computed from observed sizes and pri
 
 **Interfaces:**
 - Consumes: `StoreKitService.isProUser` (Task 6); `SizeRecord`, `ShrinkDetector.normalize(_:)` (Phase 1).
-- Produces: `ShrinkHistoryChart(history: [SizeRecord], isPro: Bool, onUpgrade: (() -> Void)? = nil)` and the pure `static func visibleHistory(_ history: [SizeRecord], isPro: Bool) -> [SizeRecord]`.
+- Produces: `ShrinkHistoryChart(history: [SizeRecord], isPro: Bool, onUpgrade: (() -> Void)? = nil)` and the pure `static func visibleHistory(_ history: [SizeRecord], isPro: Bool) -> [SizeRecord]` and `static func hiddenCount(_ history: [SizeRecord], isPro: Bool) -> Int`.
 - `ResultView` gains no new state: it already owns `showWatchPaywall` and presents `ProPaywallView` as a sheet, so `onUpgrade` reuses it.
 
 Spec §3.4 / §7: Pro sees every observation; free sees "the latest before/after only" — the two most recent, plus a "See full history with Pro" affordance whenever there is more history behind the lock.
