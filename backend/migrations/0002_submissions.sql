@@ -28,3 +28,11 @@ CREATE TABLE alert_jobs (
   sent_at     INTEGER
 );
 CREATE INDEX aj_unsent ON alert_jobs(sent_at, created_at);
+
+-- Phase-2 review I2: admin review (getObservationBySubmission) queries
+-- WHERE source = 'crowd' AND source_ref = ?, which obs_gtin(gtin, status,
+-- observed_at) cannot serve. Spec §1 puts ~1.7M rows in `observations` after
+-- the FDC import, so this table would be full-scanned on every accept/reject.
+-- This migration has not been applied to production (wrangler.toml still
+-- carries the placeholder database_id), so amending it in place is free.
+CREATE INDEX obs_source_ref ON observations(source, source_ref);
