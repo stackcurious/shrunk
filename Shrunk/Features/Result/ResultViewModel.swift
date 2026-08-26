@@ -23,19 +23,16 @@ final class ResultViewModel: ObservableObject {
     @Published var alternatives: [Alternative] = []
     @Published var isLoadingAlternatives: Bool = false
 
-    private let off: OpenFoodFactsService
-    private let upc: UPCItemDBService
+    private let api: ShrunkAPIClient
     private let engine: AlternativesEngine
     private let detector: ShrinkDetector
 
     init(
-        off: OpenFoodFactsService = .shared,
-        upc: UPCItemDBService = .shared,
+        api: ShrunkAPIClient = .shared,
         engine: AlternativesEngine = AlternativesEngine(),
         detector: ShrinkDetector = ShrinkDetector()
     ) {
-        self.off = off
-        self.upc = upc
+        self.api = api
         self.engine = engine
         self.detector = detector
     }
@@ -56,24 +53,7 @@ final class ResultViewModel: ObservableObject {
         alternatives = []
 
         do {
-            let product = try await off.fetchProduct(barcode: barcode)
-            let record = detector.analyze(product: product)
-            state = .loaded(product, record)
-            await loadAlternatives(for: product, record: record)
-            return
-        } catch ShrunkError.productNotFound {
-            await loadFromFallback(barcode: barcode)
-            return
-        } catch let error as ShrunkError {
-            state = .error(error.errorDescription ?? "Something went wrong.")
-        } catch {
-            state = .error(error.localizedDescription)
-        }
-    }
-
-    private func loadFromFallback(barcode: String) async {
-        do {
-            let product = try await upc.fetchProduct(barcode: barcode)
+            let product = try await api.fetchProduct(barcode: barcode, locationId: nil)
             let record = detector.analyze(product: product)
             state = .loaded(product, record)
             await loadAlternatives(for: product, record: record)

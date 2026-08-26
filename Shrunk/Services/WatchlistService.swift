@@ -7,14 +7,14 @@ import SwiftData
 @MainActor
 final class WatchlistService {
     private let context: ModelContext
-    private let off: OpenFoodFactsService
+    private let api: ShrunkAPIClient
     private let detector: ShrinkDetector
 
     init(context: ModelContext,
-         off: OpenFoodFactsService = .shared,
+         api: ShrunkAPIClient = .shared,
          detector: ShrinkDetector = ShrinkDetector()) {
         self.context = context
-        self.off = off
+        self.api = api
         self.detector = detector
     }
 
@@ -59,8 +59,9 @@ final class WatchlistService {
 
     // MARK: - Background sweep
 
-    /// Iterates watched products, hits OFF, detects shrink. Returns the
-    /// records that newly shrunk so `NotificationScheduler` can fire alerts.
+    /// Iterates watched products, hits the Shrunk API, detects shrink.
+    /// Returns the records that newly shrunk so `NotificationScheduler` can
+    /// fire alerts.
     func refreshAll() async -> [(WatchedProduct, ShrinkRecord)] {
         let watched: [WatchedProduct]
         do {
@@ -72,7 +73,7 @@ final class WatchlistService {
         var results: [(WatchedProduct, ShrinkRecord)] = []
         for item in watched where item.alertEnabled {
             do {
-                let product = try await off.fetchProduct(barcode: item.barcode)
+                let product = try await api.fetchProduct(barcode: item.barcode, locationId: nil)
                 let record = detector.analyze(product: product)
                 let prevSize = item.lastKnownSize
                 if let curr = record.currentSize,
@@ -87,9 +88,6 @@ final class WatchlistService {
                 continue
             }
             try? context.save()
-
-            // Throttle to respect OFF rate limits (shared infrastructure).
-            try? await Task.sleep(nanoseconds: 500_000_000)
         }
         return results
     }

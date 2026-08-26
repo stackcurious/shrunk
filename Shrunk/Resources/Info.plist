@@ -46,6 +46,11 @@
     </array>
     <key>NSCameraUsageDescription</key>
     <string>Shrunk uses your camera to scan product barcodes. Nothing is recorded or stored.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
     <key>UIBackgroundModes</key>
     <array>
         <string>fetch</string>
