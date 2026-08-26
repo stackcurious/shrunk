@@ -1,6 +1,6 @@
 name = "shrunk-api"
 main = "src/index.ts"
-compatibility_date = "2026-01-03"   # wrangler/miniflare rejected 2026-08-01 as newer than supported; using the latest date it accepts
+compatibility_date = "2026-08-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
