@@ -2,3 +2,4 @@
 ## 2026-08-26 — concurrent agents share one index
 - When subagents commit concurrently on the same branch, never run a bare `git commit` in the controller; a subagent's staged change gets swept into the controller's commit (happened: UPCItemDBService.swift deletion landed in the phase-5 plan commit fc7f037). Always commit with an explicit pathspec: `git commit -m "…" -- <paths>`.
 - Make subagents stage by path too (`git add <file>`), never `git add -A`.
+- Reviewer subagents must be told explicitly "never `git stash`, `checkout`, or `reset`" — one stashed the worktree mid-review while another implementer had uncommitted work.
