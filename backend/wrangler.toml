@@ -1,0 +1,13 @@
+name = "shrunk-api"
+main = "src/index.ts"
+compatibility_date = "2026-01-03"   # wrangler/miniflare rejected 2026-08-01 as newer than supported; using the latest date it accepts
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENV = "dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "shrunk"
+database_id = "00000000-0000-0000-0000-000000000000"   # replaced in Task 9 after `wrangler d1 create`
+migrations_dir = "migrations"
