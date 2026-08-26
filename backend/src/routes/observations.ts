@@ -11,12 +11,14 @@ import {
 } from "../db";
 import { scoreSubmission } from "../gate";
 import { finalizeAcceptance } from "../crowd";
+import { hitRateLimit, OBSERVATIONS_HOURLY_LIMIT } from "../ratelimit";
 
 export const observationsRoute = new Hono<{ Bindings: Env }>();
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const KINDS = new Set(["mass", "volume", "count"]);
 const MAX_RAW_TEXT = 500;
+const MAX_DEVICE_ID_LENGTH = 64;
 
 observationsRoute.post("/v1/observations", async (c) => {
   let form: FormData;
@@ -31,6 +33,15 @@ observationsRoute.post("/v1/observations", async (c) => {
 
   const deviceId = String(form.get("device_id") ?? "").trim();
   if (!deviceId) return c.json({ error: "missing_device_id" }, 400);
+  // I4/T3b: the client always sends UUID().uuidString (36 chars); 64 leaves
+  // headroom without letting an attacker write unbounded text into the column.
+  if (deviceId.length > MAX_DEVICE_ID_LENGTH) return c.json({ error: "invalid_device_id" }, 400);
+
+  // I4: this is the app's only unauthenticated write endpoint. Reuse the
+  // per-device KV counter the Kroger proxy already uses (spec §6.6), in its
+  // own "observations" bucket so the two quotas cannot steal from each other.
+  const { allowed } = await hitRateLimit(c.env.KV, deviceId, OBSERVATIONS_HOURLY_LIMIT, "observations");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429);
 
   const quantity = Number(form.get("quantity"));
   if (!Number.isFinite(quantity) || quantity <= 0) return c.json({ error: "invalid_quantity" }, 400);

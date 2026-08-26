@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
+import { hitRateLimit, KROGER_HOURLY_LIMIT } from "../src/ratelimit";
 
 const GTIN = "0028400642255";
 
@@ -162,6 +163,7 @@ describe("POST /v1/observations", () => {
     const cases: Array<[Record<string, string>, string]> = [
       [{ gtin: "12345" }, "invalid_gtin"],
       [{ device_id: "" }, "missing_device_id"],
+      [{ device_id: "d".repeat(65) }, "invalid_device_id"],
       [{ quantity: "0" }, "invalid_quantity"],
       [{ quantity: "banana" }, "invalid_quantity"],
       [{ unit_kind: "grams" }, "invalid_unit_kind"],
@@ -179,5 +181,22 @@ describe("POST /v1/observations", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "photo_too_large" });
     expect(await photoKeys()).toEqual([]);
+  });
+
+  it("rate-limits submissions to 30 per device per hour, separately from the Kroger quota", async () => {
+    await seedProduct("mass");
+    const deviceId = `device-rl-${crypto.randomUUID()}`;
+    for (let i = 1; i <= 30; i++) {
+      const res = await post(body({ device_id: deviceId }));
+      expect(res.status, `attempt ${i}`).toBe(200);
+    }
+    const res = await post(body({ device_id: deviceId }));
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: "rate_limited" });
+
+    // A device that has exhausted its observations quota still has its
+    // separate Kroger quota (spec §6.6) untouched.
+    const { allowed } = await hitRateLimit(env.KV, deviceId, KROGER_HOURLY_LIMIT, "kroger");
+    expect(allowed).toBe(true);
   });
 });

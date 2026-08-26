@@ -42,6 +42,23 @@ describe("hitRateLimit", () => {
   it("defaults to 60 calls per hour", () => {
     expect(KROGER_HOURLY_LIMIT).toBe(60);
   });
+
+  it("keeps a separate bucket per purpose for the same device", async () => {
+    // I4: /v1/observations reuses this limiter with its own purpose so a
+    // device's Kroger proxy calls and its crowd submissions don't share one
+    // counter — otherwise each feature would silently steal the other's quota.
+    const device = `dev-${crypto.randomUUID()}`;
+    expect(await hitRateLimit(env.KV, device, 1, "kroger")).toEqual({ allowed: true, count: 1 });
+    expect(await hitRateLimit(env.KV, device, 1, "observations")).toEqual({ allowed: true, count: 1 });
+    expect(await hitRateLimit(env.KV, device, 1, "kroger")).toEqual({ allowed: false, count: 1 });
+    expect(await hitRateLimit(env.KV, device, 1, "observations")).toEqual({ allowed: false, count: 1 });
+  });
+
+  it("defaults to the kroger purpose bucket when none is given", async () => {
+    const device = `dev-${crypto.randomUUID()}`;
+    await hitRateLimit(env.KV, device, 1);
+    expect(await hitRateLimit(env.KV, device, 1, "kroger")).toEqual({ allowed: false, count: 1 });
+  });
 });
 
 describe("deviceKey", () => {
