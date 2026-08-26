@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var showPaywall: Bool = false
     @State private var showDashboard: Bool = false
     @State private var showNotificationPrefs: Bool = false
+    @State private var showStorePicker: Bool = false
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     var body: some View {
         ScrollView {
@@ -14,6 +16,12 @@ struct SettingsView: View {
                 ShrunkPageHeader(title: "Settings")
                     .padding(.horizontal, -ShrunkTheme.Spacing.lg)  // cancel outer padding
                 accountCard
+                    sectionGroup(title: "Store", subtitle: "Live prices and store alternatives come from the Kroger store you pick. Prices from Kroger.") {
+                        SettingsRow(icon: "cart.fill", iconTint: .shrunkRed,
+                                    label: storeName.isEmpty ? "Choose your store" : storeName) {
+                            showStorePicker = true
+                        }
+                    }
                     sectionGroup(title: "Alerts & notifications", subtitle: "Tune what fires and when. iOS controls master delivery — we control everything else.") {
                         SettingsRow(icon: "bell.badge", iconTint: .shrunkRed, label: "Notification preferences") {
                             showNotificationPrefs = true
@@ -58,6 +66,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showNotificationPrefs) {
             NotificationPreferencesView()
+        }
+        .sheet(isPresented: $showStorePicker) {
+            StorePickerView()
         }
     }
 
