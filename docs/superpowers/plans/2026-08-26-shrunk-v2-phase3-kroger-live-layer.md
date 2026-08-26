@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md` (§4 scan-flow steps 2 and 4, §5 `price_snapshots`, §5.2 `kroger` source, §6.1 the three `/v1/kroger/*` rows and `POST /v1/admin/purge-kroger`, §6.2 six-hourly sweep, §6.6 Kroger client, §7 store picker / ResultView live panel / alternatives, §8 Kroger-unreachable behaviour, §9 mitigations, §10 tests, §11 week 3).
 
-**Assumes Phases 1–2 are complete:** the Hono Worker in `backend/` with `src/env.ts`, `src/db.ts`, `src/gtin.ts` (`normalizeGTIN`), `src/normalize.ts` (`parsePackageWeight`), `src/routes/product.ts` (`buildProductResponse`), Vitest wired to `env`/`fetchMock` from `cloudflare:test`; `Env.ADMIN_SECRET` plus bearer-auth admin routes under `/v1/admin/*`; iOS `Shrunk/Services/ShrunkAPIClient.swift` with `ProductDTO`/`PriceSnapshotDTO`, a kind-aware `ShrinkDetector`, and `ShrunkProduct.needsConfirmation: Bool`.
+**Assumes Phases 1–2 are complete:** the Hono Worker in `backend/` with `src/env.ts`, `src/db.ts`, `src/gtin.ts` (`normalizeGTIN`), `src/normalize.ts` (`parsePackageWeight`), `src/routes/product.ts` (`buildProductResponse`), Vitest wired to `env` from `cloudflare:test` (outbound `fetch` is stubbed per test with `vi.stubGlobal`, not `fetchMock`); `Env.ADMIN_SECRET` plus bearer-auth admin routes under `/v1/admin/*`; iOS `Shrunk/Services/ShrunkAPIClient.swift` with `ProductDTO`/`PriceSnapshotDTO`, a kind-aware `ShrinkDetector`, and `ShrunkProduct.needsConfirmation: Bool`.
 
 ## Global Constraints
 
@@ -37,7 +37,6 @@ scripts/fdc/normalize.py               + leading-fraction pre-pass (mirror)
 backend/
   wrangler.toml                        + KV binding, KROGER_PERSIST var, cron trigger, main = src/worker.ts
   vitest.config.ts                     + Kroger test bindings
-  migrations/0003_alert_jobs.sql       alert_jobs (spec §5)
   src/env.ts                           + KV, KROGER_CLIENT_ID/SECRET, KROGER_PERSIST
   src/normalize.ts                     + leading-fraction pre-pass (mirror)
   src/worker.ts                        NEW — Workers entry: { fetch, scheduled }
@@ -61,7 +60,7 @@ Shrunk/
   Models/ShrunkProduct.swift           + PricePoint, + priceHistory
   Services/KrogerDTO.swift             NEW — wire types for /v1/kroger/*
   Services/DataProviders.swift         NEW — StoreDataProviding, TrendingFeedProviding
-  Services/ShrunkAPIClient.swift       + locations / liveProduct / search + deviceId
+  Services/ShrunkAPIClient.swift       + locations / liveProduct / search
   Services/ShrinkDetector.swift        + price then/now from snapshots
   Services/AlternativesEngine.swift    rewritten over the store search
   Services/OpenFoodFactsService.swift  DELETED
@@ -335,11 +334,12 @@ git commit -m "feat(kroger): GTIN <-> Kroger productId conversion"
 
 - [ ] **Step 1: Add the bindings**
 
-`backend/src/env.ts` — the full file after editing (keep whatever Phases 1–2 already put here; these five lines are the additions):
+`backend/src/env.ts` — the full file after editing (keep whatever Phases 1–2 already put here, including `PHOTOS: R2Bucket`; `KV`, `KROGER_CLIENT_ID`, `KROGER_CLIENT_SECRET` and `KROGER_PERSIST` are this task's four additions):
 
 ```ts
 export interface Env {
   DB: D1Database;
+  PHOTOS: R2Bucket;
   KV: KVNamespace;
   FDC_API_KEY: string;
   ADMIN_SECRET: string;
@@ -362,71 +362,87 @@ binding = "KV"
 id = "00000000000000000000000000000000"   # replaced in Task 11 after `wrangler kv namespace create`
 ```
 
-`backend/vitest.config.ts` — extend the existing `miniflare.bindings` object:
+`backend/vitest.config.ts` — replace the `miniflare:` line inside the `cloudflareTest({...})` plugin call (the line Phase 2 Task 1 already edited to add `ADMIN_SECRET`) with the block below, keeping Phase 2's `ADMIN_SECRET` value and adding only the three Kroger lines:
 
 ```ts
-          miniflare: {
-            bindings: {
-              TEST_MIGRATIONS: migrations,
-              FDC_API_KEY: "test-key",
-              ADMIN_SECRET: "test-admin-secret",
-              KROGER_CLIENT_ID: "test-client",
-              KROGER_CLIENT_SECRET: "test-secret",
-              KROGER_PERSIST: "off",
-            },
+        miniflare: {
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            FDC_API_KEY: "test-key",
+            ADMIN_SECRET: "test-secret",
+            KROGER_CLIENT_ID: "test-client",
+            KROGER_CLIENT_SECRET: "test-secret",
+            KROGER_PERSIST: "off",
           },
+        },
 ```
-
-(If Phase 2 already set `ADMIN_SECRET` here, leave its value alone and add only the three Kroger lines.)
 
 - [ ] **Step 2: Write the failing test**
 
 `backend/test/kroger-client.test.ts`:
 
 ```ts
-import { env, fetchMock } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { env } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KrogerClient, KrogerError } from "../src/kroger/client";
 
 const TOKEN_BODY = { access_token: "tok-123", expires_in: 1800, token_type: "bearer" };
 
+function jsonResponse(body: unknown, status = 200, responseHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), { status, headers: responseHeaders });
+}
+
+/**
+ * Stubs global `fetch` for one test. `handler` returns the Response for a call
+ * it recognizes, or `undefined` for one it doesn't — which fails the test
+ * loudly instead of silently hitting the real network.
+ */
+function stubFetch(handler: (url: URL, init: RequestInit | undefined) => Response | undefined | Promise<Response | undefined>) {
+  const mock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    const res = await handler(url, init);
+    if (!res) throw new Error(`unexpected fetch: ${init?.method ?? "GET"} ${url.pathname}${url.search}`);
+    return res;
+  });
+  vi.stubGlobal("fetch", mock);
+  return mock;
+}
+
+/** Like `stubFetch`, but the token exchange always succeeds first. */
+function stubKroger(handler: (url: URL, init: RequestInit | undefined) => Response | undefined | Promise<Response | undefined>) {
+  return stubFetch(async (url, init) => {
+    if (url.pathname === "/v1/connect/oauth2/token") return jsonResponse(TOKEN_BODY);
+    return handler(url, init);
+  });
+}
+
 beforeEach(async () => {
   await env.KV.delete("kroger:token");
-  fetchMock.activate();
-  fetchMock.disableNetConnect();
 });
 
-afterEach(() => {
-  fetchMock.assertNoPendingInterceptors();
-  fetchMock.deactivate();
-});
+afterEach(() => vi.unstubAllGlobals());
 
 describe("KrogerClient.token", () => {
   it("requests a client-credentials token and caches it in KV", async () => {
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({
-        path: "/v1/connect/oauth2/token",
-        method: "POST",
-        body: "grant_type=client_credentials&scope=product.compact",
-        headers: { authorization: `Basic ${btoa("test-client:test-secret")}` },
-      })
-      .reply(200, TOKEN_BODY);
+    const fetchMock = stubFetch((url, init) => {
+      expect(url.pathname).toBe("/v1/connect/oauth2/token");
+      expect(init?.method).toBe("POST");
+      expect(init?.body).toBe("grant_type=client_credentials&scope=product.compact");
+      expect((init?.headers as Record<string, string>).authorization).toBe(`Basic ${btoa("test-client:test-secret")}`);
+      return jsonResponse(TOKEN_BODY);
+    });
 
     const client = new KrogerClient(env);
     expect(await client.token()).toBe("tok-123");
     expect(await env.KV.get("kroger:token")).toBe("tok-123");
 
-    // Second call must be served from KV — a second HTTP call would fail
-    // assertNoPendingInterceptors/disableNetConnect.
+    // Second call must be served from KV — a second HTTP call would bump this count.
     expect(await client.token()).toBe("tok-123");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("throws KrogerError with the upstream status when the token call fails", async () => {
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/connect/oauth2/token", method: "POST" })
-      .reply(401, { error: "invalid_client" });
+    stubFetch(() => jsonResponse({ error: "invalid_client" }, 401));
 
     await expect(new KrogerClient(env).token()).rejects.toMatchObject({ status: 401 });
     expect(await env.KV.get("kroger:token")).toBeNull();
@@ -532,13 +548,6 @@ git commit -m "feat(kroger): KV-cached client-credentials token"
 Append to `backend/test/kroger-client.test.ts`:
 
 ```ts
-function stubToken() {
-  fetchMock
-    .get("https://api.kroger.com")
-    .intercept({ path: "/v1/connect/oauth2/token", method: "POST" })
-    .reply(200, TOKEN_BODY);
-}
-
 const PRODUCT = {
   productId: "0002840064225",
   upc: "0002840064225",
@@ -560,15 +569,15 @@ const PRODUCT = {
 
 describe("KrogerClient calls", () => {
   it("fetches locations near a zip and forwards Cache-Control", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/locations?filter.zipCode.near=45044&filter.radiusInMiles=15&filter.limit=20" })
-      .reply(
-        200,
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/locations") return undefined;
+      expect(url.search).toBe("?filter.zipCode.near=45044&filter.radiusInMiles=15&filter.limit=20");
+      return jsonResponse(
         { data: [{ locationId: "01400943", chain: "KROGER", name: "Hyde Park", address: { addressLine1: "3760 Paxton Ave", city: "Cincinnati", state: "OH", zipCode: "45209" }, geolocation: { latitude: 39.14, longitude: -84.42 } }] },
-        { headers: { "cache-control": "public, max-age=3600" } },
+        200,
+        { "cache-control": "public, max-age=3600" },
       );
+    });
 
     const result = await new KrogerClient(env).locations("45044");
     expect(result.data).toHaveLength(1);
@@ -577,11 +586,11 @@ describe("KrogerClient calls", () => {
   });
 
   it("fetches one product at a location", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products/0002840064225?filter.locationId=01400943" })
-      .reply(200, { data: PRODUCT }, { headers: { "cache-control": "private, max-age=1800" } });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      expect(url.search).toBe("?filter.locationId=01400943");
+      return jsonResponse({ data: PRODUCT }, 200, { "cache-control": "private, max-age=1800" });
+    });
 
     const result = await new KrogerClient(env).product("0002840064225", "01400943");
     expect(result.data?.items?.[0].price?.regular).toBe(1.89);
@@ -589,16 +598,13 @@ describe("KrogerClient calls", () => {
   });
 
   it("batches at most 50 product ids into one call", async () => {
-    stubToken();
     const ids = Array.from({ length: 60 }, (_, i) => String(i).padStart(13, "0"));
     let requestedIds = "";
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: /^\/v1\/products\?filter\.productId=/ })
-      .reply((options) => {
-        requestedIds = decodeURIComponent(new URL(`https://api.kroger.com${options.path}`).searchParams.get("filter.productId")!);
-        return { statusCode: 200, data: { data: [PRODUCT] } };
-      });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      requestedIds = decodeURIComponent(url.searchParams.get("filter.productId")!);
+      return jsonResponse({ data: [PRODUCT] });
+    });
 
     const result = await new KrogerClient(env).products(ids, "01400943");
     expect(requestedIds.split(",")).toHaveLength(50);
@@ -606,11 +612,11 @@ describe("KrogerClient calls", () => {
   });
 
   it("searches by term at a location", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products?filter.term=Beverages&filter.locationId=01400943&filter.limit=50" })
-      .reply(200, { data: [PRODUCT] });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      expect(url.search).toBe("?filter.term=Beverages&filter.locationId=01400943&filter.limit=50");
+      return jsonResponse({ data: [PRODUCT] });
+    });
 
     const result = await new KrogerClient(env).search("Beverages", "01400943");
     expect(result.data[0].productId).toBe("0002840064225");
@@ -618,21 +624,20 @@ describe("KrogerClient calls", () => {
 
   it("drops the cached token on 401 and surfaces the status", async () => {
     await env.KV.put("kroger:token", "stale-token");
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products/0002840064225?filter.locationId=01400943" })
-      .reply(401, { error: "unauthorized" });
+    stubFetch((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      return jsonResponse({ error: "unauthorized" }, 401);
+    });
 
     await expect(new KrogerClient(env).product("0002840064225", "01400943")).rejects.toMatchObject({ status: 401 });
     expect(await env.KV.get("kroger:token")).toBeNull();
   });
 
   it("surfaces 429 so the route can pass it through", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products?filter.term=Snacks&filter.locationId=01400943&filter.limit=50" })
-      .reply(429, { error: "quota" });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      return jsonResponse({ error: "quota" }, 429);
+    });
 
     await expect(new KrogerClient(env).search("Snacks", "01400943")).rejects.toMatchObject({ status: 429 });
   });
@@ -889,8 +894,8 @@ Persistence is added in Task 7 — this task leaves a marked hook.
 `backend/test/kroger-routes.test.ts`:
 
 ```ts
-import { env, fetchMock } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { env } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../src/index";
 
 const TOKEN_BODY = { access_token: "tok-123", expires_in: 1800, token_type: "bearer" };
@@ -917,29 +922,59 @@ function headers() {
   return { "X-Device-Id": `dev-${crypto.randomUUID()}` };
 }
 
-function stubToken() {
-  fetchMock.get("https://api.kroger.com").intercept({ path: "/v1/connect/oauth2/token", method: "POST" }).reply(200, TOKEN_BODY);
+function jsonResponse(body: unknown, status = 200, responseHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), { status, headers: responseHeaders });
+}
+
+/**
+ * Stubs global `fetch`; `handler` returns the Response for a call it
+ * recognizes, or `undefined` for one it doesn't — which fails the test loudly.
+ */
+function stubFetch(handler: (url: URL, init: RequestInit | undefined) => Response | undefined | Promise<Response | undefined>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const res = await handler(url, init);
+      if (!res) throw new Error(`unexpected fetch: ${init?.method ?? "GET"} ${url.pathname}${url.search}`);
+      return res;
+    }),
+  );
+}
+
+/** Like `stubFetch`, but the token exchange always succeeds first. */
+function stubKroger(handler: (url: URL, init: RequestInit | undefined) => Response | undefined | Promise<Response | undefined>) {
+  stubFetch(async (url, init) => {
+    if (url.pathname === "/v1/connect/oauth2/token") return jsonResponse(TOKEN_BODY);
+    return handler(url, init);
+  });
 }
 
 beforeEach(async () => {
   await env.KV.delete("kroger:token");
-  fetchMock.activate();
-  fetchMock.disableNetConnect();
+  // Nothing is stubbed by default — a test that doesn't call stubFetch/stubKroger
+  // must never reach the network (mirrors the old disableNetConnect()).
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      throw new Error(`unexpected fetch: ${String(input)}`);
+    }),
+  );
 });
 
-afterEach(() => fetchMock.deactivate());
+afterEach(() => vi.unstubAllGlobals());
 
 describe("GET /v1/kroger/locations", () => {
   it("returns mapped locations with attribution and the upstream cache header", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/locations?filter.zipCode.near=45044&filter.radiusInMiles=15&filter.limit=20" })
-      .reply(
-        200,
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/locations") return undefined;
+      expect(url.search).toBe("?filter.zipCode.near=45044&filter.radiusInMiles=15&filter.limit=20");
+      return jsonResponse(
         { data: [{ locationId: "01400943", chain: "KROGER", name: "Hyde Park", address: { addressLine1: "3760 Paxton Ave", city: "Cincinnati", state: "OH", zipCode: "45209" }, geolocation: { latitude: 39.14, longitude: -84.42 } }] },
-        { headers: { "cache-control": "public, max-age=3600" } },
+        200,
+        { "cache-control": "public, max-age=3600" },
       );
+    });
 
     const res = await app.request("/v1/kroger/locations?zip=45044", { headers: headers() }, env);
     expect(res.status).toBe(200);
@@ -964,11 +999,11 @@ describe("GET /v1/kroger/locations", () => {
 
 describe("GET /v1/kroger/product/:gtin", () => {
   it("maps price, size, stock and image and echoes the gtin we were asked for", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products/0002840064225?filter.locationId=01400943" })
-      .reply(200, { data: PRODUCT }, { headers: { "cache-control": "private, max-age=1800" } });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      expect(url.search).toBe("?filter.locationId=01400943");
+      return jsonResponse({ data: PRODUCT }, 200, { "cache-control": "private, max-age=1800" });
+    });
 
     const res = await app.request("/v1/kroger/product/0028400642255?locationId=01400943", { headers: headers() }, env);
     expect(res.status).toBe(200);
@@ -998,11 +1033,10 @@ describe("GET /v1/kroger/product/:gtin", () => {
   });
 
   it("404s when Kroger does not carry the product", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products/0002840064225?filter.locationId=01400943" })
-      .reply(404, { errors: { code: "PRODUCT-NOT-FOUND" } });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      return jsonResponse({ errors: { code: "PRODUCT-NOT-FOUND" } }, 404);
+    });
 
     const res = await app.request("/v1/kroger/product/0028400642255?locationId=01400943", { headers: headers() }, env);
     expect(res.status).toBe(404);
@@ -1010,11 +1044,10 @@ describe("GET /v1/kroger/product/:gtin", () => {
   });
 
   it("passes a revoked key (401) through", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products/0002840064225?filter.locationId=01400943" })
-      .reply(401, { error: "unauthorized" });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products/0002840064225") return undefined;
+      return jsonResponse({ error: "unauthorized" }, 401);
+    });
 
     const res = await app.request("/v1/kroger/product/0028400642255?locationId=01400943", { headers: headers() }, env);
     expect(res.status).toBe(401);
@@ -1024,12 +1057,12 @@ describe("GET /v1/kroger/product/:gtin", () => {
 
 describe("GET /v1/kroger/search", () => {
   it("ranks by price per base unit, cheapest first", async () => {
-    stubToken();
     const cheap = { ...PRODUCT, productId: "0002840064226", upc: "0002840064226", description: "Store Brand", items: [{ size: "32 fl oz", price: { regular: 1.0, promo: 0 }, inventory: { stockLevel: "HIGH" } }] };
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products?filter.term=Beverages&filter.locationId=01400943&filter.limit=50" })
-      .reply(200, { data: [PRODUCT, cheap] }, { headers: { "cache-control": "private, max-age=1800" } });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      expect(url.search).toBe("?filter.term=Beverages&filter.locationId=01400943&filter.limit=50");
+      return jsonResponse({ data: [PRODUCT, cheap] }, 200, { "cache-control": "private, max-age=1800" });
+    });
 
     const res = await app.request("/v1/kroger/search?term=Beverages&locationId=01400943", { headers: headers() }, env);
     expect(res.status).toBe(200);
@@ -1041,11 +1074,10 @@ describe("GET /v1/kroger/search", () => {
   });
 
   it("passes a quota error (429) through", async () => {
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products?filter.term=Snacks&filter.locationId=01400943&filter.limit=50" })
-      .reply(429, { error: "quota" });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      return jsonResponse({ error: "quota" }, 429);
+    });
 
     const res = await app.request("/v1/kroger/search?term=Snacks&locationId=01400943", { headers: headers() }, env);
     expect(res.status).toBe(429);
@@ -1054,11 +1086,10 @@ describe("GET /v1/kroger/search", () => {
 
   it("never persists search results", async () => {
     const before = await env.DB.prepare("SELECT COUNT(*) AS n FROM price_snapshots").first<{ n: number }>();
-    stubToken();
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: "/v1/products?filter.term=Dairy&filter.locationId=01400943&filter.limit=50" })
-      .reply(200, { data: [PRODUCT] });
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/products") return undefined;
+      return jsonResponse({ data: [PRODUCT] });
+    });
 
     await app.request("/v1/kroger/search?term=Dairy&locationId=01400943", { headers: headers() }, { ...env, KROGER_PERSIST: "on" });
     const after = await env.DB.prepare("SELECT COUNT(*) AS n FROM price_snapshots").first<{ n: number }>();
@@ -1303,8 +1334,8 @@ git commit -m "feat(backend): /v1/kroger locations, product and search proxy rou
 `backend/test/kroger-persist.test.ts`:
 
 ```ts
-import { env, fetchMock } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { env } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../src/index";
 import { snapshotPerUnit } from "../src/kroger/persist";
 
@@ -1322,12 +1353,20 @@ function product(size: string, regular = 1.89) {
   };
 }
 
+function jsonResponse(body: unknown, status = 200, responseHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), { status, headers: responseHeaders });
+}
+
 function stub(size: string, regular = 1.89) {
-  fetchMock.get("https://api.kroger.com").intercept({ path: "/v1/connect/oauth2/token", method: "POST" }).reply(200, TOKEN_BODY);
-  fetchMock
-    .get("https://api.kroger.com")
-    .intercept({ path: "/v1/products/0002840064225?filter.locationId=01400943" })
-    .reply(200, { data: product(size, regular) });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/v1/connect/oauth2/token") return jsonResponse(TOKEN_BODY);
+      if (url.pathname === "/v1/products/0002840064225") return jsonResponse({ data: product(size, regular) });
+      throw new Error(`unexpected fetch: ${url.pathname}${url.search}`);
+    }),
+  );
 }
 
 const call = (persist: "on" | "off") =>
@@ -1344,11 +1383,9 @@ beforeEach(async () => {
     env.DB.prepare("DELETE FROM price_snapshots"),
     env.DB.prepare("DELETE FROM products"),
   ]);
-  fetchMock.activate();
-  fetchMock.disableNetConnect();
 });
 
-afterEach(() => fetchMock.deactivate());
+afterEach(() => vi.unstubAllGlobals());
 
 describe("KROGER_PERSIST", () => {
   it("writes nothing when off", async () => {
@@ -1672,7 +1709,7 @@ beforeEach(async () => {
 
 describe("POST /v1/admin/purge-kroger", () => {
   it("deletes every snapshot and every kroger observation, keeping the rest", async () => {
-    const res = await app.request("/v1/admin/purge-kroger", { method: "POST", headers: { authorization: "Bearer test-admin-secret" } }, env);
+    const res = await app.request("/v1/admin/purge-kroger", { method: "POST", headers: { authorization: "Bearer test-secret" } }, env);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ deleted: { price_snapshots: 1, observations: 1 } });
 
@@ -1759,7 +1796,6 @@ git commit -m "feat(backend): POST /v1/admin/purge-kroger removes all Kroger-der
 ### Task 10: `alert_jobs` + the six-hourly Kroger sweep
 
 **Files:**
-- Create: `backend/migrations/0003_alert_jobs.sql`
 - Create: `backend/src/sweep.ts`, `backend/src/worker.ts`
 - Modify: `backend/wrangler.toml`
 - Test: `backend/test/sweep.test.ts`
@@ -1768,57 +1804,50 @@ git commit -m "feat(backend): POST /v1/admin/purge-kroger removes all Kroger-der
 - Consumes: `KrogerClient.products`, `krogerProductId`, `gtinFromKroger`, `toLiveProduct`, `persistKrogerProduct`, `snapshotPerUnit`, `parsePackageWeight`.
 - Produces: `runKrogerSweep(env: Env, client?: KrogerClient): Promise<SweepResult>` with `SweepResult = { pairs: number; snapshots: number; sizeDrops: number; priceHikes: number }`.
 - Produces: `backend/src/worker.ts` default export `{ fetch, scheduled }` — the new Workers entry (`wrangler.toml` `main`). `src/index.ts` keeps default-exporting the Hono `app`, so every existing test's `import app from "../src/index"` is untouched.
-- Produces: table `alert_jobs(id, kind, gtin, brand, location_id, payload, created_at, sent_at)`; this phase writes `kind ∈ {size_drop, price_hike}`. Phase 4 drains it.
+- Consumes: table `alert_jobs(id, kind, gtin, brand, location_id, payload, created_at, sent_at)`, already created by Phase 2's `migrations/0002_submissions.sql` (index `aj_unsent`); this phase writes `kind ∈ {size_drop, price_hike}` into it. Phase 4 drains it.
 - **Scope note:** `watches` and `devices` do not exist until Phase 4, so this sweep iterates the distinct `(gtin, location_id)` pairs already present in `price_snapshots`. Phase 4 replaces that one query with `watches × devices`.
 
-- [ ] **Step 1: Add the migration**
-
-Confirm the next free number first: `ls backend/migrations` (Phase 1 wrote `0001_init.sql`, Phase 2 `0002_*`). Create `backend/migrations/0003_alert_jobs.sql` — if your listing shows a different next number, use it and adjust the filename below.
-
-```sql
-CREATE TABLE alert_jobs (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind        TEXT NOT NULL,
-  gtin        TEXT,
-  brand       TEXT,
-  location_id TEXT,
-  payload     TEXT,
-  created_at  INTEGER NOT NULL,
-  sent_at     INTEGER
-);
-CREATE INDEX alert_jobs_unsent ON alert_jobs(sent_at, created_at);
-```
-
-- [ ] **Step 2: Write the failing test**
+- [ ] **Step 1: Write the failing test**
 
 `backend/test/sweep.test.ts`:
 
 ```ts
-import { env, fetchMock } from "cloudflare:test";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runKrogerSweep } from "../src/sweep";
+import worker from "../src/worker";
 
 const TOKEN_BODY = { access_token: "tok-123", expires_in: 1800, token_type: "bearer" };
 const GTIN = "0028400642255";
 const LOCATION = "01400943";
 
+function jsonResponse(body: unknown, status = 200, responseHeaders?: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), { status, headers: responseHeaders });
+}
+
 function stubBatch(size: string, perUnit: number, regular = 4.0) {
-  fetchMock.get("https://api.kroger.com").intercept({ path: "/v1/connect/oauth2/token", method: "POST" }).reply(200, TOKEN_BODY);
-  fetchMock
-    .get("https://api.kroger.com")
-    .intercept({ path: /^\/v1\/products\?filter\.productId=/ })
-    .reply(200, {
-      data: [
-        {
-          productId: "0002840064225",
-          upc: "0002840064225",
-          brand: "Gatorade",
-          description: "Gatorade Thirst Quencher",
-          categories: ["Beverages"],
-          items: [{ size, price: { regular, promo: 0, regularPerUnitEstimate: perUnit }, inventory: { stockLevel: "HIGH" } }],
-        },
-      ],
-    });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/v1/connect/oauth2/token") return jsonResponse(TOKEN_BODY);
+      if (url.pathname === "/v1/products") {
+        return jsonResponse({
+          data: [
+            {
+              productId: "0002840064225",
+              upc: "0002840064225",
+              brand: "Gatorade",
+              description: "Gatorade Thirst Quencher",
+              categories: ["Beverages"],
+              items: [{ size, price: { regular, promo: 0, regularPerUnitEstimate: perUnit }, inventory: { stockLevel: "HIGH" } }],
+            },
+          ],
+        });
+      }
+      throw new Error(`unexpected fetch: ${url.pathname}${url.search}`);
+    }),
+  );
 }
 
 /** Seed the previous snapshot the sweep will compare against. */
@@ -1839,11 +1868,9 @@ beforeEach(async () => {
     env.DB.prepare("DELETE FROM price_snapshots"),
     env.DB.prepare("DELETE FROM products"),
   ]);
-  fetchMock.activate();
-  fetchMock.disableNetConnect();
 });
 
-afterEach(() => fetchMock.deactivate());
+afterEach(() => vi.unstubAllGlobals());
 
 async function jobKinds(): Promise<string[]> {
   const rows = await env.DB.prepare("SELECT kind FROM alert_jobs ORDER BY id").all<{ kind: string }>();
@@ -1911,30 +1938,57 @@ describe("runKrogerSweep", () => {
     }
 
     const batchSizes: number[] = [];
-    fetchMock.get("https://api.kroger.com").intercept({ path: "/v1/connect/oauth2/token", method: "POST" }).reply(200, TOKEN_BODY);
-    fetchMock
-      .get("https://api.kroger.com")
-      .intercept({ path: /^\/v1\/products\?filter\.productId=/ })
-      .reply((options) => {
-        const ids = decodeURIComponent(new URL(`https://api.kroger.com${options.path}`).searchParams.get("filter.productId")!);
-        batchSizes.push(ids.split(",").length);
-        return { statusCode: 200, data: { data: [] } };
-      })
-      .times(2);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(input instanceof Request ? input.url : String(input));
+        if (url.pathname === "/v1/connect/oauth2/token") return jsonResponse(TOKEN_BODY);
+        if (url.pathname === "/v1/products") {
+          const ids = decodeURIComponent(url.searchParams.get("filter.productId")!);
+          batchSizes.push(ids.split(",").length);
+          return jsonResponse({ data: [] });
+        }
+        throw new Error(`unexpected fetch: ${url.pathname}${url.search}`);
+      }),
+    );
 
     const result = await runKrogerSweep(on());
     expect(result.pairs).toBe(60);
     expect(batchSizes).toEqual([50, 10]);
   });
 });
+
+describe("worker.scheduled", () => {
+  it("runs the Kroger sweep on the six-hourly cron string", async () => {
+    await seedSnapshot("32 fl oz", 2.0);
+    stubBatch("28 fl oz", 2.0);
+
+    const ctx = createExecutionContext();
+    await worker.scheduled({ cron: "0 */6 * * *", scheduledTime: Date.now() } as ScheduledController, on(), ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(await jobKinds()).toEqual(["size_drop"]);
+  });
+
+  it("does nothing for an unrelated cron string", async () => {
+    await seedSnapshot("32 fl oz", 2.0);
+    stubBatch("28 fl oz", 2.0);
+
+    const ctx = createExecutionContext();
+    await worker.scheduled({ cron: "0 0 * * *", scheduledTime: Date.now() } as ScheduledController, on(), ctx);
+    await waitOnExecutionContext(ctx);
+
+    expect(await jobKinds()).toEqual([]);
+  });
+});
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [ ] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx vitest run test/sweep.test.ts`
-Expected: FAIL — `Cannot find module '../src/sweep'` (and, once that resolves, `no such table: alert_jobs` if the migration was skipped).
+Expected: FAIL — `Cannot find module '../src/sweep'`.
 
-- [ ] **Step 4: Implement the sweep**
+- [ ] **Step 3: Implement the sweep**
 
 `backend/src/sweep.ts`:
 
@@ -2069,7 +2123,7 @@ async function enqueue(
 }
 ```
 
-- [ ] **Step 5: Add the Workers entry and the cron trigger**
+- [ ] **Step 4: Add the Workers entry and the cron trigger**
 
 `backend/src/worker.ts`:
 
@@ -2101,15 +2155,15 @@ main = "src/worker.ts"
 crons = ["0 */6 * * *"]
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend && npx vitest run && npx tsc --noEmit`
-Expected: `sweep.test.ts` `6 passed`; every other suite still green.
+Expected: `sweep.test.ts` `8 passed`; every other suite still green.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add backend/migrations/0003_alert_jobs.sql backend/src/sweep.ts backend/src/worker.ts backend/wrangler.toml backend/test/sweep.test.ts
+git add backend/src/sweep.ts backend/src/worker.ts backend/wrangler.toml backend/test/sweep.test.ts
 git commit -m "feat(backend): six-hourly Kroger sweep files size_drop and price_hike alert jobs"
 ```
 
@@ -2215,7 +2269,7 @@ git commit -m "chore(backend): KV namespace binding, Kroger secrets and deploy n
 **Interfaces:**
 - Produces: `StoreLocation(id:chain:name:addressLine1:city:state:zipCode:)` with `displayName`, `addressLine`.
 - Produces: `protocol StorePriced` (`regular`, `promo`, `stockLevel`) with `effectivePrice`, `inStock`, `stockLabel`; `LivePrice` (with `static let attribution = "Prices from Kroger"`) and `StoreSearchResult`, both conforming.
-- Produces: `ShrunkAPIClient.locations(zip:) -> [StoreLocation]`, `.liveProduct(barcode:locationId:) -> LivePrice`, `.search(term:locationId:) -> [StoreSearchResult]`, plus `static let deviceId: String` (persistent UUID sent as `X-Device-Id`; Phase 4 reuses it for `/v1/devices`).
+- Produces: `ShrunkAPIClient.locations(zip:) -> [StoreLocation]`, `.liveProduct(barcode:locationId:) -> LivePrice`, `.search(term:locationId:) -> [StoreSearchResult]`, plus `X-Device-Id` sent on every request via `DeviceIdentity.current` (Phase 2); Phase 4 reuses the same value for `/v1/devices`.
 - Produces: `protocol StoreDataProviding` (those three methods) with `extension ShrunkAPIClient: StoreDataProviding {}`, and `protocol TrendingFeedProviding { func fetch() async -> TrendingFeed }` with `extension TrendingFeedService: TrendingFeedProviding {}`.
 
 iOS test command used throughout (substitute the simulator from `xcrun simctl list devices available`):
@@ -2536,7 +2590,7 @@ struct SearchResultDTO: Decodable {
 
 - [ ] **Step 5: Add the client methods and the seams**
 
-In `Shrunk/Services/ShrunkAPIClient.swift`, add the device id and the shared GET, and route `fetchProduct` through it. Replace the whole `fetchProduct(barcode:locationId:)` method with the version below and add the members that follow it (`locations`, `liveProduct`, `search`, `get`, `deviceId`):
+In `Shrunk/Services/ShrunkAPIClient.swift`, add the shared GET (which sends `DeviceIdentity.current` as `X-Device-Id`, reusing Phase 2's `DeviceIdentity`) and route `fetchProduct` through it. Replace the whole `fetchProduct(barcode:locationId:)` method with the version below and add the members that follow it (`locations`, `liveProduct`, `search`, `get`):
 
 ```swift
     func fetchProduct(barcode: String, locationId: String?) async throws -> ShrunkProduct {
@@ -2578,7 +2632,7 @@ In `Shrunk/Services/ShrunkAPIClient.swift`, add the device id and the shared GET
     /// One GET, one status mapping, one decode — every endpoint goes through here.
     private func get<T: Decodable>(_ url: URL) async throws -> T {
         var request = URLRequest(url: url)
-        request.setValue(Self.deviceId, forHTTPHeaderField: "X-Device-Id")
+        request.setValue(DeviceIdentity.current, forHTTPHeaderField: "X-Device-Id")
 
         let data: Data
         do {
@@ -2601,17 +2655,6 @@ In `Shrunk/Services/ShrunkAPIClient.swift`, add the device id and the shared GET
             throw ShrunkError.decoding(error)
         }
     }
-
-    /// Stable per-install id, tied to no account. The Worker uses it only for
-    /// the per-device Kroger rate limit (spec §6.6); Phase 4 reuses it for
-    /// `/v1/devices`.
-    static let deviceId: String = {
-        let key = "shrunk.device_id"
-        if let existing = UserDefaults.standard.string(forKey: key) { return existing }
-        let fresh = UUID().uuidString
-        UserDefaults.standard.set(fresh, forKey: key)
-        return fresh
-    }()
 ```
 
 `Shrunk/Services/DataProviders.swift`:
@@ -3247,7 +3290,7 @@ struct ShrunkProduct: Identifiable, Codable, Hashable {
     let sizeHistory: [SizeRecord]
     let currentPrice: Double?
     let currency: String
-    let needsConfirmation: Bool        // Phase 2 — leave in place
+    var needsConfirmation: Bool = false   // Phase 2 — keep the default so TrendingEntry.toProduct(), ShrinkDetectorTests.makeProduct(), etc. still compile
     /// Store price snapshots, oldest first. Empty unless a store is set.
     var priceHistory: [PricePoint] = []
 }
@@ -3979,7 +4022,26 @@ and replace every `alternatives = []` with `alternativesResult = .empty`. Add th
     var isPro: Bool = false
 ```
 
-with `private let defaults: UserDefaults` added to the stored properties and `defaults: UserDefaults = .standard` added as the last initialiser parameter.
+with `private let defaults: UserDefaults` added to the stored properties and `defaults: UserDefaults = .standard` added as the last initialiser parameter — i.e. the stored properties and initialiser become:
+
+```swift
+    private let api: ShrunkAPIClient
+    private let engine: AlternativesEngine
+    private let detector: ShrinkDetector
+    private let defaults: UserDefaults
+
+    init(
+        api: ShrunkAPIClient = .shared,
+        engine: AlternativesEngine = AlternativesEngine(),
+        detector: ShrinkDetector = ShrinkDetector(),
+        defaults: UserDefaults = .standard
+    ) {
+        self.api = api
+        self.engine = engine
+        self.detector = detector
+        self.defaults = defaults
+    }
+```
 
 In `Shrunk/Features/Result/ResultView.swift`, update the sheet:
 
