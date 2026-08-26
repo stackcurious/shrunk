@@ -34,3 +34,7 @@ GoogleService-Info.plist
 
 # Subagent-driven-development scratch
 .superpowers/
+
+# FDC import artifacts
+scripts/out/
+*.zip
