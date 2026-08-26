@@ -16,7 +16,7 @@
 
 - Phase 1: `backend/` with `src/index.ts` (default-exports the Hono `app`), `src/env.ts` (`Env`), `src/db.ts` (`ProductRow`, `getProduct`, `insertProduct`, `getAcceptedObservations`, `getRecentSnapshots`), `src/gtin.ts` (`normalizeGTIN`), `src/normalize.ts` (`parsePackageWeight`, `ParsedQuantity { quantity, unitKind, raw }`, `UnitKind`), `migrations/0001_init.sql`; iOS `Shrunk/Services/ShrunkAPIClient.swift` (actor, `init(baseURL:session:)`, `fetchProduct(barcode:locationId:)`, `ProductDTO.unit(forKind:)`), `ShrinkDetector`, `ShrunkTests/ShrunkAPIClientTests.swift` (`StubURLProtocol`).
 - Phase 2: `migrations/0002_submissions.sql` (`submissions`, `alert_jobs`), `Env.ADMIN_SECRET`, `Env.PHOTOS`, `src/db.ts` `insertAlertJob(db, job: NewAlertJob)` with `NewAlertJob { kind, gtin, brand, location_id, payload, created_at }`, crowd `size_drop` payloads shaped `{gtin, unit_kind, previous_quantity, quantity, percent_change, source}`; iOS `Shrunk/Services/DeviceIdentity.swift`, `ShrunkAPIClient.submitObservation(...)`.
-- Phase 3: `migrations/0003_alert_jobs.sql`, `src/worker.ts` (`export default { fetch, scheduled }`, `main` in `wrangler.toml`), `src/sweep.ts` (`runKrogerSweep(env, client?)`, `SweepResult`), `src/kroger/*`, `Env` additions `KV`, `KROGER_CLIENT_ID`, `KROGER_CLIENT_SECRET`, `KROGER_PERSIST`; sweep `size_drop` payloads `{previous_size, size}` and `price_hike` payloads `{previous_per_unit, per_unit}`; iOS `ShrunkAPIClient.deviceId`, `.liveProduct(barcode:locationId:)`, `LivePrice` (`quantity: Double?`, `unitKind: String?`), `Shrunk/Services/DataProviders.swift` (`StoreDataProviding`, `TrendingFeedProviding`), `@AppStorage("storeLocationId")`.
+- Phase 3: adds no migration — `alert_jobs` stays defined by `migrations/0002_submissions.sql` through Phase 4, so `0003` is the next free migration number. `src/worker.ts` (`export default { fetch, scheduled }`, `main` in `wrangler.toml`), `src/sweep.ts` (`runKrogerSweep(env, client?)`, `SweepResult`), `src/kroger/*`, `Env` additions `KV`, `KROGER_CLIENT_ID`, `KROGER_CLIENT_SECRET`, `KROGER_PERSIST`; sweep `size_drop` payloads `{previous_size, size}` and `price_hike` payloads `{previous_per_unit, per_unit}`; iOS sends `DeviceIdentity.current` inline as `X-Device-Id` on every Kroger-proxy call — it defines no `ShrunkAPIClient.deviceId` static and introduces no new storage key — `.liveProduct(barcode:locationId:)`, `LivePrice` (`quantity: Double?`, `unitKind: String?`), `Shrunk/Services/DataProviders.swift` (`StoreDataProviding`, `TrendingFeedProviding`), `@AppStorage("storeLocationId")`.
 
 ## Global Constraints
 
@@ -29,7 +29,7 @@
 - **Max 40 pushes per drain invocation** (spec §6.2). A job with more recipients resumes from `alert_jobs.sent_count` on the next run.
 - Price-hike threshold: per-unit price up **≥5%** versus the previous snapshot (spec §3). Size drop: more than **1%** smaller, the same-size band from spec §5.1.
 - Digest cron runs `0 1 * * 1` (Monday 01:00 UTC): per category, count the last **7 days** of accepted shrink observations plus `verified_case` jobs; **one push per Pro device** with a non-zero count in a subscribed category (spec §6.2).
-- Feed window: accepted `crowd`/`kroger` shrink observations from the last **30 days**, merged with the curated catalogue (spec §6.1).
+- Feed window: accepted `crowd`/`kroger` shrink observations from the last **30 days**, merged with the curated catalogue. The 30-day window and the `crowd`/`kroger`-only source filter are implementation choices, not spec-mandated — spec §6.1 only says "recently accepted shrink observations, filterable by category" (curated entries are covered separately via `curatedItems()`; `fdc` bulk-import rows are excluded because a user wouldn't recognize them as "just happened").
 - Barcodes are 13-digit zero-padded GTINs; every inbound barcode goes through `normalizeGTIN` (spec §2).
 - APNs topic and bundle id are **`com.shrunk.app`**. APNs JWT is ES256, cached in KV for **50 minutes** (spec §6.5). Hosts: `api.push.apple.com` (production) / `api.sandbox.push.apple.com` (sandbox).
 - **Push `kind` values on the wire are the iOS camelCase names** — `sizeDrop`, `priceHike`, `verifiedCase`, `digest` — so the app maps a payload straight onto `ShrinkAlert.Kind`. The D1 `alert_jobs.kind` values stay snake_case (`size_drop`, `price_hike`, `verified_case`), which is what Phases 2 and 3 already write.
@@ -53,13 +53,13 @@
       }
   }
   ```
-- Phase 4 adds a `prefs TEXT` column to `devices` (per-kind notification toggles as a JSON object). Phase 5's `0005_devices_appstore.sql` creates `devices`/`watches` with `IF NOT EXISTS`, so it will find them already present and must not attempt to re-add columns.
+- Phase 4 adds a `prefs TEXT` column to `devices` (per-kind notification toggles as a JSON object). Phase 5's own migration, `0004_devices_appstore.sql`, only adds the `devices_app_account_token` index — it creates or alters neither `devices` nor `watches`, so this column is untouched from Phase 5 onward.
 
 ## File Structure
 
 ```
 backend/
-  migrations/0004_devices_watches.sql   devices + watches (spec §5) + alert_jobs.sent_count
+  migrations/0003_devices_watches.sql   devices + watches (spec §5) + alert_jobs.sent_count
   wrangler.toml                         + PUSH_PROVIDER/APNS_ENV vars, three cron triggers
   vitest.config.ts                      + push test bindings
   package.json                          + sync:trending / check:trending scripts
@@ -88,8 +88,7 @@ Shrunk/
   Resources/Info.plist                  + remote-notification background mode
   Services/AppDelegate.swift            NEW — APNs registration + UNUserNotificationCenterDelegate
   Services/PushInbox.swift              NEW — push -> Alerts feed + tap routing state
-  Services/DeviceIdentity.swift         MODIFIED — one id, shared with ShrunkAPIClient.deviceId
-  Services/ShrunkAPIClient.swift        + syncDevice, DeviceWatch, deviceId reads DeviceIdentity
+  Services/ShrunkAPIClient.swift        + syncDevice, DeviceWatch, apnsTokenKey (device_id sent is DeviceIdentity.current, untouched from Phase 2)
   Services/DataProviders.swift          + WatchlistSyncing seam
   Services/NotificationScheduler.swift  + requestPermissionAndRegister
   Services/WatchlistService.swift       refreshAll -> syncToBackend + liveSizeCheck
@@ -119,7 +118,7 @@ ShrunkTests/
 ### Task 1: `devices` + `watches` schema, push bindings, D1 helpers
 
 **Files:**
-- Create: `backend/migrations/0004_devices_watches.sql`
+- Create: `backend/migrations/0003_devices_watches.sql`
 - Modify: `backend/src/env.ts`
 - Modify: `backend/src/db.ts`
 - Modify: `backend/wrangler.toml`
@@ -142,9 +141,9 @@ ShrunkTests/
 
 - [ ] **Step 1: Write the migration**
 
-Confirm the next free number first: `ls backend/migrations` (Phase 1 wrote `0001_init.sql`, Phase 2 `0002_*`, Phase 3 `0003_*`). If your listing shows a different next number, use it and rename every reference below.
+Confirm the next free number first: `ls backend/migrations` (Phase 1 wrote `0001_init.sql`, Phase 2 `0002_submissions.sql`; Phase 3 adds no migration — it reuses `alert_jobs` from `0002_submissions.sql`). If your listing shows a different next number, use it and rename every reference below.
 
-`backend/migrations/0004_devices_watches.sql`:
+`backend/migrations/0003_devices_watches.sql`:
 
 ```sql
 -- Phase 4 (spec §5). Only new objects here — no earlier table is recreated.
@@ -481,7 +480,7 @@ Expected: every Phase 1–3 suite still green (the new migration only adds objec
 - [ ] **Step 8: Commit**
 
 ```bash
-git add backend/migrations/0004_devices_watches.sql backend/src/env.ts backend/src/db.ts backend/wrangler.toml backend/vitest.config.ts backend/test/devices-db.test.ts
+git add backend/migrations/0003_devices_watches.sql backend/src/env.ts backend/src/db.ts backend/wrangler.toml backend/vitest.config.ts backend/test/devices-db.test.ts
 git commit -m "feat(backend): devices and watches tables, push bindings, device D1 helpers"
 ```
 
@@ -2254,7 +2253,14 @@ async function recipientsFor(env: Env, job: AlertJobRow, now: number, limit: num
 /**
  * Spec §6.2 — every five minutes, turn unsent `alert_jobs` rows into pushes.
  * A job larger than the per-run budget keeps its `sent_at` NULL and resumes
- * from `sent_count` next time, so nobody is pushed twice and nobody is dropped.
+ * from `sent_count` (an `OFFSET` into `recipientsFor`'s deterministic
+ * ordering) next time. That guarantee — nobody pushed twice, nobody dropped —
+ * holds only while the job's recipient set (watches joined with devices,
+ * filtered by Pro/alert_enabled/token) is stable across the runs it spans; if
+ * a device starts/stops watching, toggles `alert_enabled`, or its Pro window
+ * starts/expires between two runs of the same large job, the `OFFSET` can
+ * skip or double-push devices whose position shifted. Not a concern for the
+ * common case (a job finishes within one run's 40-push budget).
  */
 export async function runAlertDrain(
   env: Env,
@@ -2697,7 +2703,7 @@ git commit -m "feat(backend): Kroger sweep follows watches x devices, not just p
 - Produces (`src/digest.ts`):
   - `DIGEST_WINDOW_SECONDS = 7 * 24 * 60 * 60`
   - `DigestResult { counts: Record<string, number>; devices: number; pushes: number; cleared: number }`
-  - `weeklyCounts(env: Env, now: number): Promise<Map<string, number>>` — distinct products per canonical category that shrank, counting accepted shrink observations and `verified_case` jobs from the last 7 days (a product counted by both counts once).
+  - `weeklyCounts(env: Env, now: number): Promise<Map<string, number>>` — distinct products per canonical category that shrank, counting accepted crowd/Kroger shrink observations (same source filter as `buildFeed`) and `verified_case` jobs from the last 7 days (a product counted by both counts once).
   - `digestBody(counts: Array<[string, number]>): string` — `"3 new shrinks in Snacks, 1 in Dairy"`.
   - `runWeeklyDigest(env: Env, sender?: PushSender, now?: number): Promise<DigestResult>` — one push per Pro device whose subscribed categories have a non-zero count; a device with no categories gets nothing.
 - Produces: the third cron trigger and its `worker.ts` case.
@@ -2911,8 +2917,10 @@ interface WeekObservation {
 
 /**
  * Distinct products per canonical category that shrank in the last seven days:
- * accepted observations smaller than the previous same-kind one, plus curated
- * additions published as `verified_case` jobs (spec §6.2).
+ * accepted crowd/Kroger observations smaller than the previous same-kind one
+ * (same source restriction as `buildFeed` — `fdc` is bulk-import data, not a
+ * "just happened" shrink), plus curated additions published as `verified_case`
+ * jobs (spec §6.2).
  */
 export async function weeklyCounts(env: Env, now: number): Promise<Map<string, number>> {
   const since = now - DIGEST_WINDOW_SECONDS;
@@ -2928,7 +2936,7 @@ export async function weeklyCounts(env: Env, now: number): Promise<Map<string, n
       `SELECT o.id AS id, o.gtin AS gtin, o.quantity AS quantity, o.unit_kind AS unit_kind,
               o.observed_at AS observed_at, p.category AS category
        FROM observations o JOIN products p ON p.gtin = o.gtin
-       WHERE o.status = 'accepted' AND o.created_at >= ?
+       WHERE o.status = 'accepted' AND o.source IN ('crowd','kroger') AND o.created_at >= ?
        ORDER BY o.id DESC
        LIMIT ?`
     )
@@ -3084,7 +3092,7 @@ git commit -m "feat(backend): weekly what-shrank digest cron"
 
 **Interfaces:**
 - Consumes: everything Tasks 1–9 produced.
-- Produces: a deployed Worker with three cron triggers, the APNs secrets set, and migration `0004` applied remotely.
+- Produces: a deployed Worker with three cron triggers, the APNs secrets set, and migration `0003` applied remotely.
 
 - [ ] **Step 1: Create the APNs auth key (Apple Developer portal, manual)**
 
@@ -3117,6 +3125,14 @@ APNS_KEY_P8="-----BEGIN PRIVATE KEY-----\nMIG...\n-----END PRIVATE KEY-----\n"
 ```
 
 `APNS_ENV` stays `"sandbox"` in `[vars]` for TestFlight/development builds; flip it to `"production"` in the same file when the App Store build ships.
+
+If the week-1 APNs spike found Workers can't reach `api.push.apple.com` (spec §6.5's FCM fallback), instead provision FCM: create a Firebase project, generate a service-account JSON under Project Settings → Service Accounts, then
+
+```bash
+npx wrangler secret put FCM_SERVICE_ACCOUNT_JSON   # paste the whole service-account JSON, then Ctrl-D
+```
+
+and set `PUSH_PROVIDER = "fcm"` in `backend/wrangler.toml`'s `[vars]` block (leave `APNS_ENV` as-is; `pushSender(env)` from Task 5 switches on `PUSH_PROVIDER` alone).
 
 - [ ] **Step 3: Deploy**
 
@@ -3179,7 +3195,6 @@ git commit -m "chore(backend): deploy phase 4 crons and push secrets"
 
 **Files:**
 - Create: `Shrunk/Models/GroceryCategory+Feed.swift`
-- Modify: `Shrunk/Services/DeviceIdentity.swift`
 - Modify: `Shrunk/Services/ShrunkAPIClient.swift`
 - Modify: `Shrunk/Services/DataProviders.swift`
 - Modify: `Shrunk/Models/NotificationPreferences.swift`
@@ -3187,7 +3202,7 @@ git commit -m "chore(backend): deploy phase 4 crons and push secrets"
 - Create: `ShrunkTests/DeviceRegistrationTests.swift`
 
 **Interfaces:**
-- Consumes: `POST /v1/devices` (Task 2); `ShrunkAPIClient.init(baseURL:session:)` and `.deviceId` (Phases 1, 3); `OnboardingProfile.decoded(_:)` and `GroceryCategory` (existing); `@AppStorage("storeLocationId")` (Phase 3).
+- Consumes: `POST /v1/devices` (Task 2); `ShrunkAPIClient.init(baseURL:session:)` (Phase 1); `DeviceIdentity.current` (Phase 2, untouched — key stays `"device_id"`); `OnboardingProfile.decoded(_:)` and `GroceryCategory` (existing); `@AppStorage("storeLocationId")` (Phase 3).
 - Produces: `struct DeviceWatch: Encodable, Equatable, Sendable { let gtin: String; let brand: String; let alertEnabled: Bool }`, encoding `alert_enabled`.
 - Produces: `ShrunkAPIClient.apnsTokenKey = "apnsToken"` and
   ```swift
@@ -3201,7 +3216,7 @@ git commit -m "chore(backend): deploy phase 4 crons and push secrets"
 - Produces: `GroceryCategory.feedCategory: String` — the backend's canonical category name.
 - Produces: `NotificationPreferences.sizeDropEnabled / priceHikeEnabled / verifiedCaseEnabled / digestEnabled` (all default `true`, decoded with `decodeIfPresent` so stored JSON from earlier builds still loads) and `kindTogglePayload: [String: Bool]` — the `prefs` object `/v1/devices` stores. `paused` now also switches every server push off.
 - Produces: `extension URLRequest { func bodyData() -> Data? }` in `ShrunkTests/TestHTTPHelpers.swift` (a `URLProtocol` stub sees `httpBodyStream`, never `httpBody`).
-- Reconciles the device id: `DeviceIdentity.key` becomes `"shrunk.device_id"` — the key Phase 3's `ShrunkAPIClient.deviceId` already writes and the key Phase 5's `DeviceIdentity.storageKey` expects — and `ShrunkAPIClient.deviceId` now reads through `DeviceIdentity`, so there is exactly one per-install id. Any id minted by a Phase 2 build under `"device_id"` is abandoned; only local dev installs are affected.
+- Reuses the device id as-is: Phase 2's `DeviceIdentity.current` (key `"device_id"`) is passed directly as the `device_id` sent to `/v1/devices` and as the `X-Device-Id` header. This task does not modify `Shrunk/Services/DeviceIdentity.swift` and does not add a `ShrunkAPIClient.deviceId` static — Phase 3 never defined one, and Phase 5 later layers its `currentUUID` alias onto Phase 2's untouched enum.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3291,13 +3306,12 @@ final class GroceryCategoryFeedTests: XCTestCase {
 /// Named for Phase 4 so it cannot collide with the `DeviceIdentityTests` class
 /// Phase 5's Task 5 adds to the same test target.
 final class DeviceIdentityUnificationTests: XCTestCase {
-    func test_deviceIdentityAndTheClientShareOneId() {
+    func test_deviceIdentityIsStableAndUnmodifiedByThisPhase() {
         UserDefaults.standard.removeObject(forKey: DeviceIdentity.key)
         let minted = DeviceIdentity.current
         XCTAssertNotNil(UUID(uuidString: minted))
-        XCTAssertEqual(DeviceIdentity.key, "shrunk.device_id")
-        XCTAssertEqual(ShrunkAPIClient.deviceId, minted)
-        XCTAssertEqual(UserDefaults.standard.string(forKey: "shrunk.device_id"), minted)
+        XCTAssertEqual(DeviceIdentity.key, "device_id")   // Phase 2's key, untouched
+        XCTAssertEqual(DeviceIdentity.current, minted, "reading it again must not mint a second id")
     }
 }
 
@@ -3432,38 +3446,13 @@ xcodegen generate >/dev/null && \
 ```
 Expected: compile errors — `value of type 'ShrunkAPIClient' has no member 'syncDevice'`, `cannot find 'DeviceWatch' in scope`.
 
-- [ ] **Step 3: Unify the device id**
+- [ ] **Step 3: Reuse the existing device id, add the APNs token key**
 
-Replace `Shrunk/Services/DeviceIdentity.swift` entirely:
+`Shrunk/Services/DeviceIdentity.swift` already exists, committed by Phase 2: `static let key = "device_id"`, `static var current: String`, minting a UUID string once into `@AppStorage("device_id")`. Leave it untouched — this task reuses `DeviceIdentity.current` directly wherever a `device_id` value is needed, and defines no `ShrunkAPIClient.deviceId` static (Phase 3 never added one either; it sends `DeviceIdentity.current` inline as `X-Device-Id`).
 
-```swift
-import Foundation
-
-/// The stable per-install id. It is the `device_id` sent to `/v1/devices`, the
-/// `X-Device-Id` header on every proxied call, and (from Phase 5) the
-/// `appAccountToken` handed to StoreKit — one value, minted once.
-enum DeviceIdentity {
-    static let key = "shrunk.device_id"
-
-    /// Reads the stored id, minting one on first use. Deliberately not cached
-    /// in a `static let`: a test that clears the key must get a fresh mint.
-    static var current: String {
-        if let existing = UserDefaults.standard.string(forKey: key), !existing.isEmpty {
-            return existing
-        }
-        let fresh = UUID().uuidString
-        UserDefaults.standard.set(fresh, forKey: key)
-        return fresh
-    }
-}
-```
-
-In `Shrunk/Services/ShrunkAPIClient.swift`, replace Phase 3's `static let deviceId: String = { ... }()` block with:
+In `Shrunk/Services/ShrunkAPIClient.swift`, add:
 
 ```swift
-    /// Stable per-install id, tied to no account (spec §6.6).
-    static var deviceId: String { DeviceIdentity.current }
-
     /// `@AppStorage` key holding the APNs device token as lowercase hex.
     static let apnsTokenKey = "apnsToken"
 ```
@@ -3598,7 +3587,7 @@ Append to `Shrunk/Services/ShrunkAPIClient.swift`, inside the `actor ShrunkAPICl
         var request = URLRequest(url: baseURL.appending(path: "v1/devices"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(Self.deviceId, forHTTPHeaderField: "X-Device-Id")
+        request.setValue(deviceId, forHTTPHeaderField: "X-Device-Id")
         request.httpBody = try? JSONEncoder().encode(body)
 
         do {
@@ -3685,7 +3674,7 @@ Expected: the whole `ShrunkTests` bundle passes, including the 14 new assertions
 - [ ] **Step 9: Commit**
 
 ```bash
-git add Shrunk/Models/GroceryCategory+Feed.swift Shrunk/Models/NotificationPreferences.swift Shrunk/Services/DeviceIdentity.swift Shrunk/Services/ShrunkAPIClient.swift Shrunk/Services/DataProviders.swift ShrunkTests/TestHTTPHelpers.swift ShrunkTests/DeviceRegistrationTests.swift Shrunk.xcodeproj
+git add Shrunk/Models/GroceryCategory+Feed.swift Shrunk/Models/NotificationPreferences.swift Shrunk/Services/ShrunkAPIClient.swift Shrunk/Services/DataProviders.swift ShrunkTests/TestHTTPHelpers.swift ShrunkTests/DeviceRegistrationTests.swift Shrunk.xcodeproj
 git commit -m "feat(ios): device sync payload — one device id, per-kind prefs, syncDevice"
 ```
 
@@ -3697,7 +3686,7 @@ git commit -m "feat(ios): device sync payload — one device id, per-kind prefs,
 - Modify: `Shrunk/Features/Settings/NotificationPreferencesView.swift`
 
 **Interfaces:**
-- Consumes: `NotificationPreferences.sizeDropEnabled/priceHikeEnabled/verifiedCaseEnabled/digestEnabled` and `preferenceToggle(title:subtitle:icon:tint:isOn:)` (existing private helper); `ShrunkAPIClient.syncDevice` and `.deviceId` (Task 11).
+- Consumes: `NotificationPreferences.sizeDropEnabled/priceHikeEnabled/verifiedCaseEnabled/digestEnabled` and `preferenceToggle(title:subtitle:icon:tint:isOn:)` (existing private helper); `ShrunkAPIClient.syncDevice` (Task 11); `DeviceIdentity.current` (Phase 2).
 - Produces: no new types. Changing any preference now also pushes the new `prefs` object to the Worker, so the crons stop sending what the user switched off.
 
 - [ ] **Step 1: Add the card**
@@ -3771,7 +3760,7 @@ Replace the existing `.onChange(of: prefs)` modifier with:
             // Worker or it only silences local notifications.
             Task {
                 await ShrunkAPIClient.shared.syncDevice(
-                    deviceId: ShrunkAPIClient.deviceId,
+                    deviceId: DeviceIdentity.current,
                     transactionJWS: ""
                 )
             }
@@ -4130,12 +4119,12 @@ git commit -m "feat(ios): sizeDrop, priceHike, verifiedCase and digest alert kin
 - Create: `ShrunkTests/PushInboxTests.swift`
 
 **Interfaces:**
-- Consumes: `ShrinkAlert.from(pushUserInfo:)` (Task 13); `ShrunkAPIClient.syncDevice`, `.deviceId`, `.apnsTokenKey` (Task 11).
+- Consumes: `ShrinkAlert.from(pushUserInfo:)` (Task 13); `ShrunkAPIClient.syncDevice`, `.apnsTokenKey` (Task 11); `DeviceIdentity.current` (Phase 2).
 - Produces: `Shrunk/Shrunk.entitlements` with `aps-environment = development`, wired through `CODE_SIGN_ENTITLEMENTS` in `project.yml`; `UIBackgroundModes` gains `remote-notification`.
 - Produces: `enum PushRegistration { static func hexString(from token: Data) -> String }`.
 - Produces: `@MainActor @Observable final class PushInbox` with `static let shared`, `var container: ModelContainer?`, `var pendingBarcode: String?`, `@discardableResult func record(userInfo:) -> ShrinkAlert?` (deduplicated per process by kind + gtin + copy), and `func open(userInfo:)`.
 - Produces: `final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate` — registers for remote notifications on every launch, stores the hex token in `@AppStorage("apnsToken")`, syncs the device, records foreground/background/tapped pushes, and routes a tap to the product.
-- Produces: `NotificationScheduler.requestPermissionAndRegister() async -> Bool`; `scheduleShrinkAlert(productName:brand:record:barcode:)` is replaced by `scheduleLocalAlert(title:body:barcode:)`.
+- Produces: `NotificationScheduler.requestPermissionAndRegister() async -> Bool` and `scheduleLocalAlert(title:body:barcode:)`, added alongside the existing `scheduleShrinkAlert(productName:brand:record:barcode:)` — that method's only call site, `ShrunkApp.swift`'s `runWatchlistSweep`, isn't rewritten until Task 15, so this task must not delete it yet (deleting it here would leave the app uncompilable until Task 15 lands). Task 15 removes `scheduleShrinkAlert` and its private `body(for:)` helper once it rewrites that call site to use `scheduleLocalAlert`.
 - `RootView` presents `ResultView(barcode:)` for `PushInbox.shared.pendingBarcode`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -4362,7 +4351,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UserDefaults.standard.set(hex, forKey: ShrunkAPIClient.apnsTokenKey)
         Task {
             await ShrunkAPIClient.shared.syncDevice(
-                deviceId: ShrunkAPIClient.deviceId,
+                deviceId: DeviceIdentity.current,
                 transactionJWS: "",
                 apnsToken: hex
             )
@@ -4426,7 +4415,7 @@ In `Shrunk/Services/NotificationScheduler.swift`, add `import UIKit` at the top,
     }
 ```
 
-and replace `scheduleShrinkAlert(productName:brand:record:barcode:)` and its private `body(for:)` helper with:
+and add, **alongside** the existing `scheduleShrinkAlert(productName:brand:record:barcode:)` and its private `body(for:)` helper (do not delete them yet — `ShrunkApp.swift`'s `runWatchlistSweep` still calls `scheduleShrinkAlert` until Task 15 rewrites it; deleting it now would leave the target uncompilable for the length of this task):
 
 ```swift
     /// A local notification for something the device worked out by itself —
@@ -4558,16 +4547,18 @@ git commit -m "feat(ios): APNs registration, push-to-feed delivery and tap routi
 **Files:**
 - Modify: `Shrunk/Services/WatchlistService.swift`
 - Modify: `Shrunk/ShrunkApp.swift`
+- Modify: `Shrunk/Services/NotificationScheduler.swift` (removes the now-dead `scheduleShrinkAlert`/`body(for:)`)
 - Modify: `Shrunk/Features/Watchlist/WatchlistViewModel.swift`
 - Modify: `Shrunk/Features/Watchlist/WatchlistView.swift`
 - Create: `ShrunkTests/WatchlistSyncTests.swift`
 
 **Interfaces:**
-- Consumes: `WatchlistSyncing`, `DeviceWatch`, `ShrunkAPIClient.deviceId` (Task 11); `StoreDataProviding.liveProduct(barcode:locationId:)` and `LivePrice` (Phase 3); `ShrinkAlert.unconfirmed(from:liveQuantity:)` (Task 13); `NotificationScheduler.scheduleLocalAlert(title:body:barcode:)` (Task 14); `ProductDTO.unit(forKind:)` (Phase 1).
+- Consumes: `WatchlistSyncing`, `DeviceWatch` (Task 11); `DeviceIdentity.current` (Phase 2); `StoreDataProviding.liveProduct(barcode:locationId:)` and `LivePrice` (Phase 3); `ShrinkAlert.unconfirmed(from:liveQuantity:)` (Task 13); `NotificationScheduler.scheduleLocalAlert(title:body:barcode:)` (Task 14); `ProductDTO.unit(forKind:)` (Phase 1).
 - Produces: `WatchlistService.init(context:store:sync:)` (the `api:`/`detector:` parameters are gone — `ShrinkDetector` was only used by the deleted sweep).
 - Produces: `WatchlistService.syncToBackend() async` — posts the whole watch list to `/v1/devices`; called after `add`, `remove`, `setAlertEnabled`, on foreground, and from `BGAppRefresh`.
 - Produces: `WatchlistService.liveSizeCheck() async -> [(WatchedProduct, Double)]` — replaces `refreshAll()`. Compares the live Kroger size at the user's store with `lastKnownSize`, **inserts an `.unconfirmed` `ShrinkAlert` for each mismatch**, and returns them. It never rewrites `lastKnownSize`: only a real observation may do that.
 - Produces: `WatchlistViewModel.refresh() async -> Int` (the number of mismatches found).
+- Removes: `NotificationScheduler.scheduleShrinkAlert(productName:brand:record:barcode:)` and its private `body(for:)` helper — Task 14 added `scheduleLocalAlert` alongside them because this task's rewrite of `runWatchlistSweep` (Step 4) is what retires their last call site; deleting them here, after the call site is gone, is what keeps every task's build green.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -4829,7 +4820,7 @@ final class WatchlistService {
             return
         }
         await sync.syncDevice(
-            deviceId: ShrunkAPIClient.deviceId,
+            deviceId: DeviceIdentity.current,
             transactionJWS: "",
             apnsToken: nil,
             locationId: nil,
@@ -4913,6 +4904,8 @@ In `Shrunk/ShrunkApp.swift`, replace `runWatchlistSweep` and add the foreground 
     }
 ```
 
+This was the last call site of the old local-alert path — in `Shrunk/Services/NotificationScheduler.swift`, now delete `scheduleShrinkAlert(productName:brand:record:barcode:)` and its private `body(for:)` helper (Task 14 kept them alongside `scheduleLocalAlert` for exactly this reason).
+
 and sync when the app comes to the foreground, by adding the scene-phase hook to the `WindowGroup`:
 
 ```swift
@@ -4979,7 +4972,7 @@ Expected: all tests pass, including the 5 new `WatchlistSyncTests`.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Shrunk/Services/WatchlistService.swift Shrunk/ShrunkApp.swift Shrunk/Features/Watchlist ShrunkTests/WatchlistSyncTests.swift
+git add Shrunk/Services/WatchlistService.swift Shrunk/ShrunkApp.swift Shrunk/Services/NotificationScheduler.swift Shrunk/Features/Watchlist ShrunkTests/WatchlistSyncTests.swift
 git commit -m "feat(ios): watchlist syncs to /v1/devices; BGAppRefresh does the live-size check"
 ```
 
@@ -5235,4 +5228,4 @@ git commit -m "feat(ios): Browse reads /v1/feed with the bundled catalogue as fa
 - [ ] A device with `pro_until` NULL or in the past receives nothing.
 - [ ] Turning "Weekly digest" off in Settings writes `prefs.digest = false` on the device row, and the Monday cron skips that device.
 - [ ] `alert_jobs` rows are marked `sent_at` with a `sent_count`, and no job is ever pushed twice.
-- [ ] `docs/superpowers/plans/2026-08-26-shrunk-v2-phase5-subscription-onboarding-dashboard.md` Preflight passes: `backend/src/routes/devices.ts` exists and exports `devicesRoute`, `transaction_jws` appears in it, `CREATE TABLE devices` is in `backend/migrations/0004_devices_watches.sql`, and `grep -n "func syncDevice" Shrunk/Services/ShrunkAPIClient.swift` finds the method.
+- [ ] `docs/superpowers/plans/2026-08-26-shrunk-v2-phase5-subscription-onboarding-dashboard.md` Preflight passes: `backend/src/routes/devices.ts` exists and exports `devicesRoute`, `transaction_jws` appears in it, `CREATE TABLE devices` is in `backend/migrations/0003_devices_watches.sql`, and `grep -n "func syncDevice" Shrunk/Services/ShrunkAPIClient.swift` finds the method.

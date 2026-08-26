@@ -46,7 +46,7 @@ grep -n "func syncDevice" Shrunk/Services/ShrunkAPIClient.swift   # Phase 4: may
 
 Reconciliation rules:
 
-- **Migration number.** This plan writes `backend/migrations/0005_devices_appstore.sql`. If `0005_` is already taken, use the next unused number and rename every reference to it in Task 3. Phase 4's own migration is `0004_devices_watches.sql`, which already creates `devices` (including `transaction_jws`) and `watches` per spec §5 plus the deviation above — Phase 5's `0005` adds only the `devices_app_account_token` index.
+- **Migration number.** This plan writes `backend/migrations/0004_devices_appstore.sql`. If `0004_` is already taken, use the next unused number and rename every reference to it in Task 3. Phase 4's own migration is `0003_devices_watches.sql`, which already creates `devices` (including `transaction_jws`) and `watches` per spec §5 plus the deviation above — Phase 5's `0004` adds only the `devices_app_account_token` index.
 - **`StorePickerView`.** Task 9 constructs it as `StorePickerView(embedded: true)`. If Phase 3 changed its signature, adjust that call site to match; nothing else in this plan depends on its shape.
 - **`device_id`.** If Phase 2 already persists a device id **and the stored value is a UUID string**, Task 5 keeps that helper and only adds the alias described there. If Phase 2 stored a non-UUID (e.g. a random hex string), Task 5's `DeviceIdentity` becomes the single source and Phase 2's helper must be pointed at it — `appAccountToken` is a `UUID` and StoreKit accepts nothing else.
 - **`syncDevice`.** If Phase 4 already added `ShrunkAPIClient.syncDevice(...)` with more parameters (apns token, location, categories, watches), give every extra parameter a default so `syncDevice(deviceId:transactionJWS:)` stays callable with exactly those two arguments. Task 5 shows the minimal version to write if it does not exist.
@@ -55,7 +55,7 @@ Reconciliation rules:
 
 If Phase 4 has not been written yet, it **must** honour this, because Phase 5 tasks 4 and 5 are written against it:
 
-**Deviation from spec §5, deliberate.** `devices` gains a `transaction_jws TEXT` column beyond the spec's printed schema (`id, apns_token, location_id, categories, pro_until, app_account_token, updated_at`), so the Worker can re-verify a previously-stored transaction on a retry (spec §8) without the device re-sending it. Phase 4's migration `backend/migrations/0004_devices_watches.sql` creates `devices` — including this column — and `watches`, both per spec §5 plus this one deviation. Phase 5 does not create or alter either table: its own migration, `0005_devices_appstore.sql` (Task 3), only adds the `devices_app_account_token` index.
+**Deviation from spec §5, deliberate.** `devices` gains a `transaction_jws TEXT` column beyond the spec's printed schema (`id, apns_token, location_id, categories, pro_until, app_account_token, updated_at`), so the Worker can re-verify a previously-stored transaction on a retry (spec §8) without the device re-sending it. Phase 4's migration `backend/migrations/0003_devices_watches.sql` creates `devices` — including this column — and `watches`, both per spec §5 plus this one deviation. Phase 5 does not create or alter either table: its own migration, `0004_devices_appstore.sql` (Task 3), only adds the `devices_app_account_token` index.
 
 - `POST /v1/devices` accepts JSON `{ device_id: string, apns_token?: string|null, location_id?: string|null, categories?: string[], watches?: [...], transaction_jws?: string|null }` and upserts into `devices(id, apns_token, location_id, categories, pro_until, app_account_token, transaction_jws, updated_at)` keyed on `id = device_id`. Phase 4 stores `transaction_jws` raw without verifying it; Phase 5 adds the verification.
 - The route module is `backend/src/routes/devices.ts` and exports a Hono sub-app named `devicesRoute`, mounted in `backend/src/index.ts`.
@@ -65,7 +65,7 @@ If Phase 4 has not been written yet, it **must** honour this, because Phase 5 ta
 
 ```
 backend/
-  migrations/0005_devices_appstore.sql   devices_app_account_token index only (devices/transaction_jws/watches: Phase 4's 0004)
+  migrations/0004_devices_appstore.sql   devices_app_account_token index only (devices/transaction_jws/watches: Phase 4's 0003)
   src/appstore/asn1.ts                   minimal DER reader (TLV, children, OID, time)
   src/appstore/x509.ts                   certificate parse, ECDSA sig conversion, key import
   src/appstore/root.ts                   Apple Root CA - G3 PEM + DER constant
@@ -936,7 +936,7 @@ git commit -m "feat(backend): verify App Store JWS chains against a pinned Apple
 ### Task 3: `POST /v1/appstore/notifications`
 
 **Files:**
-- Create: `backend/migrations/0005_devices_appstore.sql`
+- Create: `backend/migrations/0004_devices_appstore.sql`
 - Create: `backend/src/appstore/entitlement.ts`
 - Create: `backend/src/routes/appstore.ts`
 - Modify: `backend/src/env.ts` (one optional binding)
@@ -952,7 +952,7 @@ git commit -m "feat(backend): verify App Store JWS chains against a pinned Apple
   - `trustAnchor(env: { APPSTORE_ROOT_CA_B64?: string }): Uint8Array`
 - Produces: `Env.APPSTORE_ROOT_CA_B64?: string` in `src/env.ts`.
 - Produces: `appstoreRoute` (Hono sub-app) exported from `src/routes/appstore.ts`.
-- Produces: the index `devices_app_account_token` on `devices(app_account_token)`. `devices` (including `transaction_jws`) and `watches` are already created by Phase 4's migration `0004_devices_watches.sql`; Phase 5 creates or alters neither table.
+- Produces: the index `devices_app_account_token` on `devices(app_account_token)`. `devices` (including `transaction_jws`) and `watches` are already created by Phase 4's migration `0003_devices_watches.sql`; Phase 5 creates or alters neither table.
 
 **Token casing rule (applies to Tasks 3, 4 and 5):** Apple emits `appAccountToken` as a lowercase UUID; `UUID.uuidString` on iOS is uppercase. Every write and every lookup of `devices.app_account_token` lowercases the value first, so the two always meet.
 
@@ -960,7 +960,7 @@ git commit -m "feat(backend): verify App Store JWS chains against a pinned Apple
 
 - [ ] **Step 1: Write the migration**
 
-`backend/migrations/0005_devices_appstore.sql` — Phase 4's `0004_devices_watches.sql` already creates `devices` (including `transaction_jws`, the deviation noted above) and `watches`, both per spec §5. This migration adds only the one thing Phase 5 itself needs and Phase 4 has no reason to have created — the lookup index the notifications route and `/v1/devices` use to find a device by its App Store `app_account_token`:
+`backend/migrations/0004_devices_appstore.sql` — Phase 4's `0003_devices_watches.sql` already creates `devices` (including `transaction_jws`, the deviation noted above) and `watches`, both per spec §5. This migration adds only the one thing Phase 5 itself needs and Phase 4 has no reason to have created — the lookup index the notifications route and `/v1/devices` use to find a device by its App Store `app_account_token`:
 
 ```sql
 CREATE INDEX IF NOT EXISTS devices_app_account_token ON devices(app_account_token);
@@ -1231,12 +1231,12 @@ npx wrangler d1 migrations apply shrunk --local
 npx wrangler d1 migrations apply shrunk --remote
 npx wrangler d1 execute shrunk --remote --command "PRAGMA table_info(devices);"
 ```
-Expected: the last command lists `id, apns_token, location_id, categories, pro_until, app_account_token, transaction_jws, updated_at` — all of it from Phase 4's `0004_devices_watches.sql`; `0005` only adds the `devices_app_account_token` index and touches no columns. If `transaction_jws` is missing, Phase 4 was implemented against the spec's printed schema without the deviation noted above — land that fix in a new migration (e.g. `0006_devices_backfill_transaction_jws.sql` containing `ALTER TABLE devices ADD COLUMN transaction_jws TEXT;`), never by hand-editing an already-applied migration file.
+Expected: the last command lists `id, apns_token, location_id, categories, pro_until, app_account_token, transaction_jws, updated_at` — all of it from Phase 4's `0003_devices_watches.sql`; `0004` only adds the `devices_app_account_token` index and touches no columns. If `transaction_jws` is missing, Phase 4 was implemented against the spec's printed schema without the deviation noted above — land that fix in a new migration (e.g. `0005_devices_backfill_transaction_jws.sql` containing `ALTER TABLE devices ADD COLUMN transaction_jws TEXT;`), never by hand-editing an already-applied migration file.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add backend/migrations/0005_devices_appstore.sql backend/src/appstore/entitlement.ts backend/src/routes/appstore.ts backend/src/env.ts backend/src/index.ts backend/test/appstore-notifications.test.ts
+git add backend/migrations/0004_devices_appstore.sql backend/src/appstore/entitlement.ts backend/src/routes/appstore.ts backend/src/env.ts backend/src/index.ts backend/test/appstore-notifications.test.ts
 git commit -m "feat(backend): App Store Server Notifications V2 keep pro_until fresh"
 ```
 
