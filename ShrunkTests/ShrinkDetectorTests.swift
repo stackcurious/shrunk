@@ -96,6 +96,40 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertTrue(record.verdict.isShrink)
     }
 
+    // MARK: - Unit kinds
+
+    func test_unitKind_derivedFromUnit() {
+        XCTAssertEqual(SizeRecord(date: Date(), quantity: 1, unit: "g", source: "x").unitKind, "mass")
+        XCTAssertEqual(SizeRecord(date: Date(), quantity: 1, unit: "oz", source: "x").unitKind, "mass")
+        XCTAssertEqual(SizeRecord(date: Date(), quantity: 1, unit: "fl oz", source: "x").unitKind, "volume")
+        XCTAssertEqual(SizeRecord(date: Date(), quantity: 1, unit: "ml", source: "x").unitKind, "volume")
+        XCTAssertEqual(SizeRecord(date: Date(), quantity: 1, unit: "count", source: "x").unitKind, "count")
+        XCTAssertEqual(SizeRecord(date: Date(), quantity: 1, unit: "bananas", source: "x").unitKind, "unknown")
+    }
+
+    func test_mixedKinds_massThenVolume_isInsufficientData() {
+        // 1000 g then 28 fl oz: different kinds must never be compared.
+        let product = makeProduct(history: [
+            .init(quantity: 1000, unit: "g"),
+            .init(quantity: 28,   unit: "fl oz")
+        ])
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .insufficientData)
+    }
+
+    func test_mixedKinds_usesMostRecentKindOnly() {
+        // An old volume record is ignored; the two mass records give -10% -> moderate.
+        let product = makeProduct(history: [
+            .init(quantity: 28,   unit: "fl oz"),
+            .init(quantity: 1000, unit: "g"),
+            .init(quantity: 900,  unit: "g")
+        ])
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .moderateShrink)
+        XCTAssertEqual(record.shrinkPercent, -10, accuracy: 0.01)
+        XCTAssertEqual(record.previousSize?.quantity, 1000)
+    }
+
     // MARK: - Cost per unit
 
     func test_costPerUnit_calculatedFromCurrentPrice() {

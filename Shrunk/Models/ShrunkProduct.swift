@@ -17,3 +17,19 @@ struct SizeRecord: Codable, Hashable {
     let unit: String            // "oz", "fl oz", "g", "kg", "ml", "l", "count"
     let source: String          // "openfoodfacts", "openfoodfacts_import", "user_report"
 }
+
+extension SizeRecord {
+    /// "mass" | "volume" | "count" | "unknown" — observations of different kinds are never compared.
+    var unitKind: String {
+        switch unit.lowercased().replacingOccurrences(of: " ", with: "") {
+        case "g", "gram", "grams", "kg", "oz", "ounce", "ounces", "lb", "lbs":
+            return "mass"
+        case "ml", "l", "floz", "liter", "litre":
+            return "volume"
+        case "count", "ct", "pk", "pack", "each", "ea":
+            return "count"
+        default:
+            return "unknown"
+        }
+    }
+}
