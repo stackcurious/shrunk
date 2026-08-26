@@ -8,7 +8,16 @@ export default defineConfig(async () => {
     plugins: [
       cloudflareTest({
         wrangler: { configPath: "./wrangler.toml" },
-        miniflare: { bindings: { TEST_MIGRATIONS: migrations, FDC_API_KEY: "test-key", ADMIN_SECRET: "test-secret" } },
+        miniflare: {
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            FDC_API_KEY: "test-key",
+            ADMIN_SECRET: "test-secret",
+            KROGER_CLIENT_ID: "test-client",
+            KROGER_CLIENT_SECRET: "test-secret",
+            KROGER_PERSIST: "off",
+          },
+        },
       }),
     ],
     test: {

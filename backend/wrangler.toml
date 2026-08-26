@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENV = "dev"
+KROGER_PERSIST = "on"
 
 [[d1_databases]]
 binding = "DB"
@@ -15,3 +16,7 @@ migrations_dir = "migrations"
 [[r2_buckets]]
 binding = "PHOTOS"
 bucket_name = "shrunk-photos"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "00000000000000000000000000000000"   # replaced in Task 11 after `wrangler kv namespace create`
