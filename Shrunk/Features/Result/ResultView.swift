@@ -112,7 +112,7 @@ struct ResultView: View {
         .background(Color.paper.ignoresSafeArea())
         .sheet(isPresented: $showWatchPaywall) { ProPaywallView() }
         .sheet(isPresented: $showAlternatives) {
-            AlternativesView(product: product, record: record, alternatives: vm.alternatives)
+            AlternativesView(product: product, record: record, result: vm.alternativesResult)
         }
         .sheet(isPresented: $showShareCard) {
             ShareCardView(record: record, product: product)

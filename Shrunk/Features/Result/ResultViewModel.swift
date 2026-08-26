@@ -20,21 +20,33 @@ final class ResultViewModel: ObservableObject {
     }
 
     @Published var state: State = .loading
-    @Published var alternatives: [Alternative] = []
+    @Published var alternativesResult: AlternativesResult = .empty
     @Published var isLoadingAlternatives: Bool = false
 
     private let api: ShrunkAPIClient
     private let engine: AlternativesEngine
     private let detector: ShrinkDetector
+    private let defaults: UserDefaults
+
+    /// The store the user picked, if any (spec §7).
+    private var locationId: String? {
+        let saved = defaults.string(forKey: StorePickerViewModel.locationIdKey)
+        return (saved?.isEmpty ?? true) ? nil : saved
+    }
+
+    /// Set by the view from `StoreKitService.isProUser` before loading.
+    var isPro: Bool = false
 
     init(
         api: ShrunkAPIClient = .shared,
         engine: AlternativesEngine = AlternativesEngine(),
-        detector: ShrinkDetector = ShrinkDetector()
+        detector: ShrinkDetector = ShrinkDetector(),
+        defaults: UserDefaults = .standard
     ) {
         self.api = api
         self.engine = engine
         self.detector = detector
+        self.defaults = defaults
     }
 
     /// Inject a known product+record (e.g. for curated Browse cards) so the
@@ -43,14 +55,14 @@ final class ResultViewModel: ObservableObject {
     /// open with a stale empty section.
     func prebake(product: ShrunkProduct, record: ShrinkRecord) {
         state = .loaded(product, record)
-        alternatives = []
+        alternativesResult = .empty
         Task { await loadAlternatives(for: product, record: record) }
     }
 
     func load(barcode: String) async {
         if case .loaded = state { return }   // already prebaked — don't clobber
         state = .loading
-        alternatives = []
+        alternativesResult = .empty
 
         do {
             let product = try await api.fetchProduct(barcode: barcode, locationId: nil)
@@ -75,8 +87,12 @@ final class ResultViewModel: ObservableObject {
 
     private func loadAlternatives(for product: ShrunkProduct, record: ShrinkRecord) async {
         isLoadingAlternatives = true
-        let results = await engine.findAlternatives(for: product, shrinkRecord: record)
-        alternatives = results
+        alternativesResult = await engine.findAlternatives(
+            for: product,
+            shrinkRecord: record,
+            locationId: locationId,
+            isPro: isPro
+        )
         isLoadingAlternatives = false
     }
 }

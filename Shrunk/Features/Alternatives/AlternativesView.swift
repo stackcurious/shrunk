@@ -5,10 +5,8 @@ struct AlternativesView: View {
     @EnvironmentObject private var storeKit: StoreKitService
     @Environment(\.dismiss) private var dismiss
 
-    init(product: ShrunkProduct, record: ShrinkRecord, alternatives: [Alternative]) {
-        _vm = StateObject(wrappedValue: AlternativesViewModel(
-            product: product, record: record, alternatives: alternatives
-        ))
+    init(product: ShrunkProduct, record: ShrinkRecord, result: AlternativesResult) {
+        _vm = StateObject(wrappedValue: AlternativesViewModel(product: product, record: record, result: result))
     }
 
     var body: some View {
@@ -22,26 +20,40 @@ struct AlternativesView: View {
                     if vm.alternatives.isEmpty {
                         EmptyStateView(
                             icon: "magnifyingglass",
-                            title: "No better-value alternatives found",
-                            message: "We couldn't find anything cheaper per ounce in this category right now. Try scanning more products in the same aisle."
+                            title: "Nothing to compare yet",
+                            message: "Set your store in Settings to see in-stock alternatives ranked by cost per ounce."
                         )
                     } else {
+                        if vm.isCurated {
+                            Text("Verified cases in this category")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.smoke)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                        }
                         VStack(spacing: ShrunkTheme.Spacing.md) {
                             ForEach(Array(vm.alternatives.enumerated()), id: \.element.id) { idx, alt in
                                 AlternativeRow(
                                     alternative: alt,
-                                    isBestPick: idx == 0,
-                                    isLocked: !vm.canView(alt, isPro: storeKit.isProUser),
-                                    onTap: { vm.handleTap(alt, isPro: storeKit.isProUser) }
+                                    isBestPick: idx == 0 && !vm.isCurated,
+                                    onTap: { vm.present(alt) }
                                 )
                             }
                         }
                         .padding(.horizontal, ShrunkTheme.Spacing.lg)
 
-                        if !storeKit.isProUser, vm.alternatives.count > 2 {
+                        if !storeKit.isProUser, vm.hiddenCount > 0 {
                             unlockMoreCTA
                                 .padding(.horizontal, ShrunkTheme.Spacing.lg)
                         }
+                    }
+
+                    if !vm.isCurated {
+                        Text(LivePrice.attribution)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.smoke)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, ShrunkTheme.Spacing.sm)
                     }
                 }
                 .padding(.bottom, ShrunkTheme.Spacing.xl)
@@ -108,7 +120,7 @@ struct AlternativesView: View {
         VStack(spacing: ShrunkTheme.Spacing.sm) {
             HStack(spacing: 6) {
                 ProBadge(style: .pill)
-                Text("\(vm.alternatives.count - 2) more alternatives")
+                Text("\(vm.hiddenCount) more alternatives")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.ink)
             }

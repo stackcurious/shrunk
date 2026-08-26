@@ -7,30 +7,23 @@ final class AlternativesViewModel: ObservableObject {
 
     let sourceProduct: ShrunkProduct
     let sourceRecord: ShrinkRecord
-    let alternatives: [Alternative]
+    let result: AlternativesResult
 
-    private let freeVisibleCount = 2
-
-    init(product: ShrunkProduct, record: ShrinkRecord, alternatives: [Alternative]) {
+    init(product: ShrunkProduct, record: ShrinkRecord, result: AlternativesResult) {
         self.sourceProduct = product
         self.sourceRecord = record
-        self.alternatives = alternatives
+        self.result = result
     }
 
-    func canView(_ alternative: Alternative, isPro: Bool) -> Bool {
-        if isPro { return true }
-        guard let index = alternatives.firstIndex(where: { $0.id == alternative.id }) else {
-            return false
-        }
-        return index < freeVisibleCount
-    }
+    var alternatives: [Alternative] { result.alternatives }
+    var hiddenCount: Int { result.hiddenCount }
+    var isCurated: Bool { result.isCurated }
 
-    func handleTap(_ alternative: Alternative, isPro: Bool) {
-        if canView(alternative, isPro: isPro) {
-            presentedBarcode = alternative.id
-        } else {
-            showPaywall = true
-        }
+    /// Curated rows are verified cases, not recommendations — say so.
+    var title: String { isCurated ? "Verified cases in this category" : "Cheaper at your store" }
+
+    func present(_ alternative: Alternative) {
+        presentedBarcode = alternative.id
     }
 
     func headerCostPerUnitText() -> String {
