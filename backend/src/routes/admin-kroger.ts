@@ -8,19 +8,33 @@ export const adminKrogerRoute = new Hono<{ Bindings: Env }>();
  * the Phase 2 admin review page on purpose: this is the lever we pull if Kroger
  * ever objects, and it must not depend on anything else still working.
  */
+
+// Constant-time string comparison to prevent timing attacks on bearer token
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 adminKrogerRoute.post("/v1/admin/purge-kroger", async (c) => {
-  const expected = `Bearer ${c.env.ADMIN_SECRET}`;
-  if (!c.env.ADMIN_SECRET || c.req.header("authorization") !== expected) {
+  const secret = c.env.ADMIN_SECRET ?? "";
+  const header = c.req.header("authorization") ?? "";
+  const prefix = "Bearer ";
+  const ok = secret.length > 0 && header.startsWith(prefix) && constantTimeEqual(header.slice(prefix.length), secret);
+  if (!ok) {
     return c.json({ error: "unauthorized" }, 401);
   }
 
-  const snapshots = await c.env.DB.prepare("DELETE FROM price_snapshots").run();
-  const observations = await c.env.DB.prepare("DELETE FROM observations WHERE source = 'kroger'").run();
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM price_snapshots"),
+    c.env.DB.prepare("DELETE FROM observations WHERE source = 'kroger'"),
+  ]);
 
   return c.json({
     deleted: {
-      price_snapshots: snapshots.meta.changes ?? 0,
-      observations: observations.meta.changes ?? 0,
+      price_snapshots: results[0].meta.changes ?? 0,
+      observations: results[1].meta.changes ?? 0,
     },
   });
 });

@@ -11,8 +11,10 @@ const app = new Hono<{ Bindings: Env }>();
 app.get("/health", (c) => c.json({ ok: true }));
 app.route("/", productRoute);
 app.route("/", observationsRoute);
-app.route("/", adminRoute);
+// Mount adminKrogerRoute before adminRoute: its local bearer check must run first
+// so the purge keeps working even if the Phase 2 review page's middleware breaks.
 app.route("/", adminKrogerRoute);
+app.route("/", adminRoute);
 app.route("/", krogerRoute);
 
 export default app;
