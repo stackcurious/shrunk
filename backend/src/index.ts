@@ -5,6 +5,7 @@ import { observationsRoute } from "./routes/observations";
 import { adminRoute } from "./routes/admin";
 import { adminKrogerRoute } from "./routes/admin-kroger";
 import { krogerRoute } from "./routes/kroger";
+import { devicesRoute } from "./routes/devices";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -16,5 +17,6 @@ app.route("/", observationsRoute);
 app.route("/", adminKrogerRoute);
 app.route("/", adminRoute);
 app.route("/", krogerRoute);
+app.route("/", devicesRoute);
 
 export default app;
