@@ -66,6 +66,13 @@ final class ResultViewModel: ObservableObject {
         }
     }
 
+    /// Force a fresh fetch. `load` deliberately no-ops on an already-loaded
+    /// state, so a crowd contribution needs this to surface its new observation.
+    func reload(barcode: String) async {
+        state = .loading
+        await load(barcode: barcode)
+    }
+
     private func loadAlternatives(for product: ShrunkProduct, record: ShrinkRecord) async {
         isLoadingAlternatives = true
         let results = await engine.findAlternatives(for: product, shrinkRecord: record)

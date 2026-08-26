@@ -45,7 +45,7 @@
         <string>UIInterfaceOrientationPortrait</string>
     </array>
     <key>NSCameraUsageDescription</key>
-    <string>Shrunk uses your camera to scan product barcodes. Nothing is recorded or stored.</string>
+    <string>Shrunk uses your camera to scan product barcodes and, when you choose to contribute, to photograph a product label so we can read its net weight.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

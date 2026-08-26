@@ -12,6 +12,8 @@ struct ResultView: View {
     @State private var showAlternatives = false
     @State private var showShareCard = false
     @State private var watchedConfirmation: String?
+    @State private var showLabelCapture = false
+    @State private var contributionToast: String?
 
     init(barcode: String) {
         self.barcode = barcode
@@ -28,10 +30,30 @@ struct ResultView: View {
             content
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
+                .overlay(alignment: .bottom) { toastOverlay }
         }
         .task(id: barcode) {
             if let prebake { vm.prebake(product: prebake.product, record: prebake.record) }
             await vm.load(barcode: barcode)
+        }
+        .fullScreenCover(isPresented: $showLabelCapture) {
+            LabelCaptureView(gtin: barcode) { result in
+                contributionToast = ContributeViewModel.toastMessage(for: result)
+                Task { await vm.reload(barcode: barcode) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if let contributionToast {
+            Toast(message: contributionToast)
+                .padding(.bottom, ShrunkTheme.Spacing.xl)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: contributionToast) {
+                    try? await Task.sleep(nanoseconds: 2_800_000_000)
+                    withAnimation { self.contributionToast = nil }
+                }
         }
     }
 
@@ -72,6 +94,10 @@ struct ResultView: View {
             VStack(spacing: ShrunkTheme.Spacing.xl) {
                 heroSection(product: product, record: record)
                 comparisonRow(record: record)
+                if product.needsConfirmation {
+                    confirmationCard
+                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                }
                 costPerOzSection(record: record)
                 if product.sizeHistory.count >= 2 {
                     ShrinkHistoryChart(history: product.sizeHistory)
@@ -224,6 +250,27 @@ struct ResultView: View {
         .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
     }
 
+    /// Shown when the live store size disagrees with our latest observation
+    /// (spec §4 step 4). Phase 3 sets `needsConfirmation`; the flow is live now.
+    private var confirmationCard: some View {
+        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+            HStack(spacing: 8) {
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.verdictWarnDeep)
+                Text("SIZE UNCONFIRMED").shrunkSectionLabel()
+            }
+            Text("The size we're showing might be out of date. A photo of the net-weight line settles it.")
+                .font(.shrunkCallout)
+                .foregroundStyle(Color.smoke)
+                .fixedSize(horizontal: false, vertical: true)
+            ShrunkButton("Confirm with a label photo", icon: "camera.fill", variant: .ghost) {
+                showLabelCapture = true
+            }
+        }
+        .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
+    }
+
     // MARK: - Cost-per-oz
 
     @ViewBuilder
@@ -346,33 +393,29 @@ struct ResultView: View {
                 Circle()
                     .fill(Color.mist)
                     .frame(width: 96, height: 96)
-                Image(systemName: "questionmark.app.dashed")
+                Image(systemName: "camera.viewfinder")
                     .font(.system(size: 40, weight: .regular))
                     .foregroundStyle(Color.smoke)
             }
-            Text("Not in our database yet")
+            Text("Not in our database yet — snap the label to add it")
                 .font(.shrunkTitle)
                 .foregroundStyle(Color.ink)
                 .multilineTextAlignment(.center)
                 .padding(.top, ShrunkTheme.Spacing.sm)
-            Text("Barcode \(barcode). Open Food Facts is community-maintained — adding it takes 30 seconds and helps every Shrunk user.")
+                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            Text("Barcode \(barcode). One photo of the net-weight line adds it for every Shrunk user.")
                 .font(.shrunkBody)
                 .foregroundStyle(Color.smoke)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
                 .padding(.horizontal, ShrunkTheme.Spacing.lg)
             VStack(spacing: 10) {
-                ShrunkButton("Add it on Open Food Facts", icon: "plus.circle.fill") {
-                    let urlString = "https://world.openfoodfacts.org/cgi/product.pl?type=add&code=\(barcode)"
-                    if let url = URL(string: urlString) {
-                        UIApplication.shared.open(url)
-                    }
+                ShrunkButton("Snap the label", icon: "camera.fill") {
+                    showLabelCapture = true
                 }
-                Button("Close") {
-                    dismiss()
-                }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.smoke)
+                Button("Close") { dismiss() }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.smoke)
             }
             .padding(.horizontal, ShrunkTheme.Spacing.lg)
             .padding(.top, ShrunkTheme.Spacing.md)
