@@ -20,7 +20,7 @@ def _branded(fdc_id, gtin, pw, modified, available, brand="Acme", category="Snac
     return [fdc_id, brand, "", "", gtin, "", "", "", "", "", category, "LI", pw, modified, available, country, "", "", "", "", ""]
 
 
-def _make_zip(tmp_path: Path, branded_rows, food_rows) -> Path:
+def _make_zip(tmp_path: Path, branded_rows, food_rows, dir_prefix: str = "FoodData_Central_branded_food_csv_2026-04-30") -> Path:
     zpath = tmp_path / "fdc.zip"
     with zipfile.ZipFile(zpath, "w") as z:
         for name, header, rows in (("branded_food.csv", BRANDED_HEADER, branded_rows), ("food.csv", FOOD_HEADER, food_rows)):
@@ -28,7 +28,10 @@ def _make_zip(tmp_path: Path, branded_rows, food_rows) -> Path:
             w = csv.writer(buf, quoting=csv.QUOTE_ALL)
             w.writerow(header)
             w.writerows(rows)
-            z.writestr(f"FoodData_Central_branded_food_csv_2026-04-30/{name}", buf.getvalue())
+            if dir_prefix:
+                z.writestr(f"{dir_prefix}/{name}", buf.getvalue())
+            else:
+                z.writestr(name, buf.getvalue())
     return zpath
 
 
@@ -114,3 +117,68 @@ def test_write_report_crosschecks_curated(tmp_path):
     assert data["curated"]["found"] == 1
     assert data["curated"]["missing"] == ["0052000133417"]
     assert data["curated"]["with_multiple_sizes"] == 1
+
+
+def test_zip_no_directory_prefix(tmp_path):
+    """Test that _open_member works with zips that have no directory prefix."""
+    zpath = _make_zip(
+        tmp_path,
+        branded_rows=[
+            _branded("1", "028400642255", "12 oz/340 g", "2020-01-01", "2020-02-01"),
+        ],
+        food_rows=[["1", "branded_food", "Chips", "", "2020-04-29"]],
+        dir_prefix="",
+    )
+    result = build_rows(zpath)
+    assert set(result.products) == {"0028400642255"}
+    p = result.products["0028400642255"]
+    assert p.name == "Chips"
+
+
+def test_zip_missing_food_csv(tmp_path):
+    """Test that FileNotFoundError is raised when food.csv is missing."""
+    import pytest
+    zpath = tmp_path / "fdc.zip"
+    with zipfile.ZipFile(zpath, "w") as z:
+        buf = io.StringIO()
+        w = csv.writer(buf, quoting=csv.QUOTE_ALL)
+        w.writerow(BRANDED_HEADER)
+        w.writerows([_branded("1", "028400642255", "12 oz/340 g", "2020-01-01", "2020-02-01")])
+        z.writestr("FoodData_Central_branded_food_csv_2026-04-30/branded_food.csv", buf.getvalue())
+    with pytest.raises(FileNotFoundError):
+        build_rows(zpath)
+
+
+def test_dominant_kind_filtering_and_bad_gtin(tmp_path):
+    """Test dominant-kind filtering when versions have different unit kinds, and bad GTIN counting."""
+    zpath = _make_zip(
+        tmp_path,
+        branded_rows=[
+            _branded("1", "028400642255", "6 EA", "2017-01-01", "2017-02-01"),               # count version
+            _branded("2", "028400642255", "12 oz/340 g", "2019-01-01", "2019-02-01"),        # mass version (newer kind)
+            _branded("3", "028400642255", "10 oz/283 g", "2021-01-01", "2021-02-01"),        # mass version (latest)
+            _branded("4", "12345678", "16 oz/453 g", "2020-01-01", "2020-02-01"),            # bad GTIN (8 digits)
+        ],
+        food_rows=[
+            ["1", "branded_food", "Product", "", "2017-04-01"],
+            ["2", "branded_food", "Product", "", "2019-04-01"],
+            ["3", "branded_food", "Product", "", "2021-04-01"],
+            ["4", "branded_food", "Bad GTIN", "", "2020-04-01"],
+        ],
+    )
+    result = build_rows(zpath)
+
+    # Only the mass GTIN should have a product
+    assert set(result.products) == {"0028400642255"}
+    p = result.products["0028400642255"]
+    assert p.unit_kind == "mass"
+
+    # Exactly two observations: the mass versions, not the count version
+    obs = [o for o in result.observations if o.gtin == "0028400642255"]
+    assert len(obs) == 2
+    assert [o.quantity for o in obs] == [340.194, 283.495]
+    assert obs[0].observed_at < obs[1].observed_at  # in chronological order
+    assert result.stats["gtins_with_multiple_sizes"] == 1
+
+    # Bad GTIN should be counted
+    assert result.stats["rows_bad_gtin"] == 1

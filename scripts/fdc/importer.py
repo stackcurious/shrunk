@@ -48,8 +48,12 @@ class ImportResult:
 
 
 def _open_member(z: zipfile.ZipFile, suffix: str) -> io.TextIOWrapper:
-    name = next(n for n in z.namelist() if n.endswith("/" + suffix))
-    return io.TextIOWrapper(z.open(name), encoding="utf-8", newline="")
+    # Prefer directory-qualified match, fall back to exact basename match.
+    # This handles both "dir/food.csv" and "food.csv" without matching "branded_food.csv".
+    for n in z.namelist():
+        if n.endswith("/" + suffix) or n == suffix:
+            return io.TextIOWrapper(z.open(n), encoding="utf-8", newline="")
+    raise FileNotFoundError(f"{suffix} not found in {z.filename}")
 
 
 def _epoch(*candidates: str) -> int | None:
