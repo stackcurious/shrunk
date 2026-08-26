@@ -11,7 +11,9 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "migrate:local": "wrangler d1 migrations apply shrunk --local",
-    "migrate:remote": "wrangler d1 migrations apply shrunk --remote"
+    "migrate:remote": "wrangler d1 migrations apply shrunk --remote",
+    "sync:trending": "cp ../data/trending.json src/data/trending.json",
+    "check:trending": "diff -u ../data/trending.json src/data/trending.json"
   },
   "keywords": [],
   "author": "",
