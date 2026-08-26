@@ -20,6 +20,10 @@ describe("krogerProductId", () => {
     expect(krogerProductId("12345")).toBeNull();
     expect(krogerProductId("")).toBeNull();
   });
+
+  it("returns null for a non-UPC EAN-13", () => {
+    expect(krogerProductId("4006381333931")).toBeNull();
+  });
 });
 
 describe("gtinFromKroger", () => {

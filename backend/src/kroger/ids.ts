@@ -8,6 +8,7 @@ import { normalizeGTIN } from "../gtin";
 export function krogerProductId(gtin: string | null | undefined): string | null {
   const normalized = normalizeGTIN(gtin ?? "");
   if (!normalized) return null;
+  if (normalized[0] !== "0") return null;
   return normalized.slice(1, -1).padStart(13, "0");
 }
 
