@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "../src/index";
 
 async function seedProduct(gtin: string) {
@@ -22,6 +22,8 @@ describe("GET /v1/product/:gtin", () => {
       env.DB.prepare("DELETE FROM products"),
     ]);
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("returns product with accepted observations in date order", async () => {
     await seedProduct("0028400642255");
@@ -59,5 +61,61 @@ describe("GET /v1/product/:gtin", () => {
     const res = await app.request("/v1/product/12345", {}, env);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_gtin" });
+  });
+
+  it("creates the product from FDC when unknown", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("api.nal.usda.gov")) {
+          return new Response(
+            JSON.stringify({
+              foods: [{ gtinUpc: "028400642255", description: "GATORADE THIRST QUENCHER", brandName: "Gatorade", foodCategory: "Sports Drinks" }],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error(`unexpected fetch to ${url}`);
+      })
+    );
+
+    const res = await app.request("/v1/product/0028400642255", {}, env);
+    expect(res.status).toBe(200);
+    const body = await res.json<any>();
+    expect(body).toMatchObject({ gtin: "0028400642255", name: "Gatorade Thirst Quencher", brand: "Gatorade", category: "Sports Drinks", observations: [] });
+
+    const row = await env.DB.prepare("SELECT name FROM products WHERE gtin = ?").bind("0028400642255").first<{ name: string }>();
+    expect(row?.name).toBe("Gatorade Thirst Quencher");
+  });
+
+  it("falls back to Open Food Facts, then 404s", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("api.nal.usda.gov")) {
+          return new Response(JSON.stringify({ foods: [] }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        if (url.includes("world.openfoodfacts.org/api/v2/product/0028400642255.json")) {
+          return new Response(
+            JSON.stringify({ status: 1, product: { product_name: "Doritos", brands: "Doritos", image_url: "https://img/x.jpg" } }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.includes("world.openfoodfacts.org/api/v2/product/0099999999999.json")) {
+          return new Response(JSON.stringify({ status: 0 }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+        throw new Error(`unexpected fetch to ${url}`);
+      })
+    );
+
+    const hit = await app.request("/v1/product/0028400642255", {}, env);
+    expect(hit.status).toBe(200);
+    expect(await hit.json<any>()).toMatchObject({ name: "Doritos", brand: "Doritos", image_url: "https://img/x.jpg", observations: [] });
+
+    const miss = await app.request("/v1/product/0099999999999", {}, env);
+    expect(miss.status).toBe(404);
+    expect(await miss.json()).toEqual({ error: "not_found" });
   });
 });
