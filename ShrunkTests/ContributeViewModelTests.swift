@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import UIKit
 @testable import Shrunk
 
 // MARK: - Stubs
@@ -199,5 +200,44 @@ final class ContributeViewModelTests: XCTestCase {
         XCTAssertEqual(ContributeViewModel.format(4258.584), "4258.584")
         XCTAssertEqual(ContributeViewModel.format(73.709), "73.709")
         XCTAssertEqual(ContributeViewModel.format(1360), "1360")
+    }
+
+    // MARK: - Photo preparation
+
+    /// Renders at scale 1 so the JPEG's baked-in pixel size matches the
+    /// requested point size exactly — a real captured photo has no device
+    /// screen scale applied, and `UIImage(data:)` always reads a JPEG back at
+    /// scale 1.0, so the default renderer's device scale (2x/3x depending on
+    /// simulator) would otherwise silently double or triple these fixtures.
+    private func renderSolidImage(width: CGFloat, height: CGFloat, color: UIColor) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
+            color.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }
+    }
+
+    func test_prepare_downscalesAndReencodes() throws {
+        let big = renderSolidImage(width: 3000, height: 2000, color: .systemRed)
+        let original = try XCTUnwrap(big.jpegData(compressionQuality: 1))
+
+        let prepared = try XCTUnwrap(LabelCaptureController.prepare(photoData: original))
+
+        XCTAssertEqual(prepared.image.width, 1600)
+        XCTAssertEqual(prepared.image.height, 1067)
+        XCTAssertLessThan(prepared.jpeg.count, 1_000_000, "uploads must stay well under the 5 MB server cap")
+        XCTAssertGreaterThan(prepared.jpeg.count, 0)
+    }
+
+    func test_prepare_leavesASmallImageAtItsOwnSize() throws {
+        let small = renderSolidImage(width: 800, height: 600, color: .systemBlue)
+        let prepared = try XCTUnwrap(LabelCaptureController.prepare(photoData: try XCTUnwrap(small.jpegData(compressionQuality: 1))))
+        XCTAssertEqual(prepared.image.width, 800)
+        XCTAssertEqual(prepared.image.height, 600)
+    }
+
+    func test_prepare_rejectsNonImageData() {
+        XCTAssertNil(LabelCaptureController.prepare(photoData: Data("not an image".utf8)))
     }
 }

@@ -82,6 +82,16 @@ final class ContributeViewModel: ObservableObject {
         step = .confirm
     }
 
+    /// Back to the viewfinder — used by the confirm sheet's retake button and
+    /// after a failed upload.
+    func retake() {
+        photoJPEG = nil
+        ocrConfidence = 0
+        sourceLine = ""
+        quantityText = ""
+        step = .capture
+    }
+
     func submit() async {
         guard let quantity = Double(quantityText), quantity > 0 else { return }
         step = .submitting
