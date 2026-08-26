@@ -38,3 +38,7 @@ GoogleService-Info.plist
 # FDC import artifacts
 scripts/out/
 *.zip
+
+# Python
+__pycache__/
+.pytest_cache/
