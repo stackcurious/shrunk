@@ -207,3 +207,123 @@ export async function setProductUnitKindIfMissing(
     .bind(unitKind, now, gtin)
     .run();
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 — devices, watches (spec §5)
+// ---------------------------------------------------------------------------
+
+export interface DeviceRow {
+  id: string;
+  apns_token: string | null;
+  location_id: string | null;
+  categories: string | null;
+  prefs: string | null;
+  pro_until: number | null;
+  app_account_token: string | null;
+  transaction_jws: string | null;
+}
+
+/** Every field except `id` is optional: an omitted field keeps its stored value. */
+export interface DeviceUpsert {
+  id: string;
+  apns_token?: string | null;
+  location_id?: string | null;
+  categories?: string[] | null;
+  prefs?: Record<string, boolean> | null;
+  app_account_token?: string | null;
+  transaction_jws?: string | null;
+}
+
+export interface WatchInput {
+  gtin: string;
+  brand: string | null;
+  alert_enabled: boolean;
+}
+
+/**
+ * Upserts a device row. `pro_until` is written NULL on insert and is *never*
+ * in the UPDATE set — Phase 5's JWS verifier owns that column, and a device
+ * sync must never downgrade a subscriber (spec §8).
+ */
+export async function upsertDevice(db: D1Database, row: DeviceUpsert, now: number): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, transaction_jws, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
+         location_id       = COALESCE(excluded.location_id, devices.location_id),
+         categories        = COALESCE(excluded.categories, devices.categories),
+         prefs             = COALESCE(excluded.prefs, devices.prefs),
+         app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
+         transaction_jws   = COALESCE(excluded.transaction_jws, devices.transaction_jws),
+         updated_at        = excluded.updated_at`
+    )
+    .bind(
+      row.id,
+      row.apns_token ?? null,
+      row.location_id ?? null,
+      row.categories ? JSON.stringify(row.categories) : null,
+      row.prefs ? JSON.stringify(row.prefs) : null,
+      row.app_account_token ?? null,
+      row.transaction_jws ?? null,
+      now
+    )
+    .run();
+}
+
+export async function getDevice(db: D1Database, id: string): Promise<DeviceRow | null> {
+  return db
+    .prepare(
+      "SELECT id, apns_token, location_id, categories, prefs, pro_until, app_account_token, transaction_jws FROM devices WHERE id = ?"
+    )
+    .bind(id)
+    .first<DeviceRow>();
+}
+
+/** The watch list is replace-only: the app owns it and posts the whole set. */
+export async function replaceWatches(db: D1Database, deviceId: string, watches: WatchInput[]): Promise<void> {
+  const statements: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM watches WHERE device_id = ?").bind(deviceId),
+  ];
+  for (const watch of watches) {
+    statements.push(
+      db
+        .prepare("INSERT OR REPLACE INTO watches (device_id, gtin, brand, alert_enabled) VALUES (?, ?, ?, ?)")
+        .bind(deviceId, watch.gtin, watch.brand, watch.alert_enabled ? 1 : 0)
+    );
+  }
+  await db.batch(statements);
+}
+
+export async function listWatches(db: D1Database, deviceId: string): Promise<WatchInput[]> {
+  const { results } = await db
+    .prepare("SELECT gtin, brand, alert_enabled FROM watches WHERE device_id = ? ORDER BY gtin")
+    .bind(deviceId)
+    .all<{ gtin: string; brand: string | null; alert_enabled: number }>();
+  return results.map((r) => ({ gtin: r.gtin, brand: r.brand, alert_enabled: r.alert_enabled === 1 }));
+}
+
+/**
+ * The newest accepted observation of the same kind strictly *before* the one
+ * identified by (observedAt, id). Used by the feed and the digest to decide
+ * whether an observation is a shrink (spec §5.1).
+ */
+export async function previousAcceptedQuantity(
+  db: D1Database,
+  gtin: string,
+  unitKind: string,
+  observedAt: number,
+  id: number
+): Promise<number | null> {
+  const row = await db
+    .prepare(
+      `SELECT quantity FROM observations
+       WHERE gtin = ? AND unit_kind = ? AND status = 'accepted'
+         AND (observed_at < ? OR (observed_at = ? AND id < ?))
+       ORDER BY observed_at DESC, id DESC LIMIT 1`
+    )
+    .bind(gtin, unitKind, observedAt, observedAt, id)
+    .first<{ quantity: number }>();
+  return row ? row.quantity : null;
+}

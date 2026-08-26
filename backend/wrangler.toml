@@ -9,6 +9,8 @@ crons = ["0 */6 * * *"]
 [vars]
 ENV = "dev"
 KROGER_PERSIST = "on"
+PUSH_PROVIDER = "apns"
+APNS_ENV = "sandbox"
 
 [[d1_databases]]
 binding = "DB"
