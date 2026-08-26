@@ -43,6 +43,43 @@ final class StubSubmitter: ObservationSubmitting, @unchecked Sendable {
     }
 }
 
+/// An `ObservationSubmitting` that suspends `submitObservation` on a held-open
+/// continuation, so a test can pin two concurrent `submit()` calls at the
+/// exact instant the first one is in flight. `waitForCall()` is itself a
+/// rendezvous (not a sleep/poll): it only returns once `submitObservation`
+/// has actually been entered, so the test can't release the gate early.
+actor GatedSubmitter: ObservationSubmitting {
+    private(set) var callCount = 0
+    private var startedContinuation: CheckedContinuation<Void, Never>?
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+
+    func submitObservation(
+        gtin: String, quantity: Double, unitKind: UnitKind, rawText: String,
+        ocrConfidence: Double, deviceId: String, photoJPEG: Data?
+    ) async throws -> SubmissionResult {
+        callCount += 1
+        startedContinuation?.resume()
+        startedContinuation = nil
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            releaseContinuation = continuation
+        }
+        return SubmissionResult(status: .accepted, confidence: 0.9, observationId: 42)
+    }
+
+    /// Suspends until `submitObservation` has been entered at least once.
+    func waitForCall() async {
+        if callCount > 0 { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            startedContinuation = continuation
+        }
+    }
+
+    func release() {
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+    }
+}
+
 // MARK: - Tests
 
 @MainActor
@@ -181,6 +218,29 @@ final class ContributeViewModelTests: XCTestCase {
         }
         XCTAssertTrue(api.calls.isEmpty)
         XCTAssertEqual(vm.step, .confirm)
+    }
+
+    func test_submit_guardsAgainstReEntryWhileAlreadySubmitting() async throws {
+        let ocr = StubOCR()
+        ocr.lines = [OCRLine(text: "NET WT 12 OZ (340g)", confidence: 0.94)]
+        let gate = GatedSubmitter()
+        let vm = ContributeViewModel(gtin: "0028400642255", deviceId: "device-1", ocr: ocr, api: gate)
+
+        await vm.handleCapture(image: try pixel(), jpegData: jpeg)
+
+        // Fire two submits concurrently — a double-tap, or two in-flight Tasks.
+        async let a: Void = vm.submit()
+        async let b: Void = vm.submit()
+
+        // Let the first call reach the server before releasing it, so the
+        // second call's guard check happens while `step == .submitting`.
+        await gate.waitForCall()
+        await gate.release()
+        _ = await (a, b)
+
+        let callCount = await gate.callCount
+        XCTAssertEqual(callCount, 1)
+        XCTAssertEqual(vm.step, .finished(SubmissionResult(status: .accepted, confidence: 0.9, observationId: 42)))
     }
 
     func test_toastMessage() {

@@ -93,6 +93,7 @@ final class ContributeViewModel: ObservableObject {
     }
 
     func submit() async {
+        guard step != .submitting else { return }
         guard let quantity = Double(quantityText), quantity > 0 else { return }
         step = .submitting
         do {
