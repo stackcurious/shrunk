@@ -103,16 +103,24 @@ export interface NewAlertJob {
   created_at: number;
 }
 
-export async function insertObservation(db: D1Database, row: NewObservation): Promise<number> {
-  const result = await db
+/**
+ * Statement builder (I1) so a caller can batch this insert with another one
+ * in a single `db.batch([...])` — D1's batch is an implicit transaction, so
+ * either both rows land or neither does.
+ */
+export function buildInsertObservation(db: D1Database, row: NewObservation): D1PreparedStatement {
+  return db
     .prepare(
       "INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(
       row.gtin, row.quantity, row.unit_kind, row.raw_text, row.observed_at,
       row.source, row.source_ref, row.confidence, row.status, Math.floor(Date.now() / 1000)
-    )
-    .run();
+    );
+}
+
+export async function insertObservation(db: D1Database, row: NewObservation): Promise<number> {
+  const result = await buildInsertObservation(db, row).run();
   return Number(result.meta.last_row_id);
 }
 
@@ -142,16 +150,20 @@ export async function getObservationBySubmission(
     .first<{ id: number; gtin: string; quantity: number; unit_kind: string; status: string }>();
 }
 
-export async function insertSubmission(db: D1Database, row: Omit<SubmissionRow, "reviewed_at">): Promise<void> {
-  await db
+/** Statement builder (I1) — see buildInsertObservation. */
+export function buildInsertSubmission(db: D1Database, row: Omit<SubmissionRow, "reviewed_at">): D1PreparedStatement {
+  return db
     .prepare(
       "INSERT INTO submissions (id, device_id, gtin, photo_key, ocr_text, parsed_quantity, parsed_kind, status, created_at, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)"
     )
     .bind(
       row.id, row.device_id, row.gtin, row.photo_key, row.ocr_text,
       row.parsed_quantity, row.parsed_kind, row.status, row.created_at
-    )
-    .run();
+    );
+}
+
+export async function insertSubmission(db: D1Database, row: Omit<SubmissionRow, "reviewed_at">): Promise<void> {
+  await buildInsertSubmission(db, row).run();
 }
 
 export async function getSubmission(db: D1Database, id: string): Promise<SubmissionRow | null> {
@@ -188,6 +200,16 @@ export async function markSubmissionReviewed(
     .prepare("UPDATE submissions SET status = ?, reviewed_at = ?, photo_key = NULL WHERE id = ?")
     .bind(status, reviewedAt, id)
     .run();
+}
+
+/**
+ * I1: clears photo_key without touching status or reviewed_at — used when an
+ * R2 put fails after the submission row already exists, so the row stays
+ * `pending` and adjudicable rather than pointing at an object that was never
+ * written.
+ */
+export async function clearSubmissionPhotoKey(db: D1Database, id: string): Promise<void> {
+  await db.prepare("UPDATE submissions SET photo_key = NULL WHERE id = ?").bind(id).run();
 }
 
 export async function insertAlertJob(db: D1Database, job: NewAlertJob): Promise<void> {

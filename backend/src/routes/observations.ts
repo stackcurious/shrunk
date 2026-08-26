@@ -2,11 +2,12 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { normalizeGTIN } from "../gtin";
 import {
+  buildInsertObservation,
+  buildInsertSubmission,
+  clearSubmissionPhotoKey,
   getLatestAcceptedObservation,
   getProduct,
-  insertObservation,
   insertProduct,
-  insertSubmission,
   type ProductRow,
 } from "../db";
 import { scoreSubmission } from "../gate";
@@ -114,39 +115,52 @@ observationsRoute.post("/v1/observations", async (c) => {
   const submissionId = crypto.randomUUID();
 
   // Photos exist only so a human can adjudicate a pending row (spec §6.3).
-  // I5: the stored object's content-type is always forced to image/jpeg —
-  // never the client's declared type — since the bytes are now verified JPEG.
-  let photoKey: string | null = null;
-  if (gate.status === "pending" && file && photoBytes) {
-    photoKey = `submissions/${submissionId}.jpg`;
-    await c.env.PHOTOS.put(photoKey, photoBytes, {
-      httpMetadata: { contentType: "image/jpeg" },
-    });
+  const willStorePhoto = gate.status === "pending" && file !== null && photoBytes !== null;
+  const photoKey = willStorePhoto ? `submissions/${submissionId}.jpg` : null;
+
+  // I1: the observation and submission rows must land together or not at
+  // all. Two separate .run() calls used to let a D1 failure between them
+  // strand a `pending` observation whose submission never existed — no admin
+  // route could ever find or resolve it, and its R2 object (written even
+  // earlier, before either insert) was never deleted either.
+  const [obsResult] = await c.env.DB.batch([
+    buildInsertObservation(c.env.DB, {
+      gtin,
+      quantity,
+      unit_kind: unitKind,
+      raw_text: rawText,
+      observed_at: now,
+      source: "crowd",
+      source_ref: submissionId,
+      confidence: gate.confidence,
+      status: gate.status,
+    }),
+    buildInsertSubmission(c.env.DB, {
+      id: submissionId,
+      device_id: deviceId,
+      gtin,
+      photo_key: photoKey,
+      ocr_text: rawText,
+      parsed_quantity: quantity,
+      parsed_kind: unitKind,
+      status: gate.status,
+      created_at: now,
+    }),
+  ]);
+  const observationId = Number(obsResult.meta.last_row_id);
+
+  // The photo is written only after the DB rows are durable. If R2 fails
+  // here, the rows already exist — null out photo_key so the row stays
+  // `pending` and reviewable instead of pointing at an object that was never
+  // written. I5: content-type is always forced to image/jpeg, never the
+  // client's declared type, since the bytes are already verified JPEG.
+  if (willStorePhoto && photoBytes) {
+    try {
+      await c.env.PHOTOS.put(photoKey!, photoBytes, { httpMetadata: { contentType: "image/jpeg" } });
+    } catch {
+      await clearSubmissionPhotoKey(c.env.DB, submissionId);
+    }
   }
-
-  const observationId = await insertObservation(c.env.DB, {
-    gtin,
-    quantity,
-    unit_kind: unitKind,
-    raw_text: rawText,
-    observed_at: now,
-    source: "crowd",
-    source_ref: submissionId,
-    confidence: gate.confidence,
-    status: gate.status,
-  });
-
-  await insertSubmission(c.env.DB, {
-    id: submissionId,
-    device_id: deviceId,
-    gtin,
-    photo_key: photoKey,
-    ocr_text: rawText,
-    parsed_quantity: quantity,
-    parsed_kind: unitKind,
-    status: gate.status,
-    created_at: now,
-  });
 
   if (gate.status === "accepted") {
     await finalizeAcceptance(c.env.DB, {

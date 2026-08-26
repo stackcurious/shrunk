@@ -237,6 +237,41 @@ describe("POST /v1/observations", () => {
     expect(stored?.httpMetadata?.contentType).toBe("image/jpeg");
   });
 
+  it("keeps a pending row reviewable when the R2 put fails after the DB batch commits (I1)", async () => {
+    await seedProduct(null);
+    // A PHOTOS binding whose put() always fails — simulates an R2 transient
+    // after the DB rows already exist.
+    const brokenPhotos = {
+      get: env.PHOTOS.get.bind(env.PHOTOS),
+      put: async () => {
+        throw new Error("boom");
+      },
+      delete: env.PHOTOS.delete.bind(env.PHOTOS),
+      list: env.PHOTOS.list.bind(env.PHOTOS),
+    } as unknown as typeof env.PHOTOS;
+    const brokenEnv = { ...env, PHOTOS: brokenPhotos };
+
+    const res = await app.request(
+      "/v1/observations",
+      { method: "POST", body: body({ ocr_confidence: "0.4" }, jpeg()) },
+      brokenEnv
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json<{ status: string; observation_id: number }>();
+    expect(json.status).toBe("pending");
+
+    // The rows are durable and the row stays adjudicable — it just has no
+    // photo, rather than a photo_key pointing at an object that was never
+    // written.
+    const submission = await env.DB.prepare("SELECT id, status, photo_key FROM submissions").first<any>();
+    expect(submission).toMatchObject({ status: "pending", photo_key: null });
+    expect(
+      (await env.DB.prepare("SELECT status FROM observations WHERE id = ?").bind(json.observation_id).first<any>())
+        .status
+    ).toBe("pending");
+    expect(await photoKeys()).toEqual([]);
+  });
+
   it("rate-limits submissions to 30 per device per hour, separately from the Kroger quota", async () => {
     await seedProduct("mass");
     const deviceId = `device-rl-${crypto.randomUUID()}`;

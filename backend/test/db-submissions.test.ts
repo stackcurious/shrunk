@@ -1,6 +1,9 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  buildInsertObservation,
+  buildInsertSubmission,
+  clearSubmissionPhotoKey,
   getLatestAcceptedObservation,
   getObservationBySubmission,
   getSubmission,
@@ -112,6 +115,37 @@ describe("submission and alert_jobs helpers", () => {
     await setProductUnitKindIfMissing(env.DB, GTIN, "volume", 1700009999);
     row = await env.DB.prepare("SELECT unit_kind, updated_at FROM products WHERE gtin = ?").bind(GTIN).first<{ unit_kind: string; updated_at: number }>();
     expect(row).toMatchObject({ unit_kind: "mass", updated_at: 1700000000 });
+  });
+
+  it("builds statements that batch atomically — a failure in one leaves no partial rows (I1)", async () => {
+    await seedProduct("mass");
+    const obsStmt = buildInsertObservation(env.DB, {
+      gtin: GTIN, quantity: 793.786, unit_kind: "mass", raw_text: null,
+      observed_at: 1700000000, source: "crowd", source_ref: "sub-atomic", confidence: 0.9, status: "accepted",
+    });
+    // parsed_kind violates submissions' CHECK constraint, so this statement
+    // fails — and it must take the observation insert down with it.
+    const badSubStmt = buildInsertSubmission(env.DB, {
+      id: "sub-atomic", device_id: "device-1", gtin: GTIN, photo_key: null, ocr_text: null,
+      parsed_quantity: 793.786, parsed_kind: "not-a-real-kind",
+      status: "accepted", created_at: 1700000000,
+    });
+
+    await expect(env.DB.batch([obsStmt, badSubStmt])).rejects.toThrow();
+
+    expect(await getObservationBySubmission(env.DB, "sub-atomic")).toBeNull();
+    const count = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM observations WHERE source_ref = 'sub-atomic'"
+    ).first<{ n: number }>();
+    expect(count!.n).toBe(0);
+  });
+
+  it("clears a submission's photo_key without touching its other columns", async () => {
+    await seedProduct("mass");
+    await insertSubmission(env.DB, submission("sub-1", "pending", "submissions/sub-1.jpg"));
+    await clearSubmissionPhotoKey(env.DB, "sub-1");
+    const row = await getSubmission(env.DB, "sub-1");
+    expect(row).toMatchObject({ id: "sub-1", status: "pending", photo_key: null, reviewed_at: null });
   });
 
   it("round-trips an alert job", async () => {
