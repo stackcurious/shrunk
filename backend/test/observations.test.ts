@@ -2,6 +2,7 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
 import { hitRateLimit, KROGER_HOURLY_LIMIT } from "../src/ratelimit";
+import { declaredBodyTooLarge } from "../src/routes/observations";
 
 const GTIN = "0028400642255";
 
@@ -42,6 +43,27 @@ async function seedAccepted(quantity: number, unitKind = "mass") {
 async function photoKeys(): Promise<string[]> {
   return (await env.PHOTOS.list()).objects.map((o) => o.key);
 }
+
+describe("declaredBodyTooLarge", () => {
+  const CAP = 5 * 1024 * 1024;
+  const SLACK = 64 * 1024;
+
+  it("allows a declared size within the cap plus slack", () => {
+    expect(declaredBodyTooLarge(String(CAP))).toBe(false);
+    expect(declaredBodyTooLarge(String(CAP + SLACK))).toBe(false);
+  });
+
+  it("rejects a declared size beyond the cap plus slack", () => {
+    expect(declaredBodyTooLarge(String(CAP + SLACK + 1))).toBe(true);
+    expect(declaredBodyTooLarge(String(6 * 1024 * 1024))).toBe(true);
+  });
+
+  it("treats a missing or malformed header as small, deferring to the post-parse checks", () => {
+    expect(declaredBodyTooLarge(null)).toBe(false);
+    expect(declaredBodyTooLarge("not-a-number")).toBe(false);
+    expect(declaredBodyTooLarge("")).toBe(false);
+  });
+});
 
 describe("POST /v1/observations", () => {
   beforeEach(async () => {
@@ -181,6 +203,18 @@ describe("POST /v1/observations", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "photo_too_large" });
     expect(await photoKeys()).toEqual([]);
+  });
+
+  it("rejects a body far beyond the photo cap by its declared Content-Length, without parsing it", async () => {
+    // I7: c.req.formData() buffers the whole request before the old
+    // post-parse size check ever ran. A body this far over the cap must be
+    // rejected off Content-Length alone, before multipart parsing starts.
+    const huge = new Blob([new Uint8Array(6 * 1024 * 1024)], { type: "image/jpeg" });
+    const res = await post(body({ ocr_confidence: "0.4" }, huge));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "photo_too_large" });
+    expect(await photoKeys()).toEqual([]);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions").first<{ n: number }>()).toMatchObject({ n: 0 });
   });
 
   it("rejects a photo whose bytes are not a JPEG, regardless of the declared content-type", async () => {

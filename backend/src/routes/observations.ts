@@ -19,13 +19,31 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const KINDS = new Set(["mass", "volume", "count"]);
 const MAX_RAW_TEXT = 500;
 const MAX_DEVICE_ID_LENGTH = 64;
+/** Room for multipart field overhead above the photo itself (I7). */
+const CONTENT_LENGTH_SLACK = 64 * 1024;
 
 /** I5: the client's own Content-Type is attacker-controlled — check the bytes. */
 function isJpeg(bytes: Uint8Array): boolean {
   return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
+/**
+ * I7: c.req.formData() buffers the entire request body before the old
+ * post-parse `file.size` check ever ran — on a public endpoint an attacker
+ * could push the platform's full body limit through memory before the cap
+ * fired. Exported as a pure function so the boundary is testable without
+ * depending on a runtime's Content-Length behaviour.
+ */
+export function declaredBodyTooLarge(contentLengthHeader: string | null | undefined): boolean {
+  const declared = Number(contentLengthHeader ?? "");
+  return Number.isFinite(declared) && declared > MAX_PHOTO_BYTES + CONTENT_LENGTH_SLACK;
+}
+
 observationsRoute.post("/v1/observations", async (c) => {
+  if (declaredBodyTooLarge(c.req.header("Content-Length"))) {
+    return c.json({ error: "photo_too_large" }, 400);
+  }
+
   let form: FormData;
   try {
     form = await c.req.formData();
