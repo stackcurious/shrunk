@@ -134,12 +134,10 @@ export interface Env {
 }
 ```
 
-In `backend/vitest.config.ts`, add `ADMIN_SECRET` to the miniflare bindings (the R2 bucket comes from `wrangler.toml` and is simulated locally):
+In `backend/vitest.config.ts`, add `ADMIN_SECRET` to the existing `miniflare.bindings` object inside the `cloudflareTest({...})` plugin call (the R2 bucket comes from `wrangler.toml` and is simulated locally):
 
 ```ts
-          miniflare: {
-            bindings: { TEST_MIGRATIONS: migrations, FDC_API_KEY: "test-key", ADMIN_SECRET: "test-secret" },
-          },
+        miniflare: { bindings: { TEST_MIGRATIONS: migrations, FDC_API_KEY: "test-key", ADMIN_SECRET: "test-secret" } },
 ```
 
 - [ ] **Step 3: Write the migration**
