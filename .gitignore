@@ -31,3 +31,6 @@ Carthage/Build/
 *.p12
 *.mobileprovision
 GoogleService-Info.plist
+
+# Subagent-driven-development scratch
+.superpowers/
