@@ -11,3 +11,7 @@ binding = "DB"
 database_name = "shrunk"
 database_id = "00000000-0000-0000-0000-000000000000"   # replaced in Task 9 after `wrangler d1 create`
 migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "shrunk-photos"
