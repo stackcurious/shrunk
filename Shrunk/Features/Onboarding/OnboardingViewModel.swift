@@ -9,6 +9,7 @@ final class OnboardingViewModel: ObservableObject {
         case household      // Q1
         case frequency      // Q2
         case categories     // Q3 multi-select
+        case store          // pick a Kroger store (skippable)
         case spend          // Q4 slider
         case socialProof    // trust + authority
         case analyzing      // labor illusion
@@ -45,7 +46,7 @@ final class OnboardingViewModel: ObservableObject {
     /// CTA is enabled only when the current step's required data is captured.
     var canAdvance: Bool {
         switch step {
-        case .hero, .problem, .socialProof, .reveal, .paywall:
+        case .hero, .problem, .socialProof, .reveal, .paywall, .store:
             return true
         case .household:   return profile.householdSize != nil
         case .frequency:   return profile.shopFrequency != nil

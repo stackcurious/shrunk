@@ -5,6 +5,7 @@ struct OnboardingContainerView: View {
     @EnvironmentObject private var storeKit: StoreKitService
 
     @AppStorage("shrunk.onboarding_profile") private var persistedProfile: String = "{}"
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     let onFinish: () -> Void
 
@@ -101,6 +102,7 @@ struct OnboardingContainerView: View {
         case .household:    HouseholdStep(vm: vm)
         case .frequency:    FrequencyStep(vm: vm)
         case .categories:   CategoriesStep(vm: vm)
+        case .store:        StoreStep()
         case .spend:        SpendStep(vm: vm)
         case .socialProof:  SocialProofStep()
         case .analyzing:    AnalyzingStep(vm: vm)
@@ -139,6 +141,7 @@ struct OnboardingContainerView: View {
         case .household:   return "Continue"
         case .frequency:   return "Continue"
         case .categories:  return "Continue"
+        case .store:       return storeName.isEmpty ? "Skip for now" : "Continue"
         case .spend:       return "Continue"
         case .socialProof: return "Run my analysis"
         case .reveal:      return "Stop the bleeding"
