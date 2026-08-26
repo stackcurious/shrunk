@@ -1,0 +1,135 @@
+import XCTest
+@testable import Shrunk
+
+final class NetContentParserTests: XCTestCase {
+
+    // MARK: - Shared fixtures (must agree with the Python and TypeScript ports)
+
+    private struct FixtureCase: Decodable {
+        let input: String
+        let quantity: Double?
+        let unit_kind: String?
+        let note: String
+    }
+
+    func test_sharedFixtures() throws {
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(forResource: "package_weights", withExtension: "json"),
+            "package_weights.json is missing from the test bundle — check the resources entry in project.yml"
+        )
+        let cases = try JSONDecoder().decode([FixtureCase].self, from: Data(contentsOf: url))
+        XCTAssertGreaterThanOrEqual(cases.count, 28)
+
+        for fixture in cases {
+            let result = NetContentParser.parse(fixture.input)
+            if let expected = fixture.quantity {
+                let parsed = try XCTUnwrap(result, "expected a parse for \(fixture.input) — \(fixture.note)")
+                XCTAssertEqual(parsed.unitKind.rawValue, fixture.unit_kind, fixture.note)
+                XCTAssertEqual(parsed.quantity, expected, accuracy: 0.01, fixture.note)
+                XCTAssertEqual(parsed.raw, fixture.input, fixture.note)
+            } else {
+                XCTAssertNil(result, "expected a reject for \(fixture.input) — \(fixture.note)")
+            }
+        }
+    }
+
+    // MARK: - Real label strings (spec §10)
+
+    func test_realLabelStrings() {
+        let cases: [(String, Double, UnitKind)] = [
+            ("NET WT 12 OZ (340g)",                  340.194,  .mass),
+            ("NET WT 8 OZ (227g)",                   226.796,  .mass),
+            ("NET WT. 1 LB 4 OZ (567g)",             566.990,  .mass),
+            ("e 500 g",                              500,      .mass),
+            ("500 g e",                              500,      .mass),
+            ("NET CONTENTS 28 FL OZ (828 mL)",       828.058,  .volume),
+            ("12 – 12 FL OZ CANS",                   4258.584, .volume),
+            ("NET WT 16 OZ (1 LB) 453g",             453.592,  .mass),
+            ("NET WT 5.3 OZ (150g)",                 150.252,  .mass),
+            ("NET WT 1.5 LB (680g)",                 680.388,  .mass),
+            ("NET 2 LB (907 g)",                     907.184,  .mass),
+            ("1 GAL (3.78 L)",                       3785.410, .volume),
+            ("64 FL OZ (1.89 L)",                    1892.704, .volume),
+            ("NET WT 10 OZ",                         283.495,  .mass),
+            ("NET WEIGHT 750 g",                     750,      .mass),
+            ("NET WT 2.6 OZ (74g)",                  73.709,   .mass),
+            ("18 CT",                                18,       .count),
+            ("NET WT 19.5 OZ (1 LB 3.5 OZ) 553g",    552.815,  .mass),
+            ("NET WT 1 LB 8 OZ (680 g)",             680.388,  .mass),
+            ("6 x 12 FL OZ",                         2129.292, .volume),
+            ("NET WT 32 OZ (2 LB) 907g",             907.184,  .mass),
+            ("NET WT 4.4 OZ (125g)",                 124.738,  .mass),
+            ("CONTENIDO NETO 400 g",                 400,      .mass),
+            ("NET WT 3.5 OZ (99g)",                  99.223,   .mass),
+            ("1 QT (946 mL)",                        946.353,  .volume),
+            ("NET WT 24 OZ (1 LB 8 OZ) 680g",        680.388,  .mass),
+            ("NET WT 7 OZ (198g)",                   198.447,  .mass),
+            ("e 250 ml",                             250,      .volume),
+            ("NET WT 12.5 OZ (354g)",                354.369,  .mass),
+            ("NET WT 16.9 FL OZ (500 mL)",           499.792,  .volume),
+            ("NET WT 1.36 kg (3 LB)",                1360,     .mass)
+        ]
+
+        for (input, quantity, kind) in cases {
+            guard let parsed = NetContentParser.parse(input) else {
+                XCTFail("expected a parse for \(input)")
+                continue
+            }
+            XCTAssertEqual(parsed.quantity, quantity, accuracy: 0.01, input)
+            XCTAssertEqual(parsed.unitKind, kind, input)
+        }
+    }
+
+    func test_labelStringsThatMustNotParse() {
+        let rejects = [
+            "SERVING SIZE 1 CUP",
+            "NET WT",
+            "INGREDIENTS: WATER, SUGAR, SALT",
+            "NET WT 0 OZ",
+            "NET WT 12 OZ (500g)",     // segments disagree by 47%
+            "BEST BY 12/25/2027"
+        ]
+        for input in rejects {
+            XCTAssertNil(NetContentParser.parse(input), "expected a reject for \(input)")
+        }
+    }
+
+    // MARK: - Line selection
+
+    func test_isNetContentLine_matchesTheSpecRegex() {
+        XCTAssertTrue(NetContentParser.isNetContentLine("NET WT 12 OZ"))
+        XCTAssertTrue(NetContentParser.isNetContentLine("net weight 750 g"))
+        XCTAssertTrue(NetContentParser.isNetContentLine("NET CONTENTS 28 FL OZ"))
+        XCTAssertTrue(NetContentParser.isNetContentLine("e 500 g"))
+        XCTAssertFalse(NetContentParser.isNetContentLine("INGREDIENTS: WATER"))
+        XCTAssertFalse(NetContentParser.isNetContentLine("12 – 12 FL OZ CANS"))
+    }
+
+    func test_firstNetContent_prefersTheNetContentLine() {
+        let lines = ["DORITOS", "12 CT", "NET WT 9.75 OZ (276g)", "INGREDIENTS: CORN"]
+        let match = NetContentParser.firstNetContent(in: lines)
+        XCTAssertEqual(match?.lineIndex, 2)
+        XCTAssertEqual(match?.line, "NET WT 9.75 OZ (276g)")
+        XCTAssertEqual(match?.parsed.unitKind, .mass)
+        XCTAssertEqual(match?.parsed.quantity ?? 0, 276.408, accuracy: 0.01)
+    }
+
+    func test_firstNetContent_fallsBackToAMassOrVolumeLine() {
+        // Many US labels print the size with no "NET WT" prefix at all.
+        let lines = ["COCA-COLA", "12 – 12 FL OZ CANS", "CAFFEINE FREE"]
+        let match = NetContentParser.firstNetContent(in: lines)
+        XCTAssertEqual(match?.lineIndex, 1)
+        XCTAssertEqual(match?.parsed.unitKind, .volume)
+        XCTAssertEqual(match?.parsed.quantity ?? 0, 4258.584, accuracy: 0.01)
+    }
+
+    func test_firstNetContent_neverGuessesFromABareCount() {
+        // "12 CT" alone is as likely to be servings as packages, so the fallback
+        // tier ignores count-only lines and the sheet falls back to manual entry.
+        XCTAssertNil(NetContentParser.firstNetContent(in: ["DORITOS", "12 CT", "PARTY SIZE"]))
+    }
+
+    func test_firstNetContent_returnsNilWhenNothingParses() {
+        XCTAssertNil(NetContentParser.firstNetContent(in: ["DORITOS", "INGREDIENTS: CORN", ""]))
+    }
+}

@@ -45,6 +45,9 @@ targets:
     platform: iOS
     sources:
       - path: ShrunkTests
+      - path: fixtures/package_weights.json
+        type: file
+        buildPhase: resources
     dependencies:
       - target: Shrunk
     settings:
