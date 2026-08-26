@@ -172,11 +172,7 @@ const app = document.getElementById("app");
 const auth = () => ({ Authorization: "Bearer " + sessionStorage.getItem(STORE) });
 
 function wire() {
-  // Built at runtime rather than as one literal string: the shell itself
-  // must stay data-free so an unauthenticated GET never leaks the attribute
-  // name a card would carry.
-  const photoAttr = "data" + "-photo";
-  for (const img of app.querySelectorAll("img[" + photoAttr + "]")) {
+  for (const img of app.querySelectorAll("img[data-photo]")) {
     fetch("/v1/admin/photo/" + img.dataset.photo, { headers: auth() })
       .then((r) => (r.ok ? r.blob() : null))
       .then((b) => { if (b) img.src = URL.createObjectURL(b); });

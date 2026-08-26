@@ -73,13 +73,21 @@ describe("admin auth", () => {
     expect(res.status).toBe(401);
   });
 
-  it("serves a data-free key form to an unauthenticated browser", async () => {
+  it("serves a data-free key form to an unauthenticated browser, even with submissions pending", async () => {
+    // T4b/M2: the shell must leak no submission data to an unauthenticated
+    // GET. Assert that directly (no id, gtin, or OCR text present) rather
+    // than banning a specific attribute-name substring the production JS
+    // would otherwise have to obfuscate just to dodge this assertion.
+    const { submissionId } = await seedPending();
     const res = await app.request("/v1/admin/review", { headers: { Accept: "text/html" } }, env);
     expect(res.status).toBe(401);
     expect(res.headers.get("content-type")).toContain("text/html");
     const html = await res.text();
     expect(html).toContain('id="keyForm"');
-    expect(html).not.toContain("data-photo");
+    expect(html).not.toContain(submissionId);
+    expect(html).not.toContain(GTIN);
+    expect(html).not.toContain("Gatorade");
+    expect(html).not.toContain("NET WT 28 OZ");
   });
 });
 
