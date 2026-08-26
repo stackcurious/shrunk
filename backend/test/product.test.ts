@@ -118,4 +118,41 @@ describe("GET /v1/product/:gtin", () => {
     expect(miss.status).toBe(404);
     expect(await miss.json()).toEqual({ error: "not_found" });
   });
+
+  async function seedObservation(gtin: string, quantity: number, source: string, observedAt: number, unitKind = "mass") {
+    await env.DB.prepare(
+      "INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, ?, ?, '', ?, ?, 'ref', 0.8, 'accepted', 1)",
+    ).bind(gtin, quantity, unitKind, observedAt, source).run();
+  }
+
+  it("flags needs_confirmation when the newest Kroger size disagrees with the newest other source", async () => {
+    await env.DB.prepare("INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES ('0028400642255','G','G','Snacks',NULL,'mass',1,1)").run();
+    await seedObservation("0028400642255", 340.194, "fdc", 1600000000);
+    await seedObservation("0028400642255", 311.844, "kroger", 1700000000);
+
+    const res = await app.request("/v1/product/0028400642255", {}, env);
+    expect((await res.json<any>()).needs_confirmation).toBe(true);
+  });
+
+  it("does not flag when the sizes agree within 1%", async () => {
+    await env.DB.prepare("INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES ('0028400642255','G','G','Snacks',NULL,'mass',1,1)").run();
+    await seedObservation("0028400642255", 340.194, "fdc", 1600000000);
+    await seedObservation("0028400642255", 340.5, "kroger", 1700000000);
+
+    const res = await app.request("/v1/product/0028400642255", {}, env);
+    expect((await res.json<any>()).needs_confirmation).toBe(false);
+  });
+
+  it("does not flag across unit kinds or without a Kroger observation", async () => {
+    await env.DB.prepare("INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES ('0028400642255','G','G','Snacks',NULL,'mass',1,1)").run();
+    await seedObservation("0028400642255", 12, "fdc", 1600000000, "count");
+    await seedObservation("0028400642255", 311.844, "kroger", 1700000000, "mass");
+
+    const mixed = await app.request("/v1/product/0028400642255", {}, env);
+    expect((await mixed.json<any>()).needs_confirmation).toBe(false);
+
+    await env.DB.prepare("DELETE FROM observations WHERE source = 'kroger'").run();
+    const noKroger = await app.request("/v1/product/0028400642255", {}, env);
+    expect((await noKroger.json<any>()).needs_confirmation).toBe(false);
+  });
 });

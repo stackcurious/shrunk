@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
-import { getAcceptedObservations, getProduct, getRecentSnapshots, insertProduct, type ProductRow } from "../db";
+import { getAcceptedObservations, getProduct, getRecentSnapshots, insertProduct, type ObservationRow, type ProductRow } from "../db";
 import { normalizeGTIN } from "../gtin";
 import { lookupFDC } from "../lookup/fdc";
 import { lookupOFF } from "../lookup/off";
@@ -10,7 +10,20 @@ export const productRoute = new Hono<{ Bindings: Env }>();
 export async function buildProductResponse(db: D1Database, product: ProductRow, locationId: string | null) {
   const observations = await getAcceptedObservations(db, product.gtin);
   const price_snapshots = locationId ? await getRecentSnapshots(db, product.gtin, locationId) : [];
-  return { ...product, observations, price_snapshots };
+  return { ...product, observations, price_snapshots, needs_confirmation: needsConfirmation(observations) };
+}
+
+/**
+ * Spec §4 step 4 — the live Kroger size disagrees with everything else we know,
+ * so the app should ask for a label photo. Observations arrive oldest-first.
+ */
+export function needsConfirmation(observations: ObservationRow[]): boolean {
+  const newest = (match: (o: ObservationRow) => boolean) => [...observations].reverse().find(match) ?? null;
+  const kroger = newest((o) => o.source === "kroger");
+  if (!kroger) return false;
+  const other = newest((o) => o.source !== "kroger" && o.unit_kind === kroger.unit_kind);
+  if (!other || other.quantity <= 0) return false;
+  return Math.abs(kroger.quantity - other.quantity) / other.quantity > 0.01;
 }
 
 productRoute.get("/v1/product/:gtin", async (c) => {
