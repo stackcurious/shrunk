@@ -143,11 +143,12 @@ describe("GET /v1/admin/photo/:id", () => {
     for (const key of await photoKeys()) await env.PHOTOS.delete(key);
   });
 
-  it("returns the stored bytes", async () => {
+  it("returns the stored bytes as image/jpeg with nosniff, regardless of the object's own metadata", async () => {
     const { submissionId } = await seedPending();
     const res = await app.request(`/v1/admin/photo/${submissionId}`, { headers: AUTH }, env);
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/jpeg");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
   });
 

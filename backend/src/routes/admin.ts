@@ -49,9 +49,14 @@ adminRoute.get("/v1/admin/photo/:id", async (c) => {
   if (!submission?.photo_key) return c.json({ error: "not_found" }, 404);
   const object = await c.env.PHOTOS.get(submission.photo_key);
   if (!object) return c.json({ error: "not_found" }, 404);
+  // I5: photos are only ever stored as image/jpeg (observations.ts forces
+  // this at write time and validates the magic bytes), so serve that
+  // unconditionally rather than trusting the object's own metadata, and add
+  // nosniff since this is a stored-content route on the public API origin.
   return new Response(object.body, {
     headers: {
-      "Content-Type": object.httpMetadata?.contentType ?? "image/jpeg",
+      "Content-Type": "image/jpeg",
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, no-store",
     },
   });

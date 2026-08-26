@@ -20,6 +20,11 @@ const KINDS = new Set(["mass", "volume", "count"]);
 const MAX_RAW_TEXT = 500;
 const MAX_DEVICE_ID_LENGTH = 64;
 
+/** I5: the client's own Content-Type is attacker-controlled — check the bytes. */
+function isJpeg(bytes: Uint8Array): boolean {
+  return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
 observationsRoute.post("/v1/observations", async (c) => {
   let form: FormData;
   try {
@@ -59,6 +64,17 @@ observationsRoute.post("/v1/observations", async (c) => {
   const file = photo instanceof File && photo.size > 0 ? photo : null;
   if (file && file.size > MAX_PHOTO_BYTES) return c.json({ error: "photo_too_large" }, 400);
 
+  // I5: read the bytes once, up front — reused for the JPEG check and (when
+  // the row lands pending) the R2 put, and validated regardless of the
+  // client's declared Content-Type, which is attacker-controlled.
+  let photoBytes: ArrayBuffer | null = null;
+  if (file) {
+    photoBytes = await file.arrayBuffer();
+    if (!isJpeg(new Uint8Array(photoBytes, 0, Math.min(3, photoBytes.byteLength)))) {
+      return c.json({ error: "invalid_photo" }, 400);
+    }
+  }
+
   // Contributions are the only way non-food products enter the database at all,
   // so an unknown barcode gets a bare product row rather than a 404.
   let product = await getProduct(c.env.DB, gtin);
@@ -80,11 +96,13 @@ observationsRoute.post("/v1/observations", async (c) => {
   const submissionId = crypto.randomUUID();
 
   // Photos exist only so a human can adjudicate a pending row (spec §6.3).
+  // I5: the stored object's content-type is always forced to image/jpeg —
+  // never the client's declared type — since the bytes are now verified JPEG.
   let photoKey: string | null = null;
-  if (gate.status === "pending" && file) {
+  if (gate.status === "pending" && file && photoBytes) {
     photoKey = `submissions/${submissionId}.jpg`;
-    await c.env.PHOTOS.put(photoKey, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type || "image/jpeg" },
+    await c.env.PHOTOS.put(photoKey, photoBytes, {
+      httpMetadata: { contentType: "image/jpeg" },
     });
   }
 

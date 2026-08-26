@@ -183,6 +183,26 @@ describe("POST /v1/observations", () => {
     expect(await photoKeys()).toEqual([]);
   });
 
+  it("rejects a photo whose bytes are not a JPEG, regardless of the declared content-type", async () => {
+    await seedProduct(null);
+    const notJpeg = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: "image/jpeg" }); // PNG magic bytes
+    const res = await post(body({ ocr_confidence: "0.4" }, notJpeg));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_photo" });
+    expect(await photoKeys()).toEqual([]);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions").first<{ n: number }>()).toMatchObject({ n: 0 });
+  });
+
+  it("stores the photo as image/jpeg regardless of the client's declared content-type", async () => {
+    await seedProduct(null);
+    const lyingType = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "text/html" });
+    const res = await post(body({ ocr_confidence: "0.4" }, lyingType));
+    expect(res.status).toBe(200);
+    const submission = await env.DB.prepare("SELECT photo_key FROM submissions").first<{ photo_key: string }>();
+    const stored = await env.PHOTOS.get(submission!.photo_key);
+    expect(stored?.httpMetadata?.contentType).toBe("image/jpeg");
+  });
+
   it("rate-limits submissions to 30 per device per hour, separately from the Kroger quota", async () => {
     await seedProduct("mass");
     const deviceId = `device-rl-${crypto.randomUUID()}`;
