@@ -92,4 +92,110 @@ final class ShrunkAPIClientTests: XCTestCase {
             XCTFail("wrong error: \(error)")
         }
     }
+
+    // MARK: - Device identity
+
+    func test_deviceIdentity_mintsOnceAndSticks() {
+        UserDefaults.standard.removeObject(forKey: DeviceIdentity.key)
+        let first = DeviceIdentity.current
+        XCTAssertFalse(first.isEmpty)
+        XCTAssertNotNil(UUID(uuidString: first))
+        XCTAssertEqual(DeviceIdentity.current, first)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: DeviceIdentity.key), first)
+    }
+
+    // MARK: - Multipart encoding
+
+    func test_multipartBody_encodesFieldsAndPhoto() throws {
+        let data = ShrunkAPIClient.multipartBody(
+            boundary: "BOUND",
+            fields: ["gtin": "0028400642255", "quantity": "340.194", "unit_kind": "mass"],
+            photoJPEG: Data([0xff, 0xd8, 0xff, 0xd9])
+        )
+        let body = try XCTUnwrap(String(data: data, encoding: .isoLatin1))
+
+        XCTAssertTrue(body.contains("--BOUND\r\nContent-Disposition: form-data; name=\"gtin\"\r\n\r\n0028400642255\r\n"))
+        XCTAssertTrue(body.contains("name=\"quantity\"\r\n\r\n340.194\r\n"))
+        XCTAssertTrue(body.contains("name=\"unit_kind\"\r\n\r\nmass\r\n"))
+        XCTAssertTrue(body.contains("Content-Disposition: form-data; name=\"photo\"; filename=\"label.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n"))
+        XCTAssertTrue(body.hasSuffix("--BOUND--\r\n"))
+    }
+
+    func test_multipartBody_omitsThePhotoPartWhenThereIsNone() throws {
+        let data = ShrunkAPIClient.multipartBody(boundary: "BOUND", fields: ["gtin": "0028400642255"], photoJPEG: nil)
+        let body = try XCTUnwrap(String(data: data, encoding: .isoLatin1))
+        XCTAssertFalse(body.contains("name=\"photo\""))
+        XCTAssertTrue(body.hasSuffix("--BOUND--\r\n"))
+    }
+
+    // MARK: - submitObservation
+
+    func test_submitObservation_postsMultipartAndMapsTheResult() async throws {
+        StubURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://api.test/v1/observations")
+            XCTAssertEqual(request.httpMethod, "POST")
+            let contentType = request.value(forHTTPHeaderField: "Content-Type") ?? ""
+            XCTAssertTrue(contentType.hasPrefix("multipart/form-data; boundary=shrunk-"), contentType)
+            return (200, Data(#"{"status":"accepted","confidence":0.9,"observation_id":42}"#.utf8))
+        }
+
+        let result = try await client.submitObservation(
+            gtin: "0028400642255", quantity: 340.194, unitKind: .mass,
+            rawText: "NET WT 12 OZ (340g)", ocrConfidence: 0.95,
+            deviceId: "device-1", photoJPEG: Data([0xff, 0xd8])
+        )
+
+        XCTAssertEqual(result, SubmissionResult(status: .accepted, confidence: 0.9, observationId: 42))
+    }
+
+    func test_submitObservation_mapsPending() async throws {
+        StubURLProtocol.handler = { _ in (200, Data(#"{"status":"pending","confidence":0.5,"observation_id":7}"#.utf8)) }
+        let result = try await client.submitObservation(
+            gtin: "0028400642255", quantity: 500, unitKind: .volume,
+            rawText: "", ocrConfidence: 0, deviceId: "device-1", photoJPEG: nil
+        )
+        XCTAssertEqual(result.status, .pending)
+        XCTAssertEqual(result.confidence, 0.5)
+        XCTAssertEqual(result.observationId, 7)
+    }
+
+    func test_submitObservation_400_throwsInvalidResponse() async {
+        StubURLProtocol.handler = { _ in (400, Data(#"{"error":"invalid_gtin"}"#.utf8)) }
+        do {
+            _ = try await client.submitObservation(
+                gtin: "123", quantity: 1, unitKind: .mass,
+                rawText: "", ocrConfidence: 0, deviceId: "device-1", photoJPEG: nil
+            )
+            XCTFail("expected throw")
+        } catch ShrunkError.invalidResponse {
+            // expected
+        } catch {
+            XCTFail("wrong error: \(error)")
+        }
+    }
+
+    func test_submitObservation_unknownStatus_throwsInvalidResponse() async {
+        StubURLProtocol.handler = { _ in (200, Data(#"{"status":"weird","confidence":0.9,"observation_id":1}"#.utf8)) }
+        do {
+            _ = try await client.submitObservation(
+                gtin: "0028400642255", quantity: 1, unitKind: .mass,
+                rawText: "", ocrConfidence: 0, deviceId: "device-1", photoJPEG: nil
+            )
+            XCTFail("expected throw")
+        } catch ShrunkError.invalidResponse {
+            // expected
+        } catch {
+            XCTFail("wrong error: \(error)")
+        }
+    }
+
+    // MARK: - Product flag
+
+    func test_needsConfirmation_defaultsToFalse() {
+        let product = ShrunkProduct(
+            id: "0028400642255", name: "Doritos", brand: "Doritos", category: "Snacks",
+            imageURL: nil, sizeHistory: [], currentPrice: nil, currency: "USD"
+        )
+        XCTAssertFalse(product.needsConfirmation)
+    }
 }

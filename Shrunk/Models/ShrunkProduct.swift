@@ -9,6 +9,10 @@ struct ShrunkProduct: Identifiable, Codable, Hashable {
     let sizeHistory: [SizeRecord]
     let currentPrice: Double?
     let currency: String
+    /// Set in Phase 3 when the live store size disagrees with the latest
+    /// non-Kroger observation (spec §4 step 4). Drives the "Confirm with a
+    /// label photo" card on ResultView.
+    var needsConfirmation: Bool = false
 }
 
 struct SizeRecord: Codable, Hashable {

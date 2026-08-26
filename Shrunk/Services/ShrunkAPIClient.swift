@@ -52,6 +52,80 @@ actor ShrunkAPIClient {
         }
         return dto.toProduct()
     }
+
+    /// Uploads a crowd label observation. The server recomputes the confidence
+    /// gate (spec §6.3) — `ocrConfidence` is evidence, not a verdict.
+    func submitObservation(
+        gtin: String,
+        quantity: Double,
+        unitKind: UnitKind,
+        rawText: String,
+        ocrConfidence: Double,
+        deviceId: String,
+        photoJPEG: Data?
+    ) async throws -> SubmissionResult {
+        let boundary = "shrunk-\(UUID().uuidString)"
+        var request = URLRequest(url: baseURL.appending(path: "v1/observations"))
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Self.multipartBody(
+            boundary: boundary,
+            fields: [
+                "gtin": gtin,
+                "quantity": String(quantity),
+                "unit_kind": unitKind.rawValue,
+                "raw_text": rawText,
+                "ocr_confidence": String(ocrConfidence),
+                "device_id": deviceId
+            ],
+            photoJPEG: photoJPEG
+        )
+
+        let data: Data
+        do {
+            let (received, response) = try await session.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw ShrunkError.invalidResponse
+            }
+            data = received
+        } catch let error as ShrunkError {
+            throw error
+        } catch {
+            throw ShrunkError.network(error)
+        }
+
+        let dto: SubmissionDTO
+        do {
+            dto = try decoder.decode(SubmissionDTO.self, from: data)
+        } catch {
+            throw ShrunkError.decoding(error)
+        }
+        guard let status = SubmissionResult.Status(rawValue: dto.status) else {
+            throw ShrunkError.invalidResponse
+        }
+        return SubmissionResult(status: status, confidence: dto.confidence, observationId: dto.observation_id)
+    }
+
+    /// Built separately from the request so it can be tested directly — a custom
+    /// `URLProtocol` receives `httpBody` as nil, so the wire format is otherwise
+    /// unobservable from a stubbed session.
+    static func multipartBody(boundary: String, fields: [String: String], photoJPEG: Data?) -> Data {
+        var body = Data()
+        for key in fields.keys.sorted() {          // sorted so the body is deterministic
+            body.appendString("--\(boundary)\r\n")
+            body.appendString("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n")
+            body.appendString("\(fields[key] ?? "")\r\n")
+        }
+        if let photoJPEG {
+            body.appendString("--\(boundary)\r\n")
+            body.appendString("Content-Disposition: form-data; name=\"photo\"; filename=\"label.jpg\"\r\n")
+            body.appendString("Content-Type: image/jpeg\r\n\r\n")
+            body.append(photoJPEG)
+            body.appendString("\r\n")
+        }
+        body.appendString("--\(boundary)--\r\n")
+        return body
+    }
 }
 
 // MARK: - Wire format
@@ -118,5 +192,44 @@ struct ProductDTO: Decodable {
             currentPrice: price,
             currency: "USD"
         )
+    }
+}
+
+// MARK: - Crowd submission
+
+struct SubmissionResult: Equatable {
+    enum Status: String {
+        case accepted, pending
+    }
+
+    let status: Status
+    let confidence: Double
+    let observationId: Int
+}
+
+/// Seam for stubbing the upload in `ContributeViewModel` tests.
+protocol ObservationSubmitting: Sendable {
+    func submitObservation(
+        gtin: String,
+        quantity: Double,
+        unitKind: UnitKind,
+        rawText: String,
+        ocrConfidence: Double,
+        deviceId: String,
+        photoJPEG: Data?
+    ) async throws -> SubmissionResult
+}
+
+extension ShrunkAPIClient: ObservationSubmitting {}
+
+struct SubmissionDTO: Decodable {
+    let status: String
+    let confidence: Double
+    let observation_id: Int
+}
+
+private extension Data {
+    mutating func appendString(_ string: String) {
+        append(Data(string.utf8))
     }
 }
