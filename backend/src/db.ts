@@ -258,7 +258,6 @@ export interface DeviceUpsert {
   location_id?: string | null;
   categories?: string[] | null;
   prefs?: Record<string, boolean> | null;
-  app_account_token?: string | null;
   transaction_jws?: string | null;
 }
 
@@ -269,20 +268,30 @@ export interface WatchInput {
 }
 
 /**
- * Upserts a device row. `pro_until` is written NULL on insert and is *never*
- * in the UPDATE set — Phase 5's JWS verifier owns that column, and a device
- * sync must never downgrade a subscriber (spec §8).
+ * Upserts a device row. `pro_until` / `app_account_token` are written only
+ * when the caller passes `verified` — a transaction JWS that verified
+ * against the App Store trust anchor *and* whose appAccountToken matches
+ * this device (spec §8). This is the only place besides the notifications
+ * route's own direct `UPDATE` (`routes/appstore.ts`) that writes `pro_until`,
+ * so the "an unverified sync never downgrades or clears a subscriber"
+ * invariant lives here, once, via the `ON CONFLICT` `COALESCE`.
  */
-export async function upsertDevice(db: D1Database, row: DeviceUpsert, now: number): Promise<void> {
+export async function upsertDevice(
+  db: D1Database,
+  row: DeviceUpsert,
+  now: number,
+  verified?: { proUntil: number; appAccountToken: string } | null
+): Promise<void> {
   await db
     .prepare(
       `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, transaction_jws, updated_at)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
          location_id       = COALESCE(excluded.location_id, devices.location_id),
          categories        = COALESCE(excluded.categories, devices.categories),
          prefs             = COALESCE(excluded.prefs, devices.prefs),
+         pro_until         = COALESCE(excluded.pro_until, devices.pro_until),
          app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
          transaction_jws   = COALESCE(excluded.transaction_jws, devices.transaction_jws),
          updated_at        = excluded.updated_at`
@@ -293,7 +302,8 @@ export async function upsertDevice(db: D1Database, row: DeviceUpsert, now: numbe
       row.location_id ?? null,
       row.categories ? JSON.stringify(row.categories) : null,
       row.prefs ? JSON.stringify(row.prefs) : null,
-      row.app_account_token ?? null,
+      verified?.proUntil ?? null,
+      verified?.appAccountToken ?? null,
       row.transaction_jws ?? null,
       now
     )

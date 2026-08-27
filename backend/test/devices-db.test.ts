@@ -47,6 +47,19 @@ describe("device helpers", () => {
     expect(updated!.updated_at).toBe(1700000900);
   });
 
+  it("writes pro_until/app_account_token only when `verified` is passed, and COALESCE preserves them afterward", async () => {
+    await upsertDevice(env.DB, { id: DEVICE }, 1700000000, { proUntil: 1900000000, appAccountToken: "abc-token" });
+    expect(await getDevice(env.DB, DEVICE)).toMatchObject({ pro_until: 1900000000, app_account_token: "abc-token" });
+
+    // A later sync with no verified entitlement (the default/omitted case) must not clear it.
+    await upsertDevice(env.DB, { id: DEVICE, apns_token: "zz99" }, 1700000900);
+    expect(await getDevice(env.DB, DEVICE)).toMatchObject({
+      apns_token: "zz99",
+      pro_until: 1900000000,
+      app_account_token: "abc-token",
+    });
+  });
+
   it("stores prefs as a JSON object", async () => {
     await upsertDevice(env.DB, { id: DEVICE, prefs: { sizeDrop: true, digest: false } }, 1700000000);
     expect(JSON.parse((await getDevice(env.DB, DEVICE))!.prefs!)).toEqual({ sizeDrop: true, digest: false });

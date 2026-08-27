@@ -6,6 +6,7 @@ import { newTestChain, signTestJWS, type TestChain } from "./helpers/mint-cert";
 
 const DEVICE_ID = "6F9619FF-8B86-D011-B42D-00CF4FC964FF";
 const TOKEN = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
+const OTHER_DEVICE_ID = "11111111-2222-3333-4444-555555555555";
 const EXPIRES_MS = Date.UTC(2026, 8, 26);
 
 function testEnv(chain: TestChain) {
@@ -33,9 +34,9 @@ async function postDevice(body: Record<string, unknown>, routeEnv: typeof env) {
   );
 }
 
-async function deviceRow() {
+async function deviceRow(id: string = DEVICE_ID) {
   return env.DB.prepare("SELECT pro_until, app_account_token FROM devices WHERE id = ?")
-    .bind(DEVICE_ID)
+    .bind(id)
     .first<{ pro_until: number | null; app_account_token: string | null }>();
 }
 
@@ -79,5 +80,29 @@ describe("POST /v1/devices — subscription verification", () => {
     const res = await postDevice({ device_id: DEVICE_ID, location_id: "01400943", categories: ["snacks"] }, env);
     expect(res.status).toBe(200);
     expect(await deviceRow()).toEqual({ pro_until: null, app_account_token: null });
+  });
+
+  it("does not grant Pro when the receipt's appAccountToken belongs to a different device", async () => {
+    // The JWS is validly signed and correctly scoped, but its appAccountToken
+    // (TOKEN, i.e. DEVICE_ID's own token) doesn't match OTHER_DEVICE_ID — a
+    // valid receipt for one device must not be replayable against another.
+    const res = await postDevice(
+      { device_id: OTHER_DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) },
+      testEnv(chain),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: false });
+    expect(await deviceRow(OTHER_DEVICE_ID)).toEqual({ pro_until: null, app_account_token: null });
+  });
+
+  it("sets a past pro_until for an expired-but-signature-valid receipt, and reports pro:false", async () => {
+    const pastMs = Date.UTC(2020, 0, 1);
+    const res = await postDevice(
+      { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction({ expiresDate: pastMs })) },
+      testEnv(chain),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: false });
+    expect(await deviceRow()).toEqual({ pro_until: Math.floor(pastMs / 1000), app_account_token: TOKEN });
   });
 });
