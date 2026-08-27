@@ -17,7 +17,7 @@ APPSTORE_ALLOWED_ENVIRONMENTS = "Sandbox,Production"
 [[d1_databases]]
 binding = "DB"
 database_name = "shrunk"
-database_id = "00000000-0000-0000-0000-000000000000"   # replaced in Task 9 after `wrangler d1 create`
+database_id = "ab56af73-6f6c-459f-af81-459eee5ba8bd"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
@@ -26,4 +26,4 @@ bucket_name = "shrunk-photos"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "00000000000000000000000000000000"   # replaced in Task 11 after `wrangler kv namespace create`
+id = "8946e07db9bc4563b37fbff86a467dfe"

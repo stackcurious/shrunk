@@ -11,7 +11,7 @@ actor ShrunkAPIClient {
             return URL(string: "http://localhost:8787")!
         }
         #endif
-        return URL(string: "https://shrunk-api.REPLACE-ME.workers.dev")!   // set to the URL printed by `wrangler deploy`
+        return URL(string: "https://shrunk-api.stackcurious.workers.dev")!   // set to the URL printed by `wrangler deploy`
     }
 
     /// `@AppStorage` key holding the APNs device token as lowercase hex.
