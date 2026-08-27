@@ -18,6 +18,14 @@ export interface DigestResult {
   devices: number;
   pushes: number;
   cleared: number;
+  /**
+   * C1 — count of devices whose send (or the invalidToken clear) threw. The
+   * digest is a single flat pass over devices with no job/resume concept
+   * (unlike `alerts.ts`'s `sent_count`, nothing here is ever retried), so a
+   * failed device just gets no digest this week rather than the whole run
+   * aborting and every device behind it losing theirs too.
+   */
+  failures: number;
 }
 
 interface WeekObservation {
@@ -119,7 +127,7 @@ export async function runWeeklyDigest(
   now: number = Math.floor(Date.now() / 1000)
 ): Promise<DigestResult> {
   const counts = await weeklyCounts(env, now);
-  const result: DigestResult = { counts: Object.fromEntries(counts), devices: 0, pushes: 0, cleared: 0 };
+  const result: DigestResult = { counts: Object.fromEntries(counts), devices: 0, pushes: 0, cleared: 0, failures: 0 };
   if (counts.size === 0) return result;
 
   const { results: devices } = await env.DB
@@ -141,16 +149,22 @@ export async function runWeeklyDigest(
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (mine.length === 0) continue;
 
-    const sendResult = await sender.send(device.apns_token, {
-      title: "What shrank this week",
-      body: digestBody(mine),
-      kind: "digest",
-      collapseId: "digest",
-    });
-    if (sendResult.ok) result.pushes += 1;
-    if (sendResult.invalidToken) {
-      await env.DB.prepare("UPDATE devices SET apns_token = NULL WHERE id = ?").bind(device.id).run();
-      result.cleared += 1;
+    try {
+      const sendResult = await sender.send(device.apns_token, {
+        title: "What shrank this week",
+        body: digestBody(mine),
+        kind: "digest",
+        collapseId: "digest",
+      });
+      if (sendResult.ok) result.pushes += 1;
+      if (sendResult.invalidToken) {
+        await env.DB.prepare("UPDATE devices SET apns_token = NULL WHERE id = ?").bind(device.id).run();
+        result.cleared += 1;
+      }
+    } catch {
+      // C1 — see DigestResult.failures: one device's send throwing must not
+      // cost every device behind it that week's digest.
+      result.failures += 1;
     }
   }
 

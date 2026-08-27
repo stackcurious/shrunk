@@ -21,6 +21,12 @@ export interface DrainResult {
   jobs: number;
   pushes: number;
   cleared: number;
+  /**
+   * C1 — count of failures the run survived: a per-device `send` that threw
+   * (e.g. `APNS_KEY_P8` unset), or a per-job body (recipient/product query,
+   * bookkeeping `UPDATE`) that threw. Either way the run continues past it.
+   */
+  failures: number;
 }
 
 interface RecipientRow {
@@ -169,7 +175,7 @@ export async function runAlertDrain(
   sender: PushSender = pushSender(env),
   now: number = Math.floor(Date.now() / 1000)
 ): Promise<DrainResult> {
-  const result: DrainResult = { jobs: 0, pushes: 0, cleared: 0 };
+  const result: DrainResult = { jobs: 0, pushes: 0, cleared: 0, failures: 0 };
   let budget = MAX_PUSHES_PER_RUN;
 
   const { results: jobs } = await env.DB
@@ -183,31 +189,50 @@ export async function runAlertDrain(
     if (budget <= 0) break;
     result.jobs += 1;
 
-    const limit = budget;
-    const recipients = await recipientsFor(env, job, now, limit, job.sent_count);
+    try {
+      const limit = budget;
+      const recipients = await recipientsFor(env, job, now, limit, job.sent_count);
 
-    const product = job.gtin
-      ? await env.DB.prepare("SELECT name, brand FROM products WHERE gtin = ?").bind(job.gtin).first<{ name: string; brand: string }>()
-      : null;
-    const payload = alertCopy(job, product);
+      const product = job.gtin
+        ? await env.DB.prepare("SELECT name, brand FROM products WHERE gtin = ?").bind(job.gtin).first<{ name: string; brand: string }>()
+        : null;
+      const payload = alertCopy(job, product);
 
-    for (const device of recipients) {
-      if (!prefAllows(device.prefs, job.kind)) continue;
-      const sendResult = await sender.send(device.apns_token, payload);
-      if (sendResult.ok) result.pushes += 1;
-      if (sendResult.invalidToken) {
-        await env.DB.prepare("UPDATE devices SET apns_token = NULL WHERE id = ?").bind(device.id).run();
-        result.cleared += 1;
+      for (const device of recipients) {
+        if (!prefAllows(device.prefs, job.kind)) continue;
+        try {
+          const sendResult = await sender.send(device.apns_token, payload);
+          if (sendResult.ok) result.pushes += 1;
+          if (sendResult.invalidToken) {
+            await env.DB.prepare("UPDATE devices SET apns_token = NULL WHERE id = ?").bind(device.id).run();
+            result.cleared += 1;
+          }
+        } catch {
+          // C1 — one recipient's send rejecting (a missing/malformed
+          // APNS_KEY_P8 secret, a transient KV/fetch fault, ...) must not
+          // abort the job. `recipients.length` below still advances
+          // `sent_count` past this recipient below, exactly as it already
+          // does for a resolved `{ok:false}` (Minor #3) — a failed
+          // recipient is skipped, not retried next run, so nobody is ever
+          // pushed twice.
+          result.failures += 1;
+        }
       }
-    }
 
-    const processed = job.sent_count + recipients.length;
-    if (recipients.length < limit) {
-      await env.DB.prepare("UPDATE alert_jobs SET sent_at = ?, sent_count = ? WHERE id = ?").bind(now, processed, job.id).run();
-    } else {
-      await env.DB.prepare("UPDATE alert_jobs SET sent_count = ? WHERE id = ?").bind(processed, job.id).run();
+      const processed = job.sent_count + recipients.length;
+      if (recipients.length < limit) {
+        await env.DB.prepare("UPDATE alert_jobs SET sent_at = ?, sent_count = ? WHERE id = ?").bind(now, processed, job.id).run();
+      } else {
+        await env.DB.prepare("UPDATE alert_jobs SET sent_count = ? WHERE id = ?").bind(processed, job.id).run();
+      }
+      budget -= recipients.length;
+    } catch {
+      // C1 — a job whose recipient/product query or bookkeeping UPDATE
+      // throws is skipped rather than aborting every job behind it in this
+      // run. Nothing was persisted for this job (sent_at/sent_count
+      // untouched), so it is retried whole on the next tick.
+      result.failures += 1;
     }
-    budget -= recipients.length;
   }
 
   return result;

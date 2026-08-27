@@ -181,7 +181,7 @@ describe("runAlertDrain", () => {
     const id = await seedJob("size_drop");
 
     const { sender, sent } = fakeSender();
-    expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 1, cleared: 0 });
+    expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 1, cleared: 0, failures: 0 });
 
     expect(sent).toHaveLength(1);
     expect(sent[0].token).toBe("token-dev-1");
@@ -198,7 +198,7 @@ describe("runAlertDrain", () => {
     const first = fakeSender();
     await runAlertDrain(env, first.sender, NOW);
     const second = fakeSender();
-    expect(await runAlertDrain(env, second.sender, NOW + 300)).toEqual({ jobs: 0, pushes: 0, cleared: 0 });
+    expect(await runAlertDrain(env, second.sender, NOW + 300)).toEqual({ jobs: 0, pushes: 0, cleared: 0, failures: 0 });
     expect(second.sent).toHaveLength(0);
   });
 
@@ -254,7 +254,7 @@ describe("runAlertDrain", () => {
     await seedJob("size_drop");
 
     const { sender } = fakeSender([{ ok: false, status: 410, invalidToken: true }]);
-    expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 0, cleared: 1 });
+    expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 0, cleared: 1, failures: 0 });
 
     const row = await env.DB.prepare("SELECT apns_token FROM devices WHERE id = 'dev-1'").first<{ apns_token: string | null }>();
     expect(row!.apns_token).toBeNull();
@@ -269,11 +269,11 @@ describe("runAlertDrain", () => {
     const id = await seedJob("size_drop");
 
     const first = fakeSender();
-    expect(await runAlertDrain(env, first.sender, NOW)).toEqual({ jobs: 1, pushes: MAX_PUSHES_PER_RUN, cleared: 0 });
+    expect(await runAlertDrain(env, first.sender, NOW)).toEqual({ jobs: 1, pushes: MAX_PUSHES_PER_RUN, cleared: 0, failures: 0 });
     expect(await jobRow(id)).toEqual({ sent_at: null, sent_count: 40 });
 
     const second = fakeSender();
-    expect(await runAlertDrain(env, second.sender, NOW + 300)).toEqual({ jobs: 1, pushes: 5, cleared: 0 });
+    expect(await runAlertDrain(env, second.sender, NOW + 300)).toEqual({ jobs: 1, pushes: 5, cleared: 0, failures: 0 });
     expect(await jobRow(id)).toEqual({ sent_at: NOW + 300, sent_count: 45 });
     expect(new Set([...first.sent, ...second.sent].map((s) => s.token)).size).toBe(45);
   });
@@ -281,8 +281,94 @@ describe("runAlertDrain", () => {
   it("marks a job with no recipients sent, without pushing", async () => {
     const id = await seedJob("size_drop");
     const { sender, sent } = fakeSender();
-    expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 0, cleared: 0 });
+    expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 0, cleared: 0, failures: 0 });
     expect(sent).toHaveLength(0);
     expect(await jobRow(id)).toEqual({ sent_at: NOW, sent_count: 0 });
+  });
+});
+
+describe("C1 — per-send and per-job failure containment", () => {
+  it("continues past a rejecting send, still reaches a later recipient and a second job, and counts the failure", async () => {
+    await seedDevice("dev-1");
+    await seedDevice("dev-2");
+    await seedWatch("dev-1", GTIN, "Gatorade");
+    await seedWatch("dev-2", GTIN, "Gatorade");
+    const firstJob = await seedJob("size_drop");
+
+    const otherGtin = "0099999999997";
+    await env.DB.prepare(
+      "INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'Other', 'Other', 'Snacks', NULL, 'mass', 1, 1)"
+    ).bind(otherGtin).run();
+    await seedDevice("dev-3");
+    await seedWatch("dev-3", otherGtin, "Other");
+    const secondJob = await seedJob("size_drop", { gtin: otherGtin, brand: "Other" });
+
+    const sent: string[] = [];
+    let calls = 0;
+    const sender: PushSender = {
+      async send(token) {
+        calls += 1;
+        if (calls === 1) throw new Error("boom: APNS_KEY_P8 not set");
+        sent.push(token);
+        return { ok: true, status: 200, invalidToken: false };
+      },
+    };
+
+    const result = await runAlertDrain(env, sender, NOW);
+    expect(result).toEqual({ jobs: 2, pushes: 2, cleared: 0, failures: 1 });
+    // dev-1's send rejected; dev-2 (same job) and dev-3 (a second, unrelated
+    // job) were still reached.
+    expect(sent.sort()).toEqual(["token-dev-2", "token-dev-3"]);
+
+    // sent_count advanced past the failed recipient (recipients.length still
+    // includes dev-1), so a second run pushes nobody in either job again.
+    expect(await jobRow(firstJob)).toEqual({ sent_at: NOW, sent_count: 2 });
+    expect(await jobRow(secondJob)).toEqual({ sent_at: NOW, sent_count: 1 });
+
+    const second = fakeSender();
+    expect(await runAlertDrain(env, second.sender, NOW + 300)).toEqual({ jobs: 0, pushes: 0, cleared: 0, failures: 0 });
+    expect(second.sent).toHaveLength(0);
+  });
+
+  it("skips a job whose body throws, without aborting jobs behind it", async () => {
+    await seedDevice("dev-1");
+    await seedWatch("dev-1", GTIN, "Gatorade");
+    const badJob = await seedJob("size_drop");
+
+    const otherGtin = "0099999999996";
+    await env.DB.prepare(
+      "INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'Other', 'Other', 'Snacks', NULL, 'mass', 1, 1)"
+    ).bind(otherGtin).run();
+    await seedDevice("dev-2");
+    await seedWatch("dev-2", otherGtin, "Other");
+    const goodJob = await seedJob("size_drop", { gtin: otherGtin, brand: "Other" });
+
+    // Poison the product lookup for the FIRST job's gtin only, so its
+    // per-job body throws before any send is even attempted.
+    const poisoned = new Proxy(env.DB, {
+      get(target: D1Database, prop: string | symbol, receiver: unknown) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            const stmt = target.prepare(sql);
+            if (!sql.includes("SELECT name, brand FROM products")) return stmt;
+            return {
+              bind: (...args: unknown[]) => {
+                if (args[0] === GTIN) throw new Error("boom: simulated D1 read failure");
+                return stmt.bind(...args);
+              },
+            } as unknown as D1PreparedStatement;
+          };
+        }
+        return Reflect.get(target as object, prop, receiver as object);
+      },
+    }) as unknown as D1Database;
+
+    const { sender, sent } = fakeSender();
+    const result = await runAlertDrain({ ...env, DB: poisoned }, sender, NOW);
+    expect(result).toEqual({ jobs: 2, pushes: 1, cleared: 0, failures: 1 });
+    expect(sent.map((s) => s.token)).toEqual(["token-dev-2"]);
+    // The bad job's row is untouched — nothing was persisted, so it is
+    // retried whole on the next run.
+    expect(await jobRow(badJob)).toEqual({ sent_at: null, sent_count: 0 });
   });
 });

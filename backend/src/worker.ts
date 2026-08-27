@@ -13,7 +13,11 @@ export default {
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     switch (event.cron) {
       case "*/5 * * * *":
-        ctx.waitUntil(runAlertDrain(env));
+        // C1 — per-device and per-job failures are already contained inside
+        // runAlertDrain; this catches anything above that (e.g. the initial
+        // job-scan query itself failing) so an unhandled rejection never
+        // surfaces from ctx.waitUntil.
+        ctx.waitUntil(runAlertDrain(env).catch(() => {}));
         break;
       case "0 */6 * * *":
         // I2 — per-pair failures are already contained inside runKrogerSweep;
@@ -23,7 +27,10 @@ export default {
         ctx.waitUntil(runKrogerSweep(env).catch(() => {}));
         break;
       case "0 1 * * 1":
-        ctx.waitUntil(runWeeklyDigest(env));
+        // C1 — per-device failures are already contained inside
+        // runWeeklyDigest; this catches anything above that (e.g. the
+        // weeklyCounts/device-list query itself failing).
+        ctx.waitUntil(runWeeklyDigest(env).catch(() => {}));
         break;
     }
   },

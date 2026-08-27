@@ -153,7 +153,36 @@ describe("runWeeklyDigest", () => {
     await env.DB.prepare("DELETE FROM observations").run();
     await seedDevice("dev-1", ["Snacks"]);
     const { sender, sent } = fakeSender();
-    expect(await runWeeklyDigest(env, sender, NOW)).toEqual({ counts: {}, devices: 0, pushes: 0, cleared: 0 });
+    expect(await runWeeklyDigest(env, sender, NOW)).toEqual({ counts: {}, devices: 0, pushes: 0, cleared: 0, failures: 0 });
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("C1 — per-send failure containment", () => {
+  beforeEach(async () => {
+    await seedShrink("0000000000011", "Snacks", 340, 300, NOW - DAY);
+  });
+
+  it("continues past a rejecting send and still delivers to later devices, counting the failure", async () => {
+    await seedDevice("dev-1", ["Snacks"]);
+    await seedDevice("dev-2", ["Snacks"]);
+    await seedDevice("dev-3", ["Snacks"]);
+
+    const sent: string[] = [];
+    let calls = 0;
+    const sender: PushSender = {
+      async send(token) {
+        calls += 1;
+        if (calls === 1) throw new Error("boom: APNS_KEY_P8 not set");
+        sent.push(token);
+        return { ok: true, status: 200, invalidToken: false };
+      },
+    };
+
+    // Devices are visited in `ORDER BY id`, so dev-1's send is the one that
+    // rejects; dev-2 and dev-3 must still get pushed.
+    const result = await runWeeklyDigest(env, sender, NOW);
+    expect(result).toMatchObject({ devices: 3, pushes: 2, cleared: 0, failures: 1 });
+    expect(sent.sort()).toEqual(["token-dev-2", "token-dev-3"]);
   });
 });
