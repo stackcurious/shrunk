@@ -56,6 +56,36 @@ async function deviceRow(id: string = DEVICE_ID) {
     .first<{ pro_until: number | null; app_account_token: string | null }>();
 }
 
+/**
+ * R44: makes upsertDevice's *entitlement* write (db.ts's two
+ * `UPDATE devices SET pro_until ...` statements) fail every time, without
+ * touching anything else — simulates the narrow cross-request race the
+ * try/catch in db.ts guards against. Built the same way as
+ * observations.test.ts's `brokenPhotos`: real bound methods, not a spread
+ * (D1Database's methods live on its prototype, not as own properties).
+ */
+function dbFailingEntitlementWrite(realDB: typeof env.DB): typeof env.DB {
+  const FAIL = Symbol("fail");
+  const prepare = realDB.prepare.bind(realDB);
+  const batch = realDB.batch.bind(realDB);
+  return {
+    prepare(sql: string) {
+      const stmt = prepare(sql);
+      if (!sql.startsWith("UPDATE devices SET pro_until")) return stmt;
+      const bind = stmt.bind.bind(stmt);
+      return Object.assign(stmt, {
+        bind: (...args: unknown[]) => Object.assign(bind(...args), { [FAIL]: true }),
+      });
+    },
+    batch: (statements: D1PreparedStatement[]) => {
+      if (statements.some((s) => (s as unknown as Record<symbol, boolean>)[FAIL])) {
+        return Promise.reject(new Error("simulated entitlement write failure"));
+      }
+      return batch(statements);
+    },
+  } as unknown as typeof env.DB;
+}
+
 describe("POST /v1/devices — subscription verification", () => {
   let chain: TestChain;
 
@@ -131,6 +161,66 @@ describe("POST /v1/devices — subscription verification", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, pro: false });
     expect(await deviceRow(OTHER_DEVICE_ID)).toEqual({ pro_until: null, app_account_token: null });
+  });
+
+  it("R44: the original device can re-sync its own token after another device rebinds it, without erroring", async () => {
+    // A purchases.
+    await postDevice({ device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) }, testEnv(chain));
+    expect(await deviceRow(DEVICE_ID)).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
+
+    // B rebinds — the reinstall/new-device scenario C1 exists for.
+    await postDevice({ device_id: OTHER_DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) }, testEnv(chain));
+    expect(await deviceRow(OTHER_DEVICE_ID)).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
+    expect(await deviceRow(DEVICE_ID)).toEqual({ pro_until: null, app_account_token: null });
+
+    // A re-syncs its own still-valid receipt (appAccountToken === its own
+    // id) — the bug: the old rebind logic skipped the clear whenever the
+    // token equalled the posting device's own id, so this collided with
+    // devices_account_unique (B still held the token) and threw a 500.
+    const res = await postDevice(
+      { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) },
+      testEnv(chain),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: true });
+
+    // Exactly one row holds the token now: A.
+    expect(await deviceRow(DEVICE_ID)).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
+    const holders = await env.DB.prepare("SELECT id FROM devices WHERE app_account_token = ?")
+      .bind(TOKEN)
+      .all<{ id: string }>();
+    expect(holders.results).toEqual([{ id: DEVICE_ID.toLowerCase() }]);
+
+    // B's next ordinary sync (no JWS) now reports pro:false.
+    const bRes = await postDevice({ device_id: OTHER_DEVICE_ID }, testEnv(chain));
+    expect(await bRes.json()).toEqual({ ok: true, pro: false });
+  });
+
+  it("R44: an entitlement-write failure still persists the apns token and watches, and reports pro:false", async () => {
+    const routeEnv = { ...testEnv(chain), DB: dbFailingEntitlementWrite(env.DB) };
+    const res = await postDevice(
+      {
+        device_id: DEVICE_ID,
+        apns_token: "a1b2c3",
+        watches: [{ gtin: "0028400642255", brand: "Gatorade" }],
+        transaction_jws: await signTestJWS(chain, transaction()),
+      },
+      routeEnv,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: false });
+
+    // Entitlement never landed...
+    expect(await deviceRow()).toEqual({ pro_until: null, app_account_token: null });
+    // ...but everything else in the same sync did.
+    const device = await env.DB.prepare("SELECT apns_token FROM devices WHERE id = ?")
+      .bind(DEVICE_ID.toLowerCase())
+      .first<{ apns_token: string | null }>();
+    expect(device?.apns_token).toBe("a1b2c3");
+    const watchRows = await env.DB.prepare("SELECT gtin FROM watches WHERE device_id = ?")
+      .bind(DEVICE_ID.toLowerCase())
+      .all<{ gtin: string }>();
+    expect(watchRows.results.map((w) => w.gtin)).toEqual(["0028400642255"]);
   });
 
   it("sets a past pro_until for an expired-but-signature-valid receipt, and reports pro:false", async () => {

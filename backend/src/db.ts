@@ -278,20 +278,41 @@ export interface WatchInput {
  * against the App Store trust anchor *and* whose appAccountToken names a
  * real device id (spec §8, C1). This is the only place besides the
  * notifications route's own direct `UPDATE` (`routes/appstore.ts`) that
- * writes `pro_until`, so the "an unverified sync never downgrades or clears
- * a subscriber" invariant lives here, once, via the `ON CONFLICT` `COALESCE`.
+ * writes `pro_until`.
  *
- * C1 — rebind: `verified.appAccountToken` is Apple's permanent
- * per-subscription identifier, baked into the purchase and unchangeable —
- * it does not necessarily equal `row.id`, the device posting *today* (a
- * reinstall mints a new device id; the original App Store transaction still
- * carries the old one). When it differs, the entitlement is moved rather
- * than dropped: whichever row currently holds that token is cleared first,
- * in the same D1 batch (atomic) as the upsert that then writes the token
- * onto the posting row — so a reader never observes two rows holding the
- * same `app_account_token`, and `0006_*.sql`'s unique partial index makes
- * that invariant durable. See routes/devices.ts for why this can't be used
- * to steal someone else's subscription.
+ * R44 (fix round on C1) — two bugs in the original rebind:
+ *
+ * 1. The device-attributes write and the entitlement write are now two
+ *    separate statements, not one `INSERT ... ON CONFLICT` covering every
+ *    column. `pro_until`/`app_account_token` are never named in the first
+ *    statement at all (not even via COALESCE) — an unverified sync (`verified`
+ *    absent) returns right after it, so the "an unverified sync never
+ *    downgrades or clears a subscriber" invariant holds trivially, by
+ *    omission, rather than by COALESCE-against-NULL.
+ * 2. The entitlement clear is now unconditional whenever `verified` is
+ *    present (`WHERE app_account_token = ? AND id <> ?`), not only when
+ *    `verified.appAccountToken !== row.id`. That equality check used to skip
+ *    the clear whenever a device re-synced *its own* token — correct only if
+ *    no other row could possibly hold it. But once a rebind has moved the
+ *    token elsewhere (C1's whole point), a *different* row can hold it even
+ *    though the token still equals this device's own id (concretely: one
+ *    Apple ID on iPhone + iPad — iPhone purchases, iPad rebinds, iPhone
+ *    re-syncs its still-valid receipt). Skipping the clear then collided
+ *    with `devices_account_unique` (0006_*.sql) and threw, failing the
+ *    entire sync (apns token, location, categories, prefs, watches) for a
+ *    paying subscriber. The clear+set pair always runs together in one
+ *    batch, so a reader never observes two rows holding the same token.
+ *
+ * The entitlement write is wrapped in try/catch: a narrow cross-request race
+ * still exists (two devices presenting the same token in the same instant,
+ * two D1 batches from two different requests interleaving around the unique
+ * index) that this in-batch ordering can't fully close. Rather than let that
+ * throw the whole sync away, it's logged and swallowed — the device
+ * attributes already committed above are unaffected, and the next sync
+ * (every app foreground calls `syncEntitlement()`) retries the entitlement
+ * write, which is itself idempotent. `routes/devices.ts` needs no change for
+ * this: it already reads the device back fresh after calling this function
+ * and reports whatever `pro_until` actually landed.
  *
  * devices.transaction_jws is intentionally never written since R34; a later
  * migration drops it.
@@ -302,45 +323,45 @@ export async function upsertDevice(
   now: number,
   verified?: { proUntil: number; appAccountToken: string } | null
 ): Promise<void> {
-  const statements: D1PreparedStatement[] = [];
+  await db
+    .prepare(
+      `INSERT INTO devices (id, apns_token, location_id, categories, prefs, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         apns_token  = COALESCE(excluded.apns_token, devices.apns_token),
+         location_id = COALESCE(excluded.location_id, devices.location_id),
+         categories  = COALESCE(excluded.categories, devices.categories),
+         prefs       = COALESCE(excluded.prefs, devices.prefs),
+         updated_at  = excluded.updated_at`
+    )
+    .bind(
+      row.id,
+      row.apns_token ?? null,
+      row.location_id ?? null,
+      row.categories ? JSON.stringify(row.categories) : null,
+      row.prefs ? JSON.stringify(row.prefs) : null,
+      now
+    )
+    .run();
 
-  if (verified && verified.appAccountToken !== row.id) {
-    statements.push(
+  if (!verified) return;
+
+  try {
+    await db.batch([
       db
         .prepare(
-          "UPDATE devices SET pro_until = NULL, app_account_token = NULL, updated_at = ? WHERE app_account_token = ?"
+          "UPDATE devices SET pro_until = NULL, app_account_token = NULL, updated_at = ? WHERE app_account_token = ? AND id <> ?"
         )
-        .bind(now, verified.appAccountToken)
-    );
+        .bind(now, verified.appAccountToken, row.id),
+      db
+        .prepare("UPDATE devices SET pro_until = ?, app_account_token = ?, updated_at = ? WHERE id = ?")
+        .bind(verified.proUntil, verified.appAccountToken, now, row.id),
+    ]);
+  } catch {
+    // No device id in the log — same policy as the JWS-didn't-verify warning
+    // in routes/devices.ts.
+    console.warn("devices: entitlement write failed");
   }
-
-  statements.push(
-    db
-      .prepare(
-        `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
-           location_id       = COALESCE(excluded.location_id, devices.location_id),
-           categories        = COALESCE(excluded.categories, devices.categories),
-           prefs             = COALESCE(excluded.prefs, devices.prefs),
-           pro_until         = COALESCE(excluded.pro_until, devices.pro_until),
-           app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
-           updated_at        = excluded.updated_at`
-      )
-      .bind(
-        row.id,
-        row.apns_token ?? null,
-        row.location_id ?? null,
-        row.categories ? JSON.stringify(row.categories) : null,
-        row.prefs ? JSON.stringify(row.prefs) : null,
-        verified?.proUntil ?? null,
-        verified?.appAccountToken ?? null,
-        now
-      )
-  );
-
-  await db.batch(statements);
 }
 
 export async function getDevice(db: D1Database, id: string): Promise<DeviceRow | null> {
