@@ -172,6 +172,8 @@ Streams `branded_food.csv` from the latest release zip; for each row with a pars
 
 APNs token-based auth: ES256 JWT signed with the `.p8` key via WebCrypto, cached 50 minutes. **Week-1 spike:** confirm Workers' outbound `fetch` reaches `api.push.apple.com` (HTTP/2). If not, use Firebase Cloud Messaging HTTP v1 (free; delivers to iOS via APNs) behind the same `PushSender` interface.
 
+<TODO: fill after deploy — run the spike (`backend/spikes/apns-probe.ts`) and append one line here: `APNs spike result (YYYY-MM-DD): direct APNs from Workers returns 200 — Phase 4 ships `PUSH_PROVIDER="apns"`.` (or, if it failed, `direct APNs from Workers failed (<the error>) — Phase 4 ships `PUSH_PROVIDER="fcm"` behind the same `PushSender` interface.`). Whichever line goes here must match `PUSH_PROVIDER` in `backend/wrangler.toml`. See `docs/RELEASE_CHECKLIST.md` Step 8.>
+
 ### 6.6 Kroger client
 
 Client-credentials token (`scope=product.compact`, 30-minute TTL) cached in KV. Attribution string `"Prices from Kroger"` returned with every proxied response for the UI. Per-device rate limit (60 proxied calls/hour via KV counter) so one user cannot exhaust the 10k/day quota. Barcodes and search terms are not logged.
@@ -207,6 +209,7 @@ Kroger's Acceptable Use and Terms prohibit "systematically gathering response da
 - Attribution shown wherever Kroger data appears.
 - Every other feature works without Kroger; loss of the key degrades, never breaks, the app.
 - Permission email draft: Appendix A. Send in week 1.
+- <TODO: fill after deploy — once the email is sent, replace the line above with: `Permission email draft: Appendix A. **Sent YYYY-MM-DD** from privacy@stackcurious.com to Kroger developer support (client id `<client id>`); no reply as of YYYY-MM-DD. Until it is answered, `KROGER_PERSIST` stays on and `POST /v1/admin/purge-kroger` is the one-command retraction.` See `docs/RELEASE_CHECKLIST.md` Step 5.>
 
 ## 10. Testing
 
