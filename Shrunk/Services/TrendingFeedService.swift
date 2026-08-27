@@ -1,26 +1,20 @@
 import Foundation
 
-/// Hosted catalog of verified shrinkflation cases. Lives at a versioned URL on
-/// jsDelivr (CDN-fronted GitHub) so we can iterate on the dataset without
-/// shipping a new app build. Always falls back to a bundled copy on first
-/// launch or network failure, so Browse is never blank.
-///
-/// To update the feed in production: edit `data/trending.json` on the main
-/// branch of the GitHub repo; jsDelivr serves the new version on its next
-/// cache miss (typically within minutes; can be force-purged via the
-/// jsDelivr UI).
+/// The Browse feed. Reads `/v1/feed` on the Shrunk Worker — curated verified
+/// cases merged with recently accepted crowd and Kroger shrinks (spec §6.1) —
+/// and falls back to the bundled `trending.json` when the network is gone, so
+/// Browse is never blank (spec §8).
 actor TrendingFeedService {
     static let shared = TrendingFeedService()
 
-    /// jsDelivr serves files from GitHub at this URL pattern. The `@main`
-    /// pins us to the latest commit on main; we could pin to a tag like
-    /// `@v1.0.0` for stricter rollouts later.
-    private let remoteURL = URL(string: "https://cdn.jsdelivr.net/gh/stackcurious/shrunk@main/data/trending.json")!
-
+    private let feedURL: URL
     private let session: URLSession
     private let decoder: JSONDecoder
+    /// Plain decoder: the feed's wire names are already snake_case properties.
+    private let feedDecoder = JSONDecoder()
 
-    init(session: URLSession = .shared) {
+    init(baseURL: URL = ShrunkAPIClient.defaultBaseURL, session: URLSession = .shared) {
+        self.feedURL = baseURL.appending(path: "v1/feed")
         self.session = session
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase
@@ -59,20 +53,53 @@ actor TrendingFeedService {
         return TrendingFeed.empty
     }
 
-    /// Force-fetches remote, bypassing the bundled fallback. Used by pull-to-
-    /// refresh on Browse. Returns nil if the network is unreachable.
+    /// Force-fetches the Worker feed, bypassing the bundled fallback. Used by
+    /// pull-to-refresh on Browse. Returns nil if the Worker is unreachable.
     func fetchRemote() async -> TrendingFeed? {
-        var request = URLRequest(url: remoteURL)
+        var request = URLRequest(url: feedURL)
         request.timeoutInterval = 6
         request.cachePolicy = .reloadRevalidatingCacheData
 
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
-            return try decoder.decode(TrendingFeed.self, from: data)
+            let dto = try feedDecoder.decode(FeedResponseDTO.self, from: data)
+            let bundled = loadBundled()?.trending.reduce(into: [String: TrendingEntry]()) { $0[$1.barcode] = $1 } ?? [:]
+            return TrendingFeed(
+                version: 2,
+                updated: Date(timeIntervalSince1970: TimeInterval(dto.updated)),
+                trending: dto.items.map { Self.entry(from: $0, bundled: bundled[$0.gtin]) }
+            )
         } catch {
             return nil
         }
+    }
+
+    /// Maps one feed item onto the model Browse already renders. `/v1/feed`
+    /// carries no image, price or evidence link, so those come from the bundled
+    /// catalogue when it knows the product.
+    static func entry(from item: FeedItemDTO, bundled: TrendingEntry?) -> TrendingEntry {
+        let unit = ProductDTO.unit(forKind: item.unit_kind)
+        let observed = Date(timeIntervalSince1970: TimeInterval(item.observed_at))
+        // The feed dates only the current observation; the earlier point sits a
+        // day before so the pair sorts correctly for `ShrinkDetector`.
+        let previous = observed.addingTimeInterval(-86_400)
+
+        return TrendingEntry(
+            barcode: item.gtin,
+            name: item.name,
+            brand: item.brand,
+            category: item.category,
+            imageUrl: bundled?.imageUrl,
+            history: [
+                TrendingEntry.HistoryPoint(date: previous, quantity: item.previous_quantity, unit: unit),
+                TrendingEntry.HistoryPoint(date: observed, quantity: item.current_quantity, unit: unit),
+            ],
+            currentPrice: bundled?.currentPrice,
+            currency: bundled?.currency ?? "USD",
+            evidenceUrl: bundled?.evidenceUrl,
+            addedAt: observed
+        )
     }
 
     private func loadBundled() -> TrendingFeed? {
@@ -134,4 +161,24 @@ extension TrendingEntry {
             currency: currency ?? "USD"
         )
     }
+}
+
+// MARK: - /v1/feed wire format
+
+struct FeedResponseDTO: Decodable {
+    let updated: Int
+    let items: [FeedItemDTO]
+}
+
+struct FeedItemDTO: Decodable {
+    let gtin: String
+    let name: String
+    let brand: String
+    let category: String
+    let previous_quantity: Double
+    let current_quantity: Double
+    let unit_kind: String
+    let shrink_percent: Double
+    let observed_at: Int
+    let source: String
 }
