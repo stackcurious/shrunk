@@ -51,6 +51,16 @@ describe("canonicalCategory", () => {
     expect(canonicalCategory(null)).toBeNull();
   });
 
+  it("I5: aliases Kroger's real top-level category spellings", () => {
+    expect(canonicalCategory("Household Essentials")).toBe("Cleaning");
+    expect(canonicalCategory("household essentials")).toBe("Cleaning");
+    expect(canonicalCategory("Cleaning Supplies")).toBe("Cleaning");
+    // These already agreed case-insensitively before I5 — confirming Kroger's
+    // real spellings need no further alias.
+    expect(canonicalCategory("Personal Care")).toBe("Personal care");
+    expect(canonicalCategory("Paper Products")).toBe("Paper products");
+  });
+
   it("passes an unknown category through, trimmed", () => {
     expect(canonicalCategory(" Frozen ")).toBe("Frozen");
   });

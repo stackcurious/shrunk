@@ -93,6 +93,23 @@ describe("weeklyCounts", () => {
     expect(Object.fromEntries(await weeklyCounts(env, NOW))).toEqual({});
   });
 
+  it("I5: still counts a shrink filed under a curated-only category (Condiments, Sugar), even though no device can ever subscribe to it", async () => {
+    // Shrunk/Models/GroceryCategory+Feed.swift has no case for either name —
+    // onboarding never offers them, so device.categories can never contain
+    // "Condiments" or "Sugar" and runWeeklyDigest will never pick this up
+    // for anyone. That's by design (see categories.ts's ALIASES comment),
+    // not a bug: weeklyCounts itself still reports it correctly, since the
+    // feed and Browse's "hall of shame" list need the count too.
+    await seedShrink("0000000000031", "Condiments", 20, 15, NOW - DAY);
+    expect(Object.fromEntries(await weeklyCounts(env, NOW))).toEqual({ Condiments: 1 });
+
+    await seedDevice("dev-1", ["Snacks"]);   // the only category onboarding actually offers, plus this one
+    const { sender, sent } = fakeSender();
+    const result = await runWeeklyDigest(env, sender, NOW);
+    expect(result.counts).toEqual({ Condiments: 1 });
+    expect(sent).toHaveLength(0);   // nobody's device.categories can ever include "Condiments"
+  });
+
   it("I2: looks up every candidate's previous quantity in a single grouped query, not one per row", async () => {
     await seedShrink("0000000000021", "Snacks", 340, 300, NOW - DAY);
     await seedShrink("0000000000022", "Snacks", 340, 300, NOW - DAY);
