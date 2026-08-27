@@ -73,7 +73,13 @@ actor ShrunkAPIClient {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             switch status {
             case 200: data = received
-            case 404: throw ShrunkError.productNotFound
+            // 404 is an honest "no row for this gtin". 400 from the Worker's
+            // `normalizeGTIN` (invalid_gtin) means the same thing from the
+            // user's perspective — a barcode the backend can't serve, most
+            // commonly a short symbology it can't canonicalise (I2) — so both
+            // route to the same "not in our database yet" → Contribute flow
+            // instead of a generic error.
+            case 404, 400: throw ShrunkError.productNotFound
             default:  throw ShrunkError.invalidResponse
             }
         } catch let error as ShrunkError {

@@ -102,6 +102,24 @@ final class ShrunkAPIClientTests: XCTestCase {
         }
     }
 
+    // MARK: - I2: short barcodes reach the contribute flow
+    //
+    // A 400 from `/v1/product/:gtin` means the Worker's `normalizeGTIN`
+    // couldn't canonicalise the barcode (e.g. an unexpanded 8-digit UPC-E) —
+    // the user must land on the same "not in our database" → Contribute path
+    // as a genuine 404, not a generic "couldn't read the response" error.
+    func test_fetchProduct_400_mapsToProductNotFound() async {
+        StubURLProtocol.handler = { _ in (400, Data(#"{"error":"invalid_gtin"}"#.utf8)) }
+        do {
+            _ = try await client.fetchProduct(barcode: "12345678", locationId: nil)
+            XCTFail("expected throw")
+        } catch ShrunkError.productNotFound {
+            // expected
+        } catch {
+            XCTFail("wrong error: \(error)")
+        }
+    }
+
     // MARK: - I1: offline copy is exact, regardless of the underlying URLError
 
     func test_networkError_errorDescriptionIsTheExactOfflineCopy() {
