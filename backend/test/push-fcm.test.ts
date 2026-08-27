@@ -137,8 +137,22 @@ describe("FCMSender", () => {
     });
   });
 
+  it("reports an invalid token on 400 UNREGISTERED", async () => {
+    stubFetch([OAUTH_OK, { status: 400, body: JSON.stringify({ error: { status: "UNREGISTERED" } }) }]);
+    expect(await new FCMSender(fcmEnv).send(TOKEN, { title: "a", body: "b", kind: "digest" })).toEqual({
+      ok: false, status: 400, invalidToken: true,
+    });
+  });
+
   it("does not blame the token for a server error", async () => {
     stubFetch([OAUTH_OK, { status: 503, body: JSON.stringify({ error: { status: "UNAVAILABLE" } }) }]);
+    expect(await new FCMSender(fcmEnv).send(TOKEN, { title: "a", body: "b", kind: "digest" })).toEqual({
+      ok: false, status: 503, invalidToken: false,
+    });
+  });
+
+  it("does not blame the token for a 503 whose body happens to mention UNREGISTERED", async () => {
+    stubFetch([OAUTH_OK, { status: 503, body: JSON.stringify({ error: { status: "UNREGISTERED" } }) }]);
     expect(await new FCMSender(fcmEnv).send(TOKEN, { title: "a", body: "b", kind: "digest" })).toEqual({
       ok: false, status: 503, invalidToken: false,
     });
@@ -149,5 +163,6 @@ describe("FCMSender", () => {
     expect(await new FCMSender(fcmEnv).send(TOKEN, { title: "a", body: "b", kind: "digest" })).toEqual({
       ok: false, status: 401, invalidToken: false,
     });
+    expect(await env.KV.get("fcm:token")).toBeNull();
   });
 });

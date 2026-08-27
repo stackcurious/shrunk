@@ -105,6 +105,10 @@ export class FCMSender implements PushSender {
     if (res.ok) return { ok: true, status: res.status, invalidToken: false };
 
     const text = await res.text().catch(() => "");
-    return { ok: false, status: res.status, invalidToken: res.status === 404 || text.includes("UNREGISTERED") };
+    return {
+      ok: false,
+      status: res.status,
+      invalidToken: res.status === 404 || (res.status === 400 && text.includes("UNREGISTERED")),
+    };
   }
 }
