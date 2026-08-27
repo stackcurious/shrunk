@@ -126,8 +126,12 @@ function subscribedCategories(raw: string | null): string[] {
 }
 
 /**
- * Monday 01:00 (spec §6.2): one push per Pro device that subscribes to a
- * category something shrank in. A device with no categories gets nothing.
+ * Monday 13:00 UTC (spec §6.2, Important #4): one push per Pro device that
+ * subscribes to a category something shrank in. A device with no categories
+ * gets nothing. Moved from 01:00 UTC — that landed Sunday evening in every
+ * US timezone (20:00 ET / 17:00 PT), so the "Monday summary" wasn't actually
+ * arriving on a Monday for this US-only app; deferred the full quiet-hours
+ * fix (per-device suppression window) past this fix wave.
  */
 export async function runWeeklyDigest(
   env: Env,

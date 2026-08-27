@@ -26,7 +26,7 @@ export default {
         // ctx.waitUntil.
         ctx.waitUntil(runKrogerSweep(env).catch(() => {}));
         break;
-      case "0 1 * * 1":
+      case "0 13 * * 1":
         // C1 — per-device failures are already contained inside
         // runWeeklyDigest; this catches anything above that (e.g. the
         // weeklyCounts/device-list query itself failing).

@@ -63,7 +63,7 @@ Secrets — `npx wrangler secret put <NAME>`, mirrored into the git-ignored `bac
 |---|---|
 | `*/5 * * * *` | `runAlertDrain` (`src/alerts.ts`) — drain `alert_jobs`: push to watching Pro devices, mark sent. Max 40 pushes per invocation; a job that hits the budget resumes from its `sent_count` next run. |
 | `0 */6 * * *` | `runKrogerSweep` (`src/sweep.ts`) — only while `KROGER_PERSIST="on"`: re-check every watched `(gtin, location_id)`, file `size_drop` and `price_hike` jobs. Per-pair failures are contained so one bad pair can't fail the whole sweep. |
-| `0 1 * * 1` | `runWeeklyDigest` (`src/digest.ts`) — one push per Pro device with activity in a subscribed category. |
+| `0 13 * * 1` | `runWeeklyDigest` (`src/digest.ts`) — one push per Pro device with activity in a subscribed category. |
 
 ## Develop
 
