@@ -282,6 +282,28 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
     }
 
+    // MARK: - priceIsFromStoreSnapshot (Phase 3 review I6 regression fix)
+
+    func test_priceFromCurrentPriceFallback_isNotFromStoreSnapshot() {
+        // No priceHistory at all — priceNow falls back to product.currentPrice,
+        // exactly what TrendingEntry.toProduct() produces for curated Browse
+        // cards. That price is not Kroger-derived and must not be attributed.
+        let product = makeProduct(history: [
+            .init(quantity: 32, unit: "oz"),
+            .init(quantity: 28, unit: "oz")
+        ], price: 1.89)
+        let record = detector.analyze(product: product)
+        XCTAssertNotNil(record.costPerUnitNow)
+        XCTAssertFalse(record.priceIsFromStoreSnapshot)
+    }
+
+    func test_priceFromPriceHistory_isFromStoreSnapshot() {
+        let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(0, 1.79), (86_400, 1.89)])
+        let record = detector.analyze(product: product)
+        XCTAssertNotNil(record.costPerUnitNow)
+        XCTAssertTrue(record.priceIsFromStoreSnapshot)
+    }
+
     // MARK: - Shared cost-per-ounce (Phase 3 review M2/T17 — was duplicated in
     // LivePricePanel and AlternativesEngine; both now delegate here.)
 

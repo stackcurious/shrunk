@@ -280,16 +280,20 @@ struct ResultView: View {
     private func costPerOzSection(record: ShrinkRecord) -> some View {
         if record.costPerUnitNow == nil { EmptyView() } else {
             VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.md) {
-                // `costPerUnitThen`/`Now` come straight from `product.priceHistory`
-                // (`price_snapshots` — Kroger-derived), so this card must carry
-                // the same attribution `LivePricePanel` does (spec §9, Phase 3
-                // review I6).
+                // When `costPerUnitNow` came from `product.priceHistory`
+                // (`price_snapshots` — Kroger-derived), this card must carry the
+                // same attribution `LivePricePanel` does (spec §9, Phase 3 review
+                // I6). It must NOT show attribution when the price fell back to
+                // `product.currentPrice` with no snapshot history — e.g. curated
+                // Browse cards, whose price is not Kroger data (I6 regression fix).
                 HStack {
                     Text("REAL COST PER OUNCE").shrunkSectionLabel()
                     Spacer()
-                    Text(LivePrice.attribution)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.smoke)
+                    if record.priceIsFromStoreSnapshot {
+                        Text(LivePrice.attribution)
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.smoke)
+                    }
                 }
 
                 if let then = record.costPerUnitThen, let now = record.costPerUnitNow, then > 0 {

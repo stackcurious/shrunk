@@ -21,6 +21,11 @@ struct ShrinkDetector {
         let prices = product.priceHistory.sorted { $0.date < $1.date }
         let priceNow = prices.last?.price ?? product.currentPrice
         let priceThen = prices.count >= 2 ? prices[prices.count - 2].price : nil
+        // True only when priceNow actually came from a price_snapshots-backed
+        // PricePoint — not the product.currentPrice fallback used when there's
+        // no snapshot history at all (e.g. curated Browse cards). Only the
+        // former is Kroger-derived and may carry Kroger attribution.
+        let priceIsFromStoreSnapshot = prices.last != nil
 
         guard sameKind.count >= 2 else {
             return ShrinkRecord(
@@ -32,6 +37,7 @@ struct ShrinkDetector {
                 priceNow: priceNow,
                 costPerUnitThen: nil,
                 costPerUnitNow: nil,
+                priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
                 verdict: .insufficientData
             )
         }
@@ -51,6 +57,7 @@ struct ShrinkDetector {
                 priceNow: priceNow,
                 costPerUnitThen: nil,
                 costPerUnitNow: priceNow.map { $0 / max(current.quantity, 0.0001) },
+                priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
                 verdict: .insufficientData
             )
         }
@@ -83,6 +90,7 @@ struct ShrinkDetector {
             priceNow: priceNow,
             costPerUnitThen: costPerUnitThen,
             costPerUnitNow: costPerUnitNow,
+            priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
             verdict: verdict
         )
     }

@@ -141,7 +141,9 @@ enum ShareCardRenderer {
                     .foregroundColor: ink
                 ]
             )
-            drawAttribution(smoke: smoke, topPad: topPad)
+            if record.priceIsFromStoreSnapshot {
+                drawAttribution(smoke: smoke, topPad: topPad)
+            }
         } else if let now = record.costPerUnitNow {
             "Now: \(now.formattedCostPerUnit()) per ounce".draw(
                 at: CGPoint(x: topPad, y: costLineY),
@@ -150,7 +152,9 @@ enum ShareCardRenderer {
                     .foregroundColor: ink
                 ]
             )
-            drawAttribution(smoke: smoke, topPad: topPad)
+            if record.priceIsFromStoreSnapshot {
+                drawAttribution(smoke: smoke, topPad: topPad)
+            }
         } else {
             "Caught with Shrunk".draw(
                 at: CGPoint(x: topPad, y: costLineY),
