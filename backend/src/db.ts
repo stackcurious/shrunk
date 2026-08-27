@@ -250,7 +250,14 @@ export interface DeviceRow {
   app_account_token: string | null;
 }
 
-/** Every field except `id` is optional: an omitted field keeps its stored value. */
+/**
+ * Every field except `id` is optional: an omitted field keeps its stored
+ * value, because `upsertDevice`'s `ON CONFLICT` `COALESCE`s each column and
+ * COALESCE only skips a real NULL. `location_id: ""` and `categories: []`
+ * are the explicit-clear spellings (I3, `routes/devices.ts`'s `locationId`/
+ * `categories` helpers) — both bind as non-NULL values (`""`, `"[]"`), so
+ * COALESCE writes them instead of preserving the prior value.
+ */
 export interface DeviceUpsert {
   id: string;
   apns_token?: string | null;

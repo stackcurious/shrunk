@@ -189,3 +189,34 @@ describe("POST /v1/devices — I1: X-Device-Id required, matching, rate limited"
     expect(await res.json()).toEqual({ error: "rate_limited" });
   });
 });
+
+describe("POST /v1/devices — I3: explicit clears vs. omitted keys", () => {
+  async function deviceRow() {
+    return env.DB
+      .prepare("SELECT location_id, categories FROM devices WHERE id = ?")
+      .bind(DEVICE)
+      .first<{ location_id: string | null; categories: string | null }>();
+  }
+
+  it("categories: [] clears the stored categories; an absent key keeps them", async () => {
+    await post({ device_id: DEVICE, categories: ["Snacks", "Dairy"] });
+    expect(JSON.parse((await deviceRow())!.categories!)).toEqual(["Snacks", "Dairy"]);
+
+    await post({ device_id: DEVICE, apns_token: "a1" });   // categories key absent
+    expect(JSON.parse((await deviceRow())!.categories!)).toEqual(["Snacks", "Dairy"]);
+
+    await post({ device_id: DEVICE, categories: [] });   // explicit clear
+    expect((await deviceRow())!.categories).toBe("[]");
+  });
+
+  it("location_id: '' clears the stored store; an absent key keeps it", async () => {
+    await post({ device_id: DEVICE, location_id: "01400943" });
+    expect((await deviceRow())!.location_id).toBe("01400943");
+
+    await post({ device_id: DEVICE, apns_token: "a1" });   // location_id key absent
+    expect((await deviceRow())!.location_id).toBe("01400943");
+
+    await post({ device_id: DEVICE, location_id: "" });   // explicit clear
+    expect((await deviceRow())!.location_id).toBe("");
+  });
+});

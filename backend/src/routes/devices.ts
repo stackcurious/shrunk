@@ -67,7 +67,7 @@ devicesRoute.post("/v1/devices", async (c) => {
     {
       id,
       apns_token: text(body.apns_token, MAX_TOKEN_LENGTH),
-      location_id: text(body.location_id, 32),
+      location_id: locationId(body.location_id),
       categories: categories(body.categories),
       prefs: prefs(body.prefs),
     },
@@ -91,6 +91,31 @@ function text(value: unknown, max: number): string | null {
   return trimmed;
 }
 
+/**
+ * I3 — unlike `text()`, an explicit empty string must survive as `""` (not
+ * collapse to `null`) so `upsertDevice`'s `COALESCE(excluded.location_id,
+ * devices.location_id)` writes it instead of skipping it: `location_id: ""`
+ * means "the shopper cleared their store," and only a real NULL bind means
+ * "the key was absent, leave the stored value alone." A key that is absent
+ * (`undefined`), the wrong type, or over-length falls through to `null`,
+ * which is exactly the existing "leave it alone" behaviour.
+ */
+function locationId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+  return trimmed.length > 32 ? null : trimmed;
+}
+
+/**
+ * I3 — the empty-array case already distinguishes itself from "absent"
+ * without special-casing: `Array.isArray([])` is true, so this returns `[]`
+ * (not `null`), and `[]` is truthy in JS, so `upsertDevice`'s `row.categories
+ * ? JSON.stringify(row.categories) : null` binds `"[]"` rather than falling
+ * through to `null` — `COALESCE` then writes it. `categories: []` clears a
+ * device's subscribed categories; an absent key returns `null` here and
+ * leaves the stored value untouched, same as always.
+ */
 function categories(value: unknown): string[] | null {
   if (!Array.isArray(value)) return null;
   const out: string[] = [];

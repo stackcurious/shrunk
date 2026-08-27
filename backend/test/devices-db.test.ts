@@ -59,6 +59,25 @@ describe("device helpers", () => {
     });
   });
 
+  it("I3: an explicit empty location_id/categories clears the stored value; an absent key keeps it", async () => {
+    await upsertDevice(env.DB, { id: DEVICE, location_id: "01400943", categories: ["Snacks"] }, 1700000000);
+    let row = await getDevice(env.DB, DEVICE);
+    expect(row!.location_id).toBe("01400943");
+    expect(JSON.parse(row!.categories!)).toEqual(["Snacks"]);
+
+    // Explicit clears (COALESCE only skips a real NULL — "" and "[]" are not NULL).
+    await upsertDevice(env.DB, { id: DEVICE, location_id: "", categories: [] }, 1700000900);
+    row = await getDevice(env.DB, DEVICE);
+    expect(row!.location_id).toBe("");
+    expect(row!.categories).toBe("[]");
+
+    // A later upsert that omits both keys (undefined) must not resurrect them.
+    await upsertDevice(env.DB, { id: DEVICE, apns_token: "zz99" }, 1700001800);
+    row = await getDevice(env.DB, DEVICE);
+    expect(row!.location_id).toBe("");
+    expect(row!.categories).toBe("[]");
+  });
+
   it("stores prefs as a JSON object", async () => {
     await upsertDevice(env.DB, { id: DEVICE, prefs: { sizeDrop: true, digest: false } }, 1700000000);
     expect(JSON.parse((await getDevice(env.DB, DEVICE))!.prefs!)).toEqual({ sizeDrop: true, digest: false });
