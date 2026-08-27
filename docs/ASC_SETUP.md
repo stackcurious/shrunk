@@ -15,7 +15,7 @@ Copy-paste checklist for creating the Shrunk record in App Store Connect (ASC). 
 | SKU | `shrunk-ios-001` (any internal string; not user-visible) |
 | User Access | Full Access |
 
-> The bundle ID `com.shrunk.app` must already exist as an App ID in the Apple Developer portal (Certificates, Identifiers & Profiles) under team **X4VJ56X38V**. If it doesn't, create it there first with Push Notifications capability enabled (the app schedules local + background notifications).
+> The bundle ID `com.shrunk.app` must already exist as an App ID in the Apple Developer portal (Certificates, Identifiers & Profiles) under team **X4VJ56X38V**, with the **Push Notifications** capability enabled — the app registers for remote notifications and the Worker sends watchlist alerts and the weekly digest through APNs. The same portal holds the APNs auth key (`.p8`) the Worker signs with; see `docs/RELEASE_CHECKLIST.md`. The app also declares the `aps-environment` entitlement through `Shrunk/Shrunk.entitlements`, wired via `CODE_SIGN_ENTITLEMENTS` in `project.yml` — `development` for TestFlight, and the App Store build is re-signed to `production` automatically at distribution.
 
 ---
 
@@ -92,27 +92,34 @@ Answer **None** to every content question. Shrunk has no objectionable content, 
 
 - **Expected result: 4+.**
 - No "Unrestricted Web Access" — the only web links are fixed, first-party URLs (privacy/terms/Open Food Facts).
+- **Still 4+ in v2, and the two questions that changed both stay "No".** Label photos are user-generated, but they are sent to a private review queue and are never shown to other users, so there is no in-app user-generated content to moderate; and the only outbound links are fixed, first-party-chosen URLs (privacy, terms, USDA, Kroger, Open Food Facts), so "Unrestricted Web Access" remains No.
 
 ---
 
 ## 4. App Privacy — Nutrition Label (ASC → app → App Privacy)
 
-Shrunk collects **no personal data**. There is no account, no login, no analytics SDK, no ad SDK, and no tracking.
+**This answer changed in v2.** v1 truthfully answered "no data collected" because the app had no backend. v2 talks to a first-party Cloudflare Worker and stores a device row, so the answer is now **Yes**, with everything marked *not linked to identity* and *not used for tracking*. The facts below come from `docs/PRIVACY_POLICY.md` — if that document changes, change these answers with it.
 
-When prompted "Do you or your third-party partners collect data from this app?":
+"Do you or your third-party partners collect data from this app?" → **Yes**.
 
-→ Answer: **No, we do not collect data from this app.**
+| Data type (Apple's taxonomy) | What it is | Purpose | Linked to the user? | Used for tracking? |
+|---|---|---|---|---|
+| Identifiers → **Device ID** | A UUID the app generates at first launch, and the APNs push token | App Functionality | **No** | **No** |
+| User Content → **Photos or Videos** | A label photo, uploaded **only** when the on-device reading is not confident enough to auto-accept; deleted as soon as it is reviewed | App Functionality | **No** | **No** |
+| User Content → **Other User Content** | The net-weight reading parsed from a label | App Functionality | **No** | **No** |
+| Purchases → **Purchase History** | Subscription expiry derived from Apple's signed transaction, plus the app-generated purchase token | App Functionality | **No** | **No** |
+| Other Data → **Other Data Types** | The Kroger store id you pick, your category choices and notification preferences, and your watchlist | App Functionality (and Product Personalisation for categories) | **No** | **No** |
 
-Supporting facts for the questionnaire / review notes:
+Answer **No** to tracking on every data type, and **No** to "Do you use data for tracking purposes?" — there is no advertising SDK, no analytics SDK, no ad identifier, and nothing is shared with data brokers. App Tracking Transparency is therefore not required and the app never shows the ATT prompt.
 
-- **No account / no login.** The app has no sign-in. There is no user identity.
-- **Product lookups** go to the **Open Food Facts** public API (`world.openfoodfacts.org`) using only the scanned barcode number. No personal identifier, device ID, or account is attached to those requests. Barcodes are product identifiers, not personal data.
-- **Trending feed** is a static JSON fetched from a public CDN (jsDelivr). No data is sent to it — it is a one-way download.
-- **Watchlist, alerts, scan history, onboarding answers** are stored **locally on device only** (SwiftData + UserDefaults). Nothing is uploaded to any server we control — we operate no backend.
-- **No tracking** as Apple defines it: no data is used to track the user across other apps/websites, and there is no advertising. Answer **No** to the App Tracking Transparency / tracking questions.
-- **Purchases** are handled entirely by Apple via StoreKit 2; we receive no payment data.
+Not collected, and must stay unticked: Contact Info, Health & Fitness, Financial Info (Apple handles payment — we never see it), **Location** (the app asks for a *store*, never the device's location, and requests no location permission), Contacts, Search History, Browsing History, Sensitive Info, Diagnostics, Usage Data.
 
-If ASC insists on listing any data type, the only candidate is "Purchases / Purchase History," which is handled by Apple, not collected by us — but the correct top-level answer remains **no data collected**.
+Supporting facts if a reviewer asks:
+
+- **No account, no login.** There is no user identity to link anything to.
+- **Scan history stays on the device** (`UserDefaults`) and is never uploaded.
+- **Kroger requests carry only the barcode and the store id** — never the device id or push token.
+- **Photos are transient.** They exist in R2 only while a submission is pending human review and are deleted on accept and on reject alike.
 
 ---
 
@@ -120,19 +127,22 @@ If ASC insists on listing any data type, the only candidate is "Purchases / Purc
 
 These are declared in `Shrunk/Resources/Info.plist` — confirm they survive the build:
 
-- `NSCameraUsageDescription` — "Shrunk uses your camera to scan product barcodes. Nothing is recorded or stored." (Camera is the core scan feature.)
-- `UIBackgroundModes` + `BGTaskSchedulerPermittedIdentifiers` — for the Pro daily watchlist sweep.
-- Local notifications — for shrink alerts.
+- `NSCameraUsageDescription` — "Shrunk uses your camera to scan product barcodes and, when you choose to contribute, to photograph a product label so we can read its net weight." Covers both the scanner and the label-capture flow.
+- `UIBackgroundModes` — `fetch`, `processing` (the watchlist live-size check) and `remote-notification` (silent handling of alert pushes).
+- `BGTaskSchedulerPermittedIdentifiers` — `com.shrunk.refresh-watchlist`.
+- Push Notifications — remote alerts from the Worker (watchlist, digest, verified cases) plus local notifications.
+- `NSAppTransportSecurity` → `NSAllowsLocalNetworking` — development only, so the app can talk to `wrangler dev` on `localhost:8787`. It permits **local** connections only, does not weaken ATS for any remote host, and needs no justification to review.
 
-No HealthKit, location, contacts, photos, or microphone usage.
+No HealthKit, no location, no contacts, no photo library, no microphone. The label-capture flow uses the camera, never the photo library, so `NSPhotoLibraryUsageDescription` is deliberately absent.
 
 ---
 
 ## 6. Build & Signing
 
-- Team: **X4VJ56X38V** (set in `project.yml` → `DEVELOPMENT_TEAM`, automatic signing).
-- Archive with a Distribution provisioning profile for `com.shrunk.app`, upload via Xcode Organizer or `xcodebuild -exportArchive`.
-- Marketing version `1.0.0`, build `1` (from `project.yml`).
+- Team **X4VJ56X38V** (`project.yml` → `DEVELOPMENT_TEAM`, automatic signing).
+- Marketing version **2.0.0**, build **2** — both from `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
+- The Xcode project is generated: `xcodegen generate` before any archive. `Shrunk.xcodeproj` is not in git.
+- Archive and upload with the commands in `docs/RELEASE_CHECKLIST.md` (`xcodebuild archive` → `-exportArchive` with `ExportOptions.plist` → `xcrun altool --upload-app`), or Xcode → Product → Archive → Distribute App.
 
 ---
 
@@ -144,19 +154,45 @@ Shrunk has no account or login — open the app and start scanning immediately. 
 
 ---
 
+## 8. Export compliance
+
+`Shrunk/Resources/Info.plist` already declares:
+
+```xml
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+```
+
+That is correct and means ASC will **not** ask the encryption questions on every build. Shrunk uses only HTTPS/TLS through the OS (App Transport Security) and Apple's own StoreKit and Vision frameworks; it implements no cryptography of its own and ships no custom encryption. That falls squarely inside the exemption for apps that merely use standard OS-provided encryption.
+
+The Worker's App Store JWS verification runs **on the server**, not in the app, so it does not affect this answer.
+
+If a build ever prompts for encryption answers anyway, the correct chain is: "Does your app use encryption?" → Yes → "Does it qualify for any of the exemptions?" → Yes, "only uses encryption available in iOS/macOS" → no CCATS or French declaration needed for a US-only release.
+
+---
+
 ## Pre-submission checklist
 
-- [ ] App record created with bundle id `com.shrunk.app`
-- [ ] Subscription group `Shrunk Pro` created
-- [ ] `com.shrunk.pro.yearly` ($14.99/yr, level 1) and `com.shrunk.pro.monthly` ($2.99/mo, level 2) created and submitted with the build
-- [ ] 7-day Free Trial introductory offer added to the yearly product only
-- [ ] App Store Server Notifications set to Version 2, both URLs pointing at `https://<worker>/v1/appstore/notifications`, and ASC's Test Notification returns 200
+App record
+- [ ] App record exists with bundle id `com.shrunk.app`, team X4VJ56X38V, Push Notifications capability enabled
+- [ ] Name, subtitle, promotional text, keywords, description **including the subscription disclosure**, and What's New pasted from `docs/APP_STORE_LISTING.md`
+- [ ] Support, Marketing, Privacy Policy and EULA/Terms URLs set, and all four load in a browser
 - [ ] Age rating completed → 4+
-- [ ] App Privacy re-answered before submission — the app now talks to a first-party Cloudflare Worker and stores a device UUID, an APNs token, a store id, and category preferences server-side. The "we operate no backend" wording in §4 is stale as of Phase 5 and must be rewritten in week 6.
-- [ ] 6.9" screenshots uploaded (see `marketing/screenshots/` + re-capture device shots noted below)
-- [ ] Promotional text, description, keywords, support/marketing URLs filled from `APP_STORE_LISTING.md`
-- [ ] Privacy Policy URL set to `https://stackcurious.com/shrunk/privacy`
-- [ ] Reviewer note pasted
-- [ ] Build 1.0.0 (1) uploaded and attached
-```
-```
+
+Subscriptions (details in §2)
+- [ ] Subscription group `Shrunk Pro` created
+- [ ] `com.shrunk.pro.yearly` ($14.99/yr, level 1) and `com.shrunk.pro.monthly` ($2.99/mo, level 2) created and submitted **with the build**
+- [ ] 7-day Free Trial introductory offer on the yearly product only
+- [ ] Paywall screenshot uploaded for subscription review
+- [ ] App Store Server Notifications set to Version 2, both URLs pointing at `https://<worker>/v1/appstore/notifications`, and ASC's **Test Notification** returns 200
+
+Privacy and compliance
+- [ ] App Privacy re-answered per §4 — **"Yes, we collect data"**, five data types, all *not linked* and *not used for tracking*
+- [ ] `ITSAppUsesNonExemptEncryption=false` present in the built Info.plist (§8)
+- [ ] `https://stackcurious.com/shrunk/privacy` and `/terms` publish the current `docs/PRIVACY_POLICY.md` and `docs/TERMS.md`
+
+Build
+- [ ] Six 6.9" screenshots re-captured on a device from the 2.0.0 build (`docs/APP_STORE_LISTING.md`); the v1 set deleted
+- [ ] Reviewer note pasted (§7)
+- [ ] Version 2.0.0 (2) uploaded, processed, and attached to the release
+- [ ] `scripts/acceptance.md` filled in and passing — 35/35 curated verdicts, ≥60% kitchen-scan history, ≥25/30 live prices
