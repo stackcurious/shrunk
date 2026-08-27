@@ -59,10 +59,11 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - Launch
 
-    private func launchApp(pro: Bool = true) -> XCUIApplication {
+    private func launchApp(pro: Bool = true, tab: Int = 0) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
             "-ui-testing",
+            "-ui-testing-tab", String(tab),
             "-ui-testing-store", Self.storeLocationId,
             "-ui-testing-store-name", Self.storeDisplayName,
             "-ui-testing-recent-a", featuredBarcode,
@@ -84,7 +85,7 @@ final class ScreenshotTests: XCTestCase {
     private func capture(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
         // Give SwiftUI a beat to settle animations (the reticle pulse, sheet
         // presentation) before the frame is grabbed.
-        Thread.sleep(forTimeInterval: 1.2)
+        Thread.sleep(forTimeInterval: 2.0)
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
@@ -193,7 +194,7 @@ final class ScreenshotTests: XCTestCase {
     // MARK: - 05 · Alerts feed
 
     func test05Alerts() {
-        let app = launchApp()
+        let app = launchApp(tab: 3)
         tab(app, "Alerts").tap()
         require(app.staticTexts["Alerts"], "the Alerts header")
         capture("05_alerts")
@@ -202,7 +203,7 @@ final class ScreenshotTests: XCTestCase {
     // MARK: - 06 · Paywall
 
     func test06Paywall() {
-        let app = launchApp(pro: false)
+        let app = launchApp(pro: false, tab: 4)
         tab(app, "Settings").tap()
 
         let unlock = app.buttons.containing(

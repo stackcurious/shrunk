@@ -67,7 +67,10 @@ enum UITestingOverrides {
         guard isActive else { return }
         let defaults = UserDefaults.standard
         defaults.set(true, forKey: "shrunk.has_completed_onboarding")
-        defaults.set(0, forKey: "shrunk.selected_tab")
+        // Start on the tab the shot needs. Launching straight there avoids the
+        // window-scheme flip you get by tapping across from the dark scanner,
+        // which can leave the tab bar's material mid-transition in a capture.
+        defaults.set(Int(value(for: "-ui-testing-tab") ?? "") ?? 0, forKey: "shrunk.selected_tab")
         if let locationId = value(for: "-ui-testing-store") {
             defaults.set(locationId, forKey: StorePickerViewModel.locationIdKey)
         }
