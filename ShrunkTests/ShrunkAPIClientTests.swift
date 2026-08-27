@@ -3,10 +3,19 @@ import XCTest
 
 final class StubURLProtocol: URLProtocol {
     static var handler: ((URLRequest) -> (Int, Data))?
+    /// When set, `startLoading` fails the request at the transport level
+    /// instead of consulting `handler` — simulates "no connectivity" for I1's
+    /// offline-copy and cached-result tests. Reset to `nil` after use so it
+    /// doesn't leak into unrelated tests.
+    static var failureError: Error?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+        if let failureError = Self.failureError {
+            client?.urlProtocol(self, didFailWithError: failureError)
+            return
+        }
         let (status, data) = Self.handler!(request)
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -87,6 +96,32 @@ final class ShrunkAPIClientTests: XCTestCase {
             _ = try await client.fetchProduct(barcode: "0028400642255", locationId: nil)
             XCTFail("expected throw")
         } catch ShrunkError.invalidResponse {
+            // expected
+        } catch {
+            XCTFail("wrong error: \(error)")
+        }
+    }
+
+    // MARK: - I1: offline copy is exact, regardless of the underlying URLError
+
+    func test_networkError_errorDescriptionIsTheExactOfflineCopy() {
+        XCTAssertEqual(
+            ShrunkError.network(URLError(.notConnectedToInternet)).errorDescription,
+            "Couldn't reach Shrunk — check connection."
+        )
+        XCTAssertEqual(
+            ShrunkError.network(URLError(.timedOut)).errorDescription,
+            "Couldn't reach Shrunk — check connection."
+        )
+    }
+
+    func test_fetchProduct_transportFailure_throwsNetworkError() async {
+        StubURLProtocol.failureError = URLError(.notConnectedToInternet)
+        defer { StubURLProtocol.failureError = nil }
+        do {
+            _ = try await client.fetchProduct(barcode: "0028400642255", locationId: nil)
+            XCTFail("expected throw")
+        } catch ShrunkError.network {
             // expected
         } catch {
             XCTFail("wrong error: \(error)")

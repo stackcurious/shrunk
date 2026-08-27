@@ -11,7 +11,11 @@ enum ShrunkError: LocalizedError {
         switch self {
         case .productNotFound:    return "Not in our database yet."
         case .invalidResponse:    return "We couldn't read the response from the data source."
-        case .network(let e):     return e.localizedDescription
+        // Spec §8, verbatim — every URLSession-level failure (no connectivity,
+        // timeout, DNS, TLS…) surfaces the same offline copy regardless of the
+        // underlying URLError, matching the string ContributeViewModel already
+        // shows on the submit path (I1).
+        case .network:             return "Couldn't reach Shrunk — check connection."
         case .decoding(let e):    return "Couldn't read product data. (\(e.localizedDescription))"
         }
     }

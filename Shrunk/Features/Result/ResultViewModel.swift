@@ -8,6 +8,20 @@ enum LivePriceState: Equatable {
     case unavailable     // Kroger down, key revoked, or not carried here
 }
 
+/// Process-lifetime cache of the last successfully loaded product per barcode
+/// (spec §8: "Backend unreachable: app shows cached last result for known
+/// products, otherwise 'Couldn't reach Shrunk — check connection.'"). A plain
+/// instance property on `ResultViewModel` would not survive this — the view
+/// model is recreated per screen presentation (`.task(id: barcode)` in
+/// `ResultView`) — so a static, `@MainActor`-isolated dictionary is the
+/// simplest thing that does. Deliberately in-memory only, not persisted to
+/// disk: it only needs to outlive the view, not the process, so this stays a
+/// small fix. `internal` (not `private`) so tests can reset it between runs.
+@MainActor
+enum ProductResultCache {
+    static var products: [String: ShrunkProduct] = [:]
+}
+
 @MainActor
 final class ResultViewModel: ObservableObject {
     enum State: Equatable {
@@ -70,6 +84,7 @@ final class ResultViewModel: ObservableObject {
     /// open with a stale empty section.
     func prebake(product: ShrunkProduct, record: ShrinkRecord) {
         state = .loaded(product, record)
+        ProductResultCache.products[product.id] = product
         alternativesResult = .empty
         Task {
             await loadLivePrice(barcode: product.id)
@@ -86,12 +101,23 @@ final class ResultViewModel: ObservableObject {
 
         do {
             let product = try await api.fetchProduct(barcode: barcode, locationId: locationId)
+            ProductResultCache.products[barcode] = product
             let record = detector.analyze(product: product)
             state = .loaded(product, record)
             await loadLivePrice(barcode: barcode)
             await loadAlternatives(for: product, record: record)
         } catch ShrunkError.productNotFound {
             state = .notFound(barcode: barcode)
+            livePrice = .hidden
+        } catch ShrunkError.network(let underlying) {
+            // Spec §8: a known product (one we've already shown successfully
+            // this run) still renders offline from cache; only an unknown one
+            // falls back to the verbatim copy.
+            if let cached = ProductResultCache.products[barcode] {
+                state = .loaded(cached, detector.analyze(product: cached))
+            } else {
+                state = .error(ShrunkError.network(underlying).errorDescription ?? "Couldn't reach Shrunk — check connection.")
+            }
             livePrice = .hidden
         } catch let error as ShrunkError {
             state = .error(error.errorDescription ?? "Something went wrong.")

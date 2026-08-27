@@ -18,10 +18,15 @@ final class ResultViewModelTests: XCTestCase {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [StubURLProtocol.self]
         apiClient = ShrunkAPIClient(baseURL: URL(string: "https://api.test")!, session: URLSession(configuration: config))
+        // `ProductResultCache` is process-lifetime static state (I1) — reset it
+        // so one test's cached product can't leak into another's.
+        ProductResultCache.products.removeAll()
+        StubURLProtocol.failureError = nil
     }
 
     override func tearDown() {
         defaults.removePersistentDomain(forName: suiteName)
+        StubURLProtocol.failureError = nil
         super.tearDown()
     }
 
@@ -316,5 +321,52 @@ final class ResultViewModelTests: XCTestCase {
 
         XCTAssertEqual(store.searchTerms.count, searchCallsBefore,
                         "no redundant fetch when isPro hasn't actually changed")
+    }
+
+    // MARK: - I1: offline copy + cached last result (spec §8)
+
+    func test_load_networkFailureWithNothingCached_showsTheOfflineCopyVerbatim() async {
+        StubURLProtocol.failureError = URLError(.notConnectedToInternet)
+
+        let vm = makeVM()
+        await vm.load(barcode: "0099988877766")
+
+        guard case .error(let message) = vm.state else { return XCTFail("expected .error, got \(vm.state)") }
+        XCTAssertEqual(message, "Couldn't reach Shrunk — check connection.")
+    }
+
+    func test_load_networkFailureAfterASuccessfulLoad_showsTheCachedProduct() async {
+        StubURLProtocol.handler = { _ in (200, Data(self.productJSON().utf8)) }
+
+        let vm = makeVM()
+        await vm.load(barcode: "0028400642255")
+        guard case .loaded(let firstProduct, _) = vm.state else { return XCTFail("expected initial .loaded") }
+        XCTAssertEqual(firstProduct.name, "Gatorade")
+
+        // A second load for the same barcode that fails at the network layer
+        // must fall back to the product this view (or another instance —
+        // the cache is process-lifetime) already showed successfully.
+        StubURLProtocol.failureError = URLError(.notConnectedToInternet)
+        await vm.reload(barcode: "0028400642255")
+
+        guard case .loaded(let product, _) = vm.state else { return XCTFail("expected cached .loaded, got \(vm.state)") }
+        XCTAssertEqual(product.id, "0028400642255")
+        XCTAssertEqual(product.name, "Gatorade")
+    }
+
+    func test_load_networkFailureForADifferentUncachedBarcode_stillShowsTheOfflineCopy() async {
+        // Caching one barcode's product must not make an *unrelated* barcode
+        // look cached.
+        StubURLProtocol.handler = { _ in (200, Data(self.productJSON().utf8)) }
+        let vm = makeVM()
+        await vm.load(barcode: "0028400642255")
+        guard case .loaded = vm.state else { return XCTFail("expected initial .loaded") }
+
+        StubURLProtocol.failureError = URLError(.notConnectedToInternet)
+        let vm2 = makeVM()
+        await vm2.load(barcode: "0011122233344")
+
+        guard case .error(let message) = vm2.state else { return XCTFail("expected .error, got \(vm2.state)") }
+        XCTAssertEqual(message, "Couldn't reach Shrunk — check connection.")
     }
 }
