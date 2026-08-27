@@ -280,7 +280,17 @@ struct ResultView: View {
     private func costPerOzSection(record: ShrinkRecord) -> some View {
         if record.costPerUnitNow == nil { EmptyView() } else {
             VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.md) {
-                Text("REAL COST PER OUNCE").shrunkSectionLabel()
+                // `costPerUnitThen`/`Now` come straight from `product.priceHistory`
+                // (`price_snapshots` — Kroger-derived), so this card must carry
+                // the same attribution `LivePricePanel` does (spec §9, Phase 3
+                // review I6).
+                HStack {
+                    Text("REAL COST PER OUNCE").shrunkSectionLabel()
+                    Spacer()
+                    Text(LivePrice.attribution)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.smoke)
+                }
 
                 if let then = record.costPerUnitThen, let now = record.costPerUnitNow, then > 0 {
                     let pct = ((now - then) / then) * 100

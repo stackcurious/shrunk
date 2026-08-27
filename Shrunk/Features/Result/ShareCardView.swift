@@ -141,6 +141,7 @@ enum ShareCardRenderer {
                     .foregroundColor: ink
                 ]
             )
+            drawAttribution(smoke: smoke, topPad: topPad)
         } else if let now = record.costPerUnitNow {
             "Now: \(now.formattedCostPerUnit()) per ounce".draw(
                 at: CGPoint(x: topPad, y: costLineY),
@@ -149,6 +150,7 @@ enum ShareCardRenderer {
                     .foregroundColor: ink
                 ]
             )
+            drawAttribution(smoke: smoke, topPad: topPad)
         } else {
             "Caught with Shrunk".draw(
                 at: CGPoint(x: topPad, y: costLineY),
@@ -187,6 +189,19 @@ enum ShareCardRenderer {
     private static func drawDivider(y: CGFloat, color: UIColor, in rect: CGRect) {
         color.setFill()
         UIRectFill(CGRect(x: 20, y: y, width: rect.width - 40, height: 0.6))
+    }
+
+    /// This image is explicitly designed to leave the app, so the Kroger
+    /// price it just drew must carry the same attribution every other surface
+    /// does (spec §9, Phase 3 review I6).
+    private static func drawAttribution(smoke: UIColor, topPad: CGFloat) {
+        LivePrice.attribution.draw(
+            at: CGPoint(x: topPad, y: 202),
+            withAttributes: [
+                .font: UIFont.systemFont(ofSize: 10, weight: .medium),
+                .foregroundColor: smoke
+            ]
+        )
     }
 
     private static func compact(_ value: Double) -> String {
