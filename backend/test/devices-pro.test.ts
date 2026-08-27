@@ -253,4 +253,40 @@ describe("POST /v1/devices — subscription verification", () => {
     expect(await res.json()).toEqual({ ok: true, pro: true });
     expect(await deviceRow()).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
   });
+
+  async function entitlementUpdatedAt(id: string = DEVICE_ID) {
+    const row = await env.DB.prepare("SELECT entitlement_updated_at FROM devices WHERE id = ?")
+      .bind(id.toLowerCase())
+      .first<{ entitlement_updated_at: number | null }>();
+    return row?.entitlement_updated_at ?? null;
+  }
+
+  it("Minor 2: a verified sync sets entitlement_updated_at from the transaction's own signedDate", async () => {
+    const signedDateMs = Date.UTC(2026, 7, 20);
+    const res = await postDevice(
+      { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction({ signedDate: signedDateMs })) },
+      testEnv(chain),
+    );
+    expect(res.status).toBe(200);
+    expect(await entitlementUpdatedAt()).toBe(Math.floor(signedDateMs / 1000));
+  });
+
+  it("Minor 2: falls back to the sync's own now when the transaction carries no signedDate", async () => {
+    const before = Math.floor(Date.now() / 1000);
+    const res = await postDevice(
+      { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) },
+      testEnv(chain),
+    );
+    expect(res.status).toBe(200);
+    const updatedAt = await entitlementUpdatedAt();
+    expect(updatedAt).not.toBeNull();
+    expect(updatedAt!).toBeGreaterThanOrEqual(before);
+    expect(updatedAt!).toBeLessThanOrEqual(Math.floor(Date.now() / 1000));
+  });
+
+  it("Minor 2: an unverified sync (no JWS) leaves entitlement_updated_at untouched", async () => {
+    const res = await postDevice({ device_id: DEVICE_ID, location_id: "01400943" }, env);
+    expect(res.status).toBe(200);
+    expect(await entitlementUpdatedAt()).toBeNull();
+  });
 });

@@ -37,7 +37,17 @@ describe("verifyAndDecode", () => {
       expiresDateMs: EXPIRES_MS,
       revocationDateMs: null,
       environment: "Sandbox",
+      // Minor 2 — the payload carries no signedDate, so it falls back to
+      // the verification instant.
+      signedDateMs: NOW.getTime(),
     });
+  });
+
+  it("Minor 2: extracts the transaction's own signedDate when Apple sends one", async () => {
+    const signedDateMs = Date.UTC(2026, 7, 20);
+    const jws = await signTestJWS(chain, transaction({ signedDate: signedDateMs }));
+    const decoded = await verifyAndDecode(jws, NOW, chain.rootDer);
+    expect(decoded?.signedDateMs).toBe(signedDateMs);
   });
 
   it("still decodes a transaction for the wrong bundle id, reporting that bundle id", async () => {

@@ -13,6 +13,8 @@ export interface DecodedTransaction {
   expiresDateMs: number | null;    // Apple sends milliseconds
   revocationDateMs: number | null;
   environment: string;
+  /** Minor 2 — falls back to the verification instant if absent. */
+  signedDateMs: number;
 }
 
 /** responseBodyV2DecodedPayload, narrowed to the fields Shrunk uses. */
@@ -129,6 +131,7 @@ export async function verifyAndDecode(
     expiresDateMs: typeof payload.expiresDate === "number" ? payload.expiresDate : null,
     revocationDateMs: typeof payload.revocationDate === "number" ? payload.revocationDate : null,
     environment: typeof environment === "string" ? environment : "Production",
+    signedDateMs: typeof payload.signedDate === "number" ? payload.signedDate : now.getTime(),
   };
 }
 

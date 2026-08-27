@@ -321,7 +321,7 @@ export async function upsertDevice(
   db: D1Database,
   row: DeviceUpsert,
   now: number,
-  verified?: { proUntil: number; appAccountToken: string } | null
+  verified?: { proUntil: number; appAccountToken: string; signedDate?: number } | null
 ): Promise<void> {
   await db
     .prepare(
@@ -354,8 +354,15 @@ export async function upsertDevice(
         )
         .bind(now, verified.appAccountToken, row.id),
       db
-        .prepare("UPDATE devices SET pro_until = ?, app_account_token = ?, updated_at = ? WHERE id = ?")
-        .bind(verified.proUntil, verified.appAccountToken, now, row.id),
+        .prepare(
+          "UPDATE devices SET pro_until = ?, app_account_token = ?, entitlement_updated_at = ?, updated_at = ? WHERE id = ?"
+        )
+        // Minor 2 — gives this writer of pro_until the same
+        // entitlement_updated_at baseline routes/appstore.ts's notification
+        // path already writes, so the ordering rule (a stale/duplicate
+        // notification must not overwrite a newer entitlement) holds no
+        // matter which writer landed last.
+        .bind(verified.proUntil, verified.appAccountToken, verified.signedDate ?? now, now, row.id),
     ]);
   } catch {
     // No device id in the log — same policy as the JWS-didn't-verify warning

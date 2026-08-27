@@ -42,6 +42,10 @@ export function proUntilSeconds(tx: DecodedTransaction, bundleId: string = SHRUN
 export interface VerifiedEntitlement {
   appAccountToken: string; // lowercased
   proUntil: number;        // unix seconds
+  /** Minor 2 — the transaction's own signedDate, so upsertDevice can give
+   *  entitlement_updated_at the same ordering baseline routes/appstore.ts
+   *  writes on the notifications path. */
+  signedDate: number;      // unix seconds
 }
 
 /** Verify a device-supplied transaction JWS. Null means "grant nothing". */
@@ -59,5 +63,5 @@ export async function entitlementFromJWS(
   if (!allowedEnvironments.has(tx.environment)) return null;
   const proUntil = proUntilSeconds(tx);
   if (proUntil == null) return null;
-  return { appAccountToken: tx.appAccountToken.toLowerCase(), proUntil };
+  return { appAccountToken: tx.appAccountToken.toLowerCase(), proUntil, signedDate: Math.floor(tx.signedDateMs / 1000) };
 }
