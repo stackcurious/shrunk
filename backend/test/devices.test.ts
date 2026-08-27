@@ -2,13 +2,24 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
 import { canonicalCategory } from "../src/categories";
+import { DEVICES_HOURLY_LIMIT } from "../src/ratelimit";
 
 const DEVICE = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
 
-async function post(body: unknown) {
+/** Every real call site sends X-Device-Id (ShrunkAPIClient.swift); default it
+ * to the body's own device_id and let a test override it to exercise I1. */
+async function post(body: unknown, headers: Record<string, string> = {}) {
+  const bodyDeviceId =
+    body && typeof body === "object" && "device_id" in (body as Record<string, unknown>)
+      ? String((body as Record<string, unknown>).device_id)
+      : "";
   return app.request(
     "/v1/devices",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Device-Id": bodyDeviceId, ...headers },
+      body: JSON.stringify(body),
+    },
     env
   );
 }
@@ -134,5 +145,47 @@ describe("POST /v1/devices", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "too_many_watches" });
     expect(await watchRows()).toEqual([]);
+  });
+});
+
+describe("POST /v1/devices — I1: X-Device-Id required, matching, rate limited", () => {
+  it("rejects a missing X-Device-Id header", async () => {
+    const res = await app.request(
+      "/v1/devices",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device_id: DEVICE }) },
+      env
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+    expect(await env.DB.prepare("SELECT id FROM devices WHERE id = ?").bind(DEVICE).first<any>()).toBeNull();
+  });
+
+  it("rejects a X-Device-Id that does not match body.device_id", async () => {
+    const res = await post({ device_id: DEVICE }, { "X-Device-Id": "11111111-2222-3333-4444-555555555555" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+  });
+
+  it("rejects a X-Device-Id that isn't UUID-shaped", async () => {
+    const res = await post({ device_id: DEVICE }, { "X-Device-Id": "not-a-uuid" });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+  });
+
+  it("accepts a header that matches body.device_id case-insensitively", async () => {
+    const res = await post({ device_id: DEVICE, apns_token: "a1b2c3" }, { "X-Device-Id": DEVICE.toUpperCase() });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: false });
+  });
+
+  it("429s once a device exceeds DEVICES_HOURLY_LIMIT requests in an hour", async () => {
+    const limited = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";   // unique to this test — an isolated rate-limit bucket
+    for (let i = 0; i < DEVICES_HOURLY_LIMIT; i++) {
+      const res = await post({ device_id: limited });
+      expect(res.status).toBe(200);
+    }
+    const res = await post({ device_id: limited });
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: "rate_limited" });
   });
 });

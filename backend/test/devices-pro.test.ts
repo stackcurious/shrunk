@@ -26,10 +26,16 @@ function transaction(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// I1: X-Device-Id is now required and must match body.device_id — every real
+// call site already sends it, so derive it from the body like ShrunkAPIClient does.
 async function postDevice(body: Record<string, unknown>, routeEnv: typeof env) {
   return app.request(
     "/v1/devices",
-    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Device-Id": String(body.device_id ?? "") },
+      body: JSON.stringify(body),
+    },
     routeEnv,
   );
 }

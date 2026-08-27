@@ -16,6 +16,15 @@ export const KROGER_GLOBAL_HOURLY_LIMIT = 400;
 export const OBSERVATIONS_HOURLY_LIMIT = 30;
 
 /**
+ * Phase-4 review I1 — `POST /v1/devices` was unauthenticated and unrate-limited
+ * despite writing up to 1 + 1 + MAX_WATCHES D1 rows per request and steering
+ * the Kroger sweep's pair set via `location_id`. 60/hour comfortably covers
+ * every legitimate call site (token refresh, prefs change, watchlist sync)
+ * while bounding a spoofed-id loop's D1 write volume and sweep-pair injection.
+ */
+export const DEVICES_HOURLY_LIMIT = 60;
+
+/**
  * Fixed-window counter in KV, one key per device per hour per `purpose`. The
  * purpose keeps unrelated quotas from sharing a bucket — without it, a
  * device's Kroger proxy calls and its crowd submissions would draw down the

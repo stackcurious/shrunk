@@ -4,6 +4,7 @@ import type { Env } from "../env";
 import { canonicalCategory } from "../categories";
 import { normalizeGTIN } from "../gtin";
 import { entitlementFromJWS, trustAnchor } from "../appstore/entitlement";
+import { DEVICES_HOURLY_LIMIT, hitRateLimit, isValidDeviceId } from "../ratelimit";
 
 /** Spec §3 says "unlimited items"; 500 is the abuse ceiling, not a product limit. */
 export const MAX_WATCHES = 500;
@@ -25,6 +26,19 @@ devicesRoute.post("/v1/devices", async (c) => {
   const id = typeof body.device_id === "string" ? body.device_id.trim() : "";
   if (!UUID_RE.test(id)) return c.json({ error: "invalid_device_id" }, 400);
 
+  // I1 — the route used to trust body.device_id alone, so anyone could mint
+  // device rows (and steer the Kroger sweep's pair set via location_id) with
+  // no proof they own the id. X-Device-Id must be the UUID the app actually
+  // sends (DeviceIdentity.current) and must name *this* device, matching the
+  // enforcement already on /v1/kroger/* (routes/kroger.ts).
+  const headerDeviceId = (c.req.header("x-device-id") ?? "").trim();
+  if (!isValidDeviceId(headerDeviceId) || headerDeviceId.toLowerCase() !== id.toLowerCase()) {
+    return c.json({ error: "invalid_device_id" }, 400);
+  }
+
+  const { allowed } = await hitRateLimit(c.env.KV, headerDeviceId, DEVICES_HOURLY_LIMIT, "devices");
+  if (!allowed) return c.json({ error: "rate_limited" }, 429);
+
   const rawWatches = body.watches;
   if (Array.isArray(rawWatches) && rawWatches.length > MAX_WATCHES) {
     return c.json({ error: "too_many_watches" }, 400);
@@ -42,7 +56,9 @@ devicesRoute.post("/v1/devices", async (c) => {
   const entitlement = await entitlementFromJWS(transactionJws, new Date(), trustAnchor(c.env));
   const verified = entitlement && entitlement.appAccountToken === id.toLowerCase() ? entitlement : null;
   if (!verified && transactionJws) {
-    console.warn("devices: transaction_jws did not verify for", id);
+    // Minor #1 — a device id is a stable per-install identifier; log that a
+    // verification failed, not which device it was.
+    console.warn("devices: transaction_jws did not verify");
   }
 
   const now = Math.floor(Date.now() / 1000);
