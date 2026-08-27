@@ -28,11 +28,27 @@ extension DeviceIdentity {
     /// `current` is always minted as `UUID().uuidString` (Phase 2), so the
     /// fallback below never fires in practice; if it ever did, it re-mints
     /// and persists a fresh UUID under the same key so `current` and
-    /// `currentUUID` can never diverge.
+    /// `currentUUID` can never diverge. The fresh value is written through
+    /// `stored` — the same `@AppStorage` setter `current` uses — rather than
+    /// a raw `UserDefaults.standard.set`, so a later `current` read sees the
+    /// same value `currentUUID` just minted instead of a stale legacy string.
     static var currentUUID: UUID {
         if let uuid = UUID(uuidString: current) { return uuid }
         let fresh = UUID()
-        UserDefaults.standard.set(fresh.uuidString, forKey: key)
+        stored = fresh.uuidString
         return fresh
     }
 }
+
+#if DEBUG
+extension DeviceIdentity {
+    /// Test-only seam: writes through the same `stored` `@AppStorage` setter
+    /// `current`/`currentUUID` use, so a seeded value is reliably observed
+    /// within this process — unlike a bare `UserDefaults.standard.set`, which
+    /// the static `@AppStorage` wrapper doesn't consistently pick up mid-process
+    /// (see the precedent note on `ShrunkAPIClientTests.test_deviceIdentity_mintsOnceAndSticks`).
+    static func _resetForTesting(to value: String) {
+        stored = value
+    }
+}
+#endif

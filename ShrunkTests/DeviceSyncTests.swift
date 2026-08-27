@@ -28,19 +28,26 @@ final class DeviceIdentityTests: XCTestCase {
     }
 
     func test_currentUUID_reusesAPersistedUUID() {
-        // Seeded through `current` (Phase 2's own write path) rather than a raw
-        // `UserDefaults.standard.set`: `DeviceIdentity`'s static `@AppStorage`
-        // only observes external UserDefaults changes through SwiftUI's
-        // view-update cycle (see the precedent note on
-        // `ShrunkAPIClientTests.test_deviceIdentity_mintsOnceAndSticks`), so a
-        // bare UserDefaults write made outside the wrapper's own setter is not
-        // reliably visible to a later `current`/`currentUUID` read sharing this
-        // process with other tests that already touched `DeviceIdentity`.
-        // Confirmed empirically: run alone, the brief's original raw-write
-        // version passes; run after this class's earlier tests, it fails on
-        // a stale in-process cache, not on `DeviceIdentity`'s actual logic.
-        let stored = UUID(uuidString: DeviceIdentity.current)!
-        XCTAssertEqual(DeviceIdentity.currentUUID, stored)
+        // Seed a legacy, non-UUID string through `_resetForTesting` — the same
+        // `stored` `@AppStorage` setter path `current`/`currentUUID` use — rather
+        // than a raw `UserDefaults.standard.set`, which the static `@AppStorage`
+        // wrapper doesn't reliably observe mid-process (see the precedent note on
+        // `ShrunkAPIClientTests.test_deviceIdentity_mintsOnceAndSticks`). This
+        // actually exercises `currentUUID`'s fallback path, unlike the prior
+        // version of this test, which only round-tripped a value it had just
+        // written itself (the fallback never fired).
+        DeviceIdentity._resetForTesting(to: "not-a-uuid")
+        // Prove the seed landed: `current` must observe it before we can trust
+        // anything that follows.
+        XCTAssertEqual(DeviceIdentity.current, "not-a-uuid")
+
+        let minted = DeviceIdentity.currentUUID
+        // The fallback must write its fresh UUID through the shared `stored`
+        // setter, so `current` now agrees with what `currentUUID` just minted.
+        XCTAssertEqual(DeviceIdentity.current, minted.uuidString)
+        // Mint-once: a second call reuses the now-valid stored UUID rather than
+        // minting again.
+        XCTAssertEqual(DeviceIdentity.currentUUID, minted)
     }
 }
 
