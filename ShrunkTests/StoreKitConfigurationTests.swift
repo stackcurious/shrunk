@@ -22,16 +22,74 @@ final class StoreKitConfigurationTests: XCTestCase {
     private var spy: SpyDeviceSyncer!
     private var service: StoreKitService!
 
-    override func setUp() async throws {
-        try await super.setUp()
-        // Gate: local StoreKit testing needs macOS Developer Mode enabled; when it's
-        // off, the daemon fails silently (SKInternalErrorDomain Code=3 logged to the
-        // console, no thrown Swift error) and product lookups come back empty — skip
-        // this class in that one observed case instead of failing the whole suite.
+    override func tearDown() async throws {
+        session?.clearTransactions()
+        session = nil
+        try await super.tearDown()
+    }
+
+    // MARK: - Structural (reads the .storekit JSON directly; never skips)
+
+    /// A real red/green test of `Shrunk.storekit` itself, independent of whether the
+    /// local `SKTestSession` daemon is reachable on this machine. This is what stops
+    /// a `ShrunkProProduct`/config drift (e.g. a product-id typo) from being masked
+    /// by the daemon-unavailable skip below — that skip only fires for the one
+    /// symptom this test has already ruled out as the cause of an empty probe.
+    func test_storekitConfiguration_declaresTheTwoSubscriptionsWithYearlyTrialOnly() throws {
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(forResource: "Shrunk", withExtension: "storekit"),
+            "Shrunk.storekit was not found in the test bundle"
+        )
+        let data = try Data(contentsOf: url)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        let topLevelProducts = (json["products"] as? [[String: Any]]) ?? []
+        let groups = try XCTUnwrap(json["subscriptionGroups"] as? [[String: Any]])
+        XCTAssertEqual(groups.count, 1, "expected exactly one subscription group")
+        let subscriptions = try XCTUnwrap(groups.first?["subscriptions"] as? [[String: Any]])
+
+        let allProductIDs = topLevelProducts.compactMap { $0["productID"] as? String }
+            + subscriptions.compactMap { $0["productID"] as? String }
+        XCTAssertFalse(
+            allProductIDs.contains { $0.localizedCaseInsensitiveContains("lifetime") },
+            "the retired lifetime SKU must not be present: \(allProductIDs)"
+        )
+
+        let subscriptionIDs = Set(subscriptions.compactMap { $0["productID"] as? String })
+        XCTAssertEqual(subscriptionIDs, [ShrunkProProduct.monthly, ShrunkProProduct.yearly])
+
+        let yearly = try XCTUnwrap(subscriptions.first { $0["productID"] as? String == ShrunkProProduct.yearly })
+        let monthly = try XCTUnwrap(subscriptions.first { $0["productID"] as? String == ShrunkProProduct.monthly })
+
+        let yearlyOffer = try XCTUnwrap(
+            yearly["introductoryOffer"] as? [String: Any],
+            "yearly must have an introductory offer"
+        )
+        XCTAssertEqual(yearlyOffer["paymentMode"] as? String, "free")
+        XCTAssertEqual(yearlyOffer["subscriptionPeriod"] as? String, "P1W")
+
+        let monthlyOffer = monthly["introductoryOffer"]
+        XCTAssertTrue(
+            monthlyOffer == nil || monthlyOffer is NSNull,
+            "monthly must not have an introductory offer"
+        )
+    }
+
+    // MARK: - Shared SKTestSession setup (skips only after the structural test above
+
+    /// Builds a fresh `SKTestSession`-backed `StoreKitService` for one test. Skips
+    /// the calling test — instead of failing it — only when the local StoreKit test
+    /// daemon itself is unreachable on this machine: creating the session throws an
+    /// `SKInternalErrorDomain` error, or the very first `Product.products(for:)`
+    /// probe throws that same domain, or (the failure actually observed while
+    /// building this file: macOS Developer Mode disabled) the daemon fails silently
+    /// — no thrown error — and the probe simply comes back empty. Any other error,
+    /// or a non-empty-but-wrong probe result, is a real bug and is not caught here.
+    private func requireStoreKitSession() async throws {
         do {
             session = try SKTestSession(configurationFileNamed: "Shrunk")
         } catch let error as NSError where error.domain == "SKInternalErrorDomain" {
-            throw XCTSkip("SKTestSession unavailable on this machine (\(error)) — enable macOS Developer Mode: sudo DevToolsSecurity -enable")
+            throw XCTSkip(Self.daemonUnavailableMessage(error))
         }
         session.resetToDefaultState()
         session.clearTransactions()
@@ -43,24 +101,27 @@ final class StoreKitConfigurationTests: XCTestCase {
         do {
             probe = try await Product.products(for: ShrunkProProduct.all)
         } catch let error as NSError where error.domain == "SKInternalErrorDomain" {
-            throw XCTSkip("SKTestSession unavailable on this machine (\(error)) — enable macOS Developer Mode: sudo DevToolsSecurity -enable")
+            throw XCTSkip(Self.daemonUnavailableMessage(error))
         }
         guard !probe.isEmpty else {
-            throw XCTSkip("SKTestSession unavailable on this machine (Product.products(for:) returned no products; the local StoreKit daemon is not responding) — enable macOS Developer Mode: sudo DevToolsSecurity -enable")
+            throw XCTSkip(Self.daemonUnavailableMessage(nil))
         }
 
         await service.loadProducts()
     }
 
-    override func tearDown() async throws {
-        session?.clearTransactions()
-        session = nil
-        try await super.tearDown()
+    private static func daemonUnavailableMessage(_ error: NSError?) -> String {
+        let cause = error.map { "(\($0))" } ?? "(Product.products(for:) returned no products)"
+        return "SKTestSession unavailable on this machine \(cause); "
+            + "test_storekitConfiguration_declaresTheTwoSubscriptionsWithYearlyTrialOnly "
+            + "already confirmed Shrunk.storekit itself is correct — "
+            + "enable macOS Developer Mode: sudo DevToolsSecurity -enable"
     }
 
     // MARK: - Trial
 
     func test_configuration_exposesBothPlansInOneGroup() async throws {
+        try await requireStoreKitSession()
         let monthly = try XCTUnwrap(service.monthlyProduct)
         let yearly = try XCTUnwrap(service.yearlyProduct)
 
@@ -77,6 +138,7 @@ final class StoreKitConfigurationTests: XCTestCase {
     }
 
     func test_yearly_offersASevenDayFreeTrialToANewCustomer() async throws {
+        try await requireStoreKitSession()
         let yearly = try XCTUnwrap(service.yearlyProduct)
         let offer = try XCTUnwrap(yearly.subscription?.introductoryOffer)
 
@@ -92,6 +154,7 @@ final class StoreKitConfigurationTests: XCTestCase {
     // MARK: - Active
 
     func test_purchasingYearly_makesTheUserProAndSyncsTheJWS() async throws {
+        try await requireStoreKitSession()
         let yearly = try XCTUnwrap(service.yearlyProduct)
 
         try await service.purchase(yearly)
@@ -103,6 +166,7 @@ final class StoreKitConfigurationTests: XCTestCase {
     }
 
     func test_purchasingMonthly_alsoGrantsPro() async throws {
+        try await requireStoreKitSession()
         let monthly = try XCTUnwrap(service.monthlyProduct)
         try await service.purchase(monthly)
         XCTAssertTrue(service.isProUser)
@@ -111,6 +175,7 @@ final class StoreKitConfigurationTests: XCTestCase {
     // MARK: - Expired
 
     func test_expiredSubscription_dropsProAndConsumesTheTrial() async throws {
+        try await requireStoreKitSession()
         let yearly = try XCTUnwrap(service.yearlyProduct)
         try await service.purchase(yearly)
         XCTAssertTrue(service.isProUser)

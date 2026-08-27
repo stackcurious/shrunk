@@ -26,6 +26,7 @@ targets:
         excludes:
           - "**/*.md"
           - "**/*.entitlements"
+          - "**/*.storekit"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shrunk.app
