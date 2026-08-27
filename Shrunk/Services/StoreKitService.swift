@@ -108,6 +108,9 @@ final class StoreKitService: ObservableObject {
     }
 
     func restore() async {
+        purchaseInProgress = true
+        defer { purchaseInProgress = false }
+
         do {
             try await AppStore.sync()
         } catch {

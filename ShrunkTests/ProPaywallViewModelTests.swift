@@ -93,4 +93,25 @@ final class ProPaywallViewModelTests: XCTestCase {
         vm.selectedPlan = .monthly
         XCTAssertEqual(vm.fineprint, "$2.99/month. Cancel anytime in Settings.")
     }
+
+    // MARK: - Restore outcome
+
+    func test_restoreOutcomeMessage_isNilWhenRestoreFoundAnActiveSubscription() {
+        XCTAssertNil(ProPaywallViewModel.restoreOutcomeMessage(isPro: true, error: nil))
+        XCTAssertNil(ProPaywallViewModel.restoreOutcomeMessage(isPro: true, error: "some transient error"))
+    }
+
+    func test_restoreOutcomeMessage_saysNoPurchasesWhenNotProAndNoError() {
+        XCTAssertEqual(
+            ProPaywallViewModel.restoreOutcomeMessage(isPro: false, error: nil),
+            "No purchases to restore."
+        )
+    }
+
+    func test_restoreOutcomeMessage_includesTheErrorWhenOneIsPresent() {
+        XCTAssertEqual(
+            ProPaywallViewModel.restoreOutcomeMessage(isPro: false, error: "The network connection was lost."),
+            "No purchases to restore. The network connection was lost."
+        )
+    }
 }

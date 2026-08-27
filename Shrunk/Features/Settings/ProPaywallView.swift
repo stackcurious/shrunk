@@ -69,6 +69,15 @@ final class ProPaywallViewModel: ObservableObject {
             ? "\(yearlyDisplayPrice)/year. Cancel anytime in Settings."
             : "\(monthlyDisplayPrice)/month. Cancel anytime in Settings."
     }
+
+    /// What to tell the user once `StoreKitService.restore()` finishes. `nil`
+    /// when restore actually found an active subscription — the sheet
+    /// dismisses on its own via `isProUser`, so no message is needed.
+    static func restoreOutcomeMessage(isPro: Bool, error: String?) -> String? {
+        guard !isPro else { return nil }
+        guard let error, !error.isEmpty else { return "No purchases to restore." }
+        return "No purchases to restore. \(error)"
+    }
 }
 
 // MARK: - Sheet
@@ -117,7 +126,7 @@ struct ProPaywallContent: View {
     private let onSkip: (() -> Void)?
 
     @State private var purchaseError: String?
-    @State private var purchaseInProgress: Bool = false
+    @State private var restoreMessage: String?
 
     init(skipTitle: String? = nil, onSkip: (() -> Void)? = nil) {
         self.skipTitle = skipTitle
@@ -151,6 +160,12 @@ struct ProPaywallContent: View {
             isPresented: Binding(get: { purchaseError != nil }, set: { if !$0 { purchaseError = nil } }),
             actions: { Button("OK", role: .cancel) {} },
             message: { Text(purchaseError ?? "") }
+        )
+        .alert(
+            "Restore purchases",
+            isPresented: Binding(get: { restoreMessage != nil }, set: { if !$0 { restoreMessage = nil } }),
+            actions: { Button("OK", role: .cancel) {} },
+            message: { Text(restoreMessage ?? "") }
         )
     }
 
@@ -249,6 +264,7 @@ struct ProPaywallContent: View {
 
     private func planRow(plan: ProPaywallViewModel.Plan, title: String, price: String, caption: String, badge: String?) -> some View {
         let isSelected = vm.selectedPlan == plan
+        let accessibilityLabel = [badge, title, price, caption].compactMap { $0 }.joined(separator: ", ")
         return Button {
             vm.selectedPlan = plan
         } label: {
@@ -256,6 +272,7 @@ struct ProPaywallContent: View {
                 Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(isSelected ? Color.shrunkRed : Color.smokeSoft)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(title)
@@ -292,6 +309,7 @@ struct ProPaywallContent: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.78), value: isSelected)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
@@ -350,10 +368,38 @@ struct ProPaywallContent: View {
 
     // MARK: CTA
 
+    @ViewBuilder
     private var ctaSection: some View {
+        if storeKit.yearlyProduct == nil, storeKit.monthlyProduct == nil, let loadError = storeKit.loadError {
+            loadErrorState(message: loadError)
+        } else {
+            VStack(spacing: 10) {
+                ShrunkButton(vm.ctaTitle, icon: "lock.open.fill", isLoading: storeKit.purchaseInProgress) {
+                    Task { await buy() }
+                }
+                if let skipTitle, let onSkip {
+                    Button(skipTitle) { onSkip() }
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color.smoke)
+                }
+            }
+        }
+    }
+
+    private func loadErrorState(message: String) -> some View {
         VStack(spacing: 10) {
-            ShrunkButton(vm.ctaTitle, icon: "lock.open.fill", isLoading: purchaseInProgress) {
-                Task { await buy() }
+            VStack(spacing: 4) {
+                Text("Couldn't load plans")
+                    .font(.system(size: 15, weight: .heavy))
+                    .foregroundStyle(Color.ink)
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.smoke)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ShrunkButton("Retry", icon: "arrow.clockwise", isLoading: storeKit.purchaseInProgress) {
+                Task { await load() }
             }
             if let skipTitle, let onSkip {
                 Button(skipTitle) { onSkip() }
@@ -369,8 +415,6 @@ struct ProPaywallContent: View {
             purchaseError = StoreKitError.productNotLoaded.errorDescription
             return
         }
-        purchaseInProgress = true
-        defer { purchaseInProgress = false }
         do {
             try await storeKit.purchase(product)
         } catch {
@@ -383,8 +427,15 @@ struct ProPaywallContent: View {
     private var legal: some View {
         VStack(spacing: 8) {
             Button("Restore purchases") {
-                Task { await storeKit.restore() }
+                Task {
+                    await storeKit.restore()
+                    restoreMessage = ProPaywallViewModel.restoreOutcomeMessage(
+                        isPro: storeKit.isProUser,
+                        error: storeKit.loadError
+                    )
+                }
             }
+            .disabled(storeKit.purchaseInProgress)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Color.smoke)
 
