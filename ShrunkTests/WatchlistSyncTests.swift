@@ -73,7 +73,8 @@ final class WatchlistSyncTests: XCTestCase {
         quantity: Double,
         price: Double? = 1.89,
         shrinkPercent: Double = 0,
-        verdict: ShrinkRecord.ShrinkVerdict = .insufficientData
+        verdict: ShrinkRecord.ShrinkVerdict = .insufficientData,
+        priceIsFromStoreSnapshot: Bool = true
     ) -> ShrinkRecord {
         ShrinkRecord(
             product: product(barcode),
@@ -84,7 +85,7 @@ final class WatchlistSyncTests: XCTestCase {
             priceNow: price,
             costPerUnitThen: nil,
             costPerUnitNow: nil,
-            priceIsFromStoreSnapshot: false,
+            priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
             verdict: verdict
         )
     }
@@ -275,5 +276,41 @@ final class WatchlistSyncTests: XCTestCase {
         try service.recordScannedShrink(product: product("0052000133417"), record: unchanged)
 
         XCTAssertTrue(try alerts().isEmpty)
+    }
+
+    // MARK: - Only a store-observed price feeds the ledger (spec §3.5,
+    // "every input is observed" — a curated Browse card's editorial price
+    // from trending.json is not a store observation and must not cost the
+    // ledger a dollar figure it can't back up).
+
+    func test_aPriceNotObservedAtTheStoreFilesTheAlertWithNoPrice() throws {
+        let shrunk = record(
+            "0052000133417", quantity: 828.058, price: 1.99, shrinkPercent: -12.5,
+            verdict: .significantShrink, priceIsFromStoreSnapshot: false
+        )
+        try service.recordScannedShrink(product: product("0052000133417"), record: shrunk)
+
+        let filed = try alerts()
+        XCTAssertEqual(filed.count, 1)
+        XCTAssertEqual(filed[0].kind, .newShrink, "still files, and still a confirmed shrink")
+        XCTAssertNil(filed[0].currentPrice, "an editorial/fallback price must never carry through")
+
+        let ledger = SavingsLedger.build(alerts: filed, watchlist: [], shopFrequency: .weekly)
+        XCTAssertEqual(ledger.totalAnnual, 0)
+    }
+
+    func test_aPriceObservedAtTheStoreFeedsTheLedger() throws {
+        let shrunk = record(
+            "0052000133417", quantity: 828.058, price: 1.99, shrinkPercent: -12.5,
+            verdict: .significantShrink, priceIsFromStoreSnapshot: true
+        )
+        try service.recordScannedShrink(product: product("0052000133417"), record: shrunk)
+
+        let filed = try alerts()
+        XCTAssertEqual(filed.count, 1)
+        XCTAssertEqual(filed[0].currentPrice, 1.99)
+
+        let ledger = SavingsLedger.build(alerts: filed, watchlist: [], shopFrequency: .weekly)
+        XCTAssertGreaterThan(ledger.totalAnnual, 0)
     }
 }

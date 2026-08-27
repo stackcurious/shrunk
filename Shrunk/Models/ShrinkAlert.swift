@@ -120,6 +120,13 @@ extension ShrinkAlert {
     /// watched to count). `isRead: true`: a scan is something the user is
     /// already looking at on the result screen, so filing it must not
     /// inflate the Alerts tab's unread badge the way an unseen push would.
+    ///
+    /// `currentPrice` is carried only when `record.priceIsFromStoreSnapshot`
+    /// — i.e. `priceNow` actually came from a Kroger `price_snapshots` entry,
+    /// not the `product.currentPrice` fallback (curated Browse cards read
+    /// from `trending.json`, an editorial price, never Kroger-observed). The
+    /// alert still files and still shows as a confirmed shrink; it just
+    /// carries no dollar figure `SavingsLedger` could count as "observed."
     static func newShrink(from product: ShrunkProduct, record: ShrinkRecord) -> ShrinkAlert {
         ShrinkAlert(
             barcode: product.id,
@@ -131,7 +138,7 @@ extension ShrinkAlert {
             currentQuantity: record.currentSize?.quantity,
             currentUnit: record.currentSize?.unit,
             shrinkPercent: record.shrinkPercent,
-            currentPrice: record.priceNow,
+            currentPrice: record.priceIsFromStoreSnapshot ? record.priceNow : nil,
             costDeltaPerUnit: nil,
             isRead: true
         )

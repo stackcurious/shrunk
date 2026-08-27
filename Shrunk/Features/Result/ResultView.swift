@@ -39,8 +39,13 @@ struct ResultView: View {
             await vm.load(barcode: barcode)
             // A scan's ShrinkRecord is now final — spec §3.5 counts every
             // scanned product, not just watched ones (WatchlistService
-            // dedupes so repeat views of the same size don't refile).
-            if case .loaded(let product, let record) = vm.state {
+            // dedupes so repeat views of the same size don't refile). Gated
+            // to `prebake == nil`: a prebaked ResultView is a curated Browse
+            // card (BrowseView passes `record.product`/`record` straight
+            // from `trending.json`, pre-filtered to shrinks by
+            // BrowseViewModel.applyFeed) — not something the user scanned,
+            // so it must never file an alert or price a ledger entry.
+            if prebake == nil, case .loaded(let product, let record) = vm.state {
                 try? WatchlistService(context: modelContext).recordScannedShrink(product: product, record: record)
             }
         }
