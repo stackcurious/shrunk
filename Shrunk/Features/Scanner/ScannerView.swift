@@ -131,8 +131,8 @@ struct ScannerView: View {
                     .fill(Color.shrunkRed)
                     .frame(width: 6, height: 6)
                 Text("Searching for barcode")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
@@ -150,13 +150,11 @@ struct ScannerView: View {
         HStack(spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "barcode.viewfinder")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundStyle(.white)
+                    .font(.subheadline.weight(.semibold))
                 Text("SHRUNK")
-                    .font(.system(size: 12, weight: .heavy))
-                    .tracking(1.6)
-                    .foregroundStyle(.white)
+                    .font(.subheadline.weight(.semibold))
             }
+            .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(.ultraThinMaterial, in: Capsule())
@@ -168,31 +166,26 @@ struct ScannerView: View {
                     processor.toggleTorch()
                 } label: {
                     Image(systemName: processor.torchOn ? "bolt.fill" : "bolt.slash.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(processor.torchOn ? Color.yellow : .white)
+                        .font(.headline)
+                        .foregroundStyle(processor.torchOn ? Color.yellow : .primary)
                         .frame(width: 38, height: 38)
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .accessibilityLabel(processor.torchOn ? "Turn flash off" : "Turn flash on")
             }
         }
-        .padding(.horizontal, ShrunkTheme.Spacing.md)
-        .padding(.top, ShrunkTheme.Spacing.sm)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
         .frame(height: 56)
     }
 
     // MARK: - Recent scans bottom card
 
     private var bottomCard: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 11, weight: .heavy))
-                Text("RECENT")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(1.0)
-            }
-            .foregroundStyle(.white.opacity(0.65))
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Recent", systemImage: "clock.arrow.circlepath")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -201,52 +194,39 @@ struct ScannerView: View {
                             vm.handle(barcode: code)
                         } label: {
                             Text(code)
-                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .background(.ultraThinMaterial, in: Capsule())
+                                .font(.subheadline)
+                                .monospacedDigit()
                         }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .tint(.primary)
                     }
                 }
             }
         }
-        .padding(ShrunkTheme.Spacing.md)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .padding(.horizontal, ShrunkTheme.Spacing.md)
-        .padding(.bottom, ShrunkTheme.Spacing.md)
+        .background(.ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Permission fallback
 
     private var permissionPrompt: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(Color.shrunkRed.opacity(0.12))
-                    .frame(width: 96, height: 96)
-                Image(systemName: "camera.metering.unknown")
-                    .font(.system(size: 40, weight: .light))
-                    .foregroundStyle(Color.shrunkRed)
-            }
-            Text("Camera access needed")
-                .font(.shrunkTitle)
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
+        ContentUnavailableView {
+            Label("Camera access needed", systemImage: "camera.metering.unknown")
+        } description: {
             Text(processor.error ?? "Open Settings → Shrunk and turn on Camera to start scanning.")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.75))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-            ShrunkButton("Open Settings", icon: "gear") {
+        } actions: {
+            Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.top, ShrunkTheme.Spacing.sm)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
     }
 }

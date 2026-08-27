@@ -126,10 +126,10 @@ struct MainTabsView: View {
                 .tabItem { Label("Scan", systemImage: "barcode.viewfinder") }
                 .tag(0)
             BrowseView()
-                .tabItem { Label("Browse", systemImage: "square.grid.2x2.fill") }
+                .tabItem { Label("Browse", systemImage: "square.grid.2x2") }
                 .tag(1)
             WatchlistView()
-                .tabItem { Label("Watchlist", systemImage: "bell.badge") }
+                .tabItem { Label("Watchlist", systemImage: "eye") }
                 .tag(2)
             AlertsFeedView()
                 .tabItem { Label("Alerts", systemImage: "bell") }
@@ -138,9 +138,10 @@ struct MainTabsView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(4)
         }
-        // Only the scanner is a dark screen; every other tab is the light
-        // paper theme, and the status bar has to follow or it renders
-        // white-on-cream.
-        .preferredColorScheme(selectedTab == 0 ? .dark : .light)
+        // The scanner is a full-bleed camera screen, so the window goes dark
+        // there or the status bar draws black-on-black. Every other tab
+        // follows the system appearance — `nil` is "don't override" — which is
+        // what makes dark mode work app-wide (spec §3).
+        .preferredColorScheme(selectedTab == 0 ? .dark : nil)
     }
 }
