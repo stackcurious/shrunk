@@ -20,4 +20,10 @@ export interface Env {
   /** Firebase service-account JSON, used only when PUSH_PROVIDER = "fcm". */
   FCM_SERVICE_ACCOUNT_JSON: string;
   ENV: string;
+  /**
+   * Test-only trust anchor: base64 DER of a root certificate that replaces
+   * Apple Root CA - G3. Never set in `wrangler.toml`, so production always
+   * verifies against Apple.
+   */
+  APPSTORE_ROOT_CA_B64?: string;
 }
