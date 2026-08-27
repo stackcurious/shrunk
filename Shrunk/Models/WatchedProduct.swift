@@ -46,6 +46,11 @@ final class WatchedProduct {
 }
 
 extension WatchedProduct {
+    /// `lastKnownPrice` is carried only when `record.priceIsFromStoreSnapshot`
+    /// — the same guard `ShrinkAlert.newShrink(from product:record:)` applies
+    /// (R38) — so a curated Browse card's editorial `trending.json` price
+    /// (never Kroger-observed) can't feed the "observed only" savings
+    /// dashboard.
     static func from(product: ShrunkProduct, record: ShrinkRecord) -> WatchedProduct {
         WatchedProduct(
             barcode: product.id,
@@ -53,7 +58,7 @@ extension WatchedProduct {
             brand: product.brand,
             lastKnownSize: record.currentSize?.quantity ?? 0,
             lastKnownUnit: record.currentSize?.unit ?? "count",
-            lastKnownPrice: record.priceNow,
+            lastKnownPrice: record.priceIsFromStoreSnapshot ? record.priceNow : nil,
             lastShrinkPercent: record.shrinkPercent
         )
     }

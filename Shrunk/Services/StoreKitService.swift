@@ -36,7 +36,12 @@ final class StoreKitService: ObservableObject {
     @Published var isProUser: Bool = false
     @Published private(set) var monthlyProduct: Product?
     @Published private(set) var yearlyProduct: Product?
-    @Published private(set) var isTrialEligible: Bool = true
+    /// Tri-state (I7): `nil` means unresolved — before `refreshTrialEligibility()`
+    /// has run, or after it couldn't determine an answer. The paywall must
+    /// only advertise the trial once this is `true`; showing it while
+    /// unknown (or after a failed product load) risks Apple's sheet charging
+    /// an ineligible returning subscriber immediately, with no warning.
+    @Published private(set) var isTrialEligible: Bool?
     @Published private(set) var purchaseInProgress: Bool = false
     @Published private(set) var loadError: String?
 
@@ -76,11 +81,16 @@ final class StoreKitService: ObservableObject {
 
     /// The 7-day free trial is an introductory offer on the yearly product and
     /// is offered once per subscription group, so eligibility is a group-level
-    /// question. Defaults to `true` while products are still loading — the
-    /// paywall reads better optimistic than pessimistic, and StoreKit is the
-    /// authority at purchase time either way.
+    /// question. I7: when the yearly product (and so its group id) isn't
+    /// available — still loading, or `loadProducts()` failed — this sets
+    /// `isTrialEligible` back to `nil` (unresolved) rather than leaving a
+    /// stale value in place, so the paywall falls back to "Subscribe"
+    /// instead of advertising a trial it can't back up.
     func refreshTrialEligibility() async {
-        guard let groupID = yearlyProduct?.subscription?.subscriptionGroupID else { return }
+        guard let groupID = yearlyProduct?.subscription?.subscriptionGroupID else {
+            isTrialEligible = nil
+            return
+        }
         isTrialEligible = await Product.SubscriptionInfo.isEligibleForIntroOffer(for: groupID)
     }
 

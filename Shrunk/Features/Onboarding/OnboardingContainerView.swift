@@ -25,7 +25,11 @@ struct OnboardingContainerView: View {
             persistedProfile = profile.encoded()
         }
         .onChange(of: storeKit.isProUser) { _, isPro in
-            if isPro { finish() }
+            // I6: don't bounce an already-Pro user out of onboarding before
+            // they've picked categories or a store — only an entitlement
+            // resolved on the paywall step (i.e. an actual purchase there)
+            // should finish the flow early.
+            if vm.shouldAutoFinish(becauseIsPro: isPro) { finish() }
         }
     }
 

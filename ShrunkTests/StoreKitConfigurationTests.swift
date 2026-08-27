@@ -120,6 +120,20 @@ final class StoreKitConfigurationTests: XCTestCase {
 
     // MARK: - Trial
 
+    /// I7: unlike the old `Bool = true` default, a fresh service (or one
+    /// whose yearly product never resolved — no `requireStoreKitSession()`
+    /// here, so this always runs, even where the SKTestSession daemon is
+    /// unavailable) must read as unresolved, not eligible. The paywall
+    /// relies on this to fall back to "Subscribe" instead of advertising a
+    /// trial it can't back up.
+    func test_isTrialEligible_startsUnresolvedAndStaysUnresolvedWithoutAYearlyProduct() async {
+        let fresh = StoreKitService(syncer: SpyDeviceSyncer())
+        XCTAssertNil(fresh.isTrialEligible, "unresolved before any product has loaded")
+
+        await fresh.refreshTrialEligibility()
+        XCTAssertNil(fresh.isTrialEligible, "still unresolved with no yearly product/group id available")
+    }
+
     func test_configuration_exposesBothPlansInOneGroup() async throws {
         try await requireStoreKitSession()
         let monthly = try XCTUnwrap(service.monthlyProduct)
@@ -148,7 +162,7 @@ final class StoreKitConfigurationTests: XCTestCase {
         XCTAssertNil(service.monthlyProduct?.subscription?.introductoryOffer)
 
         await service.refreshTrialEligibility()
-        XCTAssertTrue(service.isTrialEligible)
+        XCTAssertEqual(service.isTrialEligible, true)
     }
 
     // MARK: - Active
@@ -188,7 +202,7 @@ final class StoreKitConfigurationTests: XCTestCase {
         XCTAssertFalse(service.isProUser)
 
         await service.refreshTrialEligibility()
-        XCTAssertFalse(service.isTrialEligible, "the introductory offer is used once per group")
+        XCTAssertEqual(service.isTrialEligible, false, "the introductory offer is used once per group")
     }
 
     // MARK: - Restore (P5-T8 fix round 2)

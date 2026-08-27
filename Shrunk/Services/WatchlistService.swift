@@ -28,7 +28,12 @@ final class WatchlistService {
         if let existing = try fetch(barcode: product.id) {
             existing.lastKnownSize = currentSize.quantity
             existing.lastKnownUnit = currentSize.unit
-            existing.lastKnownPrice = record.priceNow
+            // I5: only a store-observed price may overwrite a previously
+            // good one — a curated re-add (editorial trending.json price)
+            // must not clobber it with a non-observed figure.
+            if record.priceIsFromStoreSnapshot {
+                existing.lastKnownPrice = record.priceNow
+            }
             existing.lastShrinkPercent = record.shrinkPercent
             existing.lastChecked = Date()
             try context.save()

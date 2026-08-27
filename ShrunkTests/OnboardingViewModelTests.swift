@@ -69,6 +69,36 @@ final class OnboardingViewModelTests: XCTestCase {
         vm.step = .paywall
         XCTAssertEqual(vm.progressFraction, 1, accuracy: 0.001)
     }
+
+    // MARK: - I6: an already-Pro entitlement must not skip categories/store
+
+    func test_shouldAutoFinish_onlyWhenProOnThePaywallStep() {
+        let vm = OnboardingViewModel()
+
+        // Not Pro yet: never auto-finish, on any step.
+        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: false))
+
+        // Pro, but the entitlement resolved before the user picked
+        // categories or a store — e.g. StoreKitService.bootstrap() finishing
+        // right after `.welcome` renders. Must not skip the flow.
+        XCTAssertEqual(vm.step, .welcome)
+        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: true))
+
+        vm.advance()
+        XCTAssertEqual(vm.step, .categories)
+        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: true))
+
+        vm.toggleCategory(.snacks)
+        vm.advance()
+        XCTAssertEqual(vm.step, .store)
+        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: true))
+
+        // Only once the user has actually reached the paywall (having
+        // purchased through it) does the entitlement finish the flow.
+        vm.advance()
+        XCTAssertEqual(vm.step, .paywall)
+        XCTAssertTrue(vm.shouldAutoFinish(becauseIsPro: true))
+    }
 }
 
 final class OnboardingProfileTests: XCTestCase {

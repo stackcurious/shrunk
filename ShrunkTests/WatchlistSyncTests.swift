@@ -313,4 +313,49 @@ final class WatchlistSyncTests: XCTestCase {
         let ledger = SavingsLedger.build(alerts: filed, watchlist: [], shopFrequency: .weekly)
         XCTAssertGreaterThan(ledger.totalAnnual, 0)
     }
+
+    // MARK: - I5 — the watchlist branch of the same guard (WatchedProduct.from
+    // / WatchlistService.add): a curated Browse card's editorial price must
+    // not feed the dashboard's "observed only" ledger either.
+
+    func test_watchingAProductWithANonObservedPriceLeavesLastKnownPriceNil() throws {
+        let curated = record(
+            "0052000133417", quantity: 946.353, price: 1.89, priceIsFromStoreSnapshot: false
+        )
+        try service.add(product: product("0052000133417"), record: curated)
+
+        let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))
+        XCTAssertNil(watched.lastKnownPrice, "an editorial/fallback price must never carry through")
+
+        let ledger = SavingsLedger.build(alerts: [], watchlist: [watched], shopFrequency: .weekly)
+        XCTAssertEqual(ledger.totalAnnual, 0)
+    }
+
+    func test_watchingAProductWithAnObservedPriceSetsLastKnownPrice() throws {
+        let observed = record(
+            "0052000133417", quantity: 946.353, price: 1.89, priceIsFromStoreSnapshot: true
+        )
+        try service.add(product: product("0052000133417"), record: observed)
+
+        let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))
+        XCTAssertEqual(watched.lastKnownPrice, 1.89)
+    }
+
+    func test_reAddingWithANonObservedPriceDoesNotClobberAGoodStoredPrice() throws {
+        let observed = record(
+            "0052000133417", quantity: 946.353, price: 1.89, priceIsFromStoreSnapshot: true
+        )
+        try service.add(product: product("0052000133417"), record: observed)
+
+        // A later re-add (e.g. reopening a curated Browse card for the same
+        // barcode) carries no store observation — the good price already on
+        // file must survive it.
+        let curatedReAdd = record(
+            "0052000133417", quantity: 946.353, price: 9.99, priceIsFromStoreSnapshot: false
+        )
+        try service.add(product: product("0052000133417"), record: curatedReAdd)
+
+        let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))
+        XCTAssertEqual(watched.lastKnownPrice, 1.89, "a non-observed re-add must not overwrite a good stored price")
+    }
 }

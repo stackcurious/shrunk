@@ -60,4 +60,13 @@ final class OnboardingViewModel: ObservableObject {
     func selectFrequency(_ frequency: ShopFrequency) {
         profile.shopFrequency = frequency
     }
+
+    /// I6: an entitlement can resolve mid-flow — `StoreKitService.bootstrap()`
+    /// often finishes right after `.welcome` renders — and an already-Pro
+    /// user must still walk categories and pick a store rather than being
+    /// bounced straight out. Only auto-finish when the entitlement arrives
+    /// *on the paywall step*, i.e. the user actually purchased through it.
+    func shouldAutoFinish(becauseIsPro isPro: Bool) -> Bool {
+        isPro && step == .paywall
+    }
 }

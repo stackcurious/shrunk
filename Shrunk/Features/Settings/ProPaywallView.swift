@@ -18,14 +18,18 @@ final class ProPaywallViewModel: ObservableObject {
     @Published private(set) var monthlyDisplayPrice: String = "$2.99"
     @Published private(set) var yearlyDisplayPrice: String = "$14.99"
     @Published private(set) var savingsBadge: String? = "Save 58%"
-    @Published private(set) var isTrialEligible: Bool = true
+    /// Tri-state (I7): `nil` until `StoreKitService.isTrialEligible` resolves.
+    /// Every trial affordance below must gate on this being exactly `true` —
+    /// never on "not false" — so an unresolved or failed load reads as no
+    /// trial, not as an eligible one.
+    @Published private(set) var isTrialEligible: Bool?
 
     func apply(
         monthlyDisplayPrice: String?,
         monthlyPrice: Decimal?,
         yearlyDisplayPrice: String?,
         yearlyPrice: Decimal?,
-        isTrialEligible: Bool
+        isTrialEligible: Bool?
     ) {
         if let monthlyDisplayPrice { self.monthlyDisplayPrice = monthlyDisplayPrice }
         if let yearlyDisplayPrice { self.yearlyDisplayPrice = yearlyDisplayPrice }
@@ -49,9 +53,10 @@ final class ProPaywallViewModel: ObservableObject {
         return Int(percent.rounded())
     }
 
-    /// The trial rides on the yearly product only.
+    /// The trial rides on the yearly product only, and never applies while
+    /// eligibility is unresolved (`nil`) or has resolved `false` (I7).
     var trialAppliesToSelection: Bool {
-        isTrialEligible && selectedPlan == .yearly
+        isTrialEligible == true && selectedPlan == .yearly
     }
 
     var ctaTitle: String {
@@ -144,7 +149,7 @@ struct ProPaywallContent: View {
             VStack(spacing: ShrunkTheme.Spacing.lg) {
                 hero
                     .padding(.top, ShrunkTheme.Spacing.md)
-                if vm.isTrialEligible {
+                if vm.isTrialEligible == true {
                     trialCallout
                         .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 }
@@ -255,7 +260,7 @@ struct ProPaywallContent: View {
                 plan: .yearly,
                 title: "Yearly",
                 price: "\(vm.yearlyDisplayPrice)/year",
-                caption: vm.isTrialEligible ? "7 days free, then billed yearly" : "Billed once a year",
+                caption: vm.isTrialEligible == true ? "7 days free, then billed yearly" : "Billed once a year",
                 badge: vm.savingsBadge
             )
             planRow(

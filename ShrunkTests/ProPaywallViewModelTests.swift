@@ -4,7 +4,7 @@ import XCTest
 @MainActor
 final class ProPaywallViewModelTests: XCTestCase {
 
-    private func loaded(isTrialEligible: Bool = true) -> ProPaywallViewModel {
+    private func loaded(isTrialEligible: Bool? = true) -> ProPaywallViewModel {
         let vm = ProPaywallViewModel()
         vm.apply(
             monthlyDisplayPrice: "$2.99", monthlyPrice: Decimal(string: "2.99"),
@@ -82,6 +82,27 @@ final class ProPaywallViewModelTests: XCTestCase {
 
     func test_ineligibleUserSeesAPlainYearlyCTA() {
         let vm = loaded(isTrialEligible: false)
+        XCTAssertFalse(vm.trialAppliesToSelection)
+        XCTAssertEqual(vm.ctaTitle, "Subscribe for $14.99/year")
+    }
+
+    // MARK: - I7: tri-state eligibility — unresolved must never advertise a trial
+
+    func test_unresolvedTrialEligibility_neverAppliesEvenOnYearly() {
+        let vm = loaded(isTrialEligible: nil)
+        XCTAssertEqual(vm.selectedPlan, .yearly)
+        XCTAssertFalse(vm.trialAppliesToSelection, "unknown must read as no-trial, not as eligible")
+        XCTAssertEqual(vm.ctaTitle, "Subscribe for $14.99/year")
+        XCTAssertEqual(vm.fineprint, "$14.99/year. Cancel anytime in Settings.")
+    }
+
+    func test_defaultViewModel_isUnresolvedBeforeApplyRuns() {
+        // Before `apply` ever runs (the paywall's first frame, or a failed
+        // load), the CTA must fall back to "Subscribe" rather than
+        // optimistically offering a trial (I7 — this replaces the old
+        // `Bool = true` default).
+        let vm = ProPaywallViewModel()
+        XCTAssertNil(vm.isTrialEligible)
         XCTAssertFalse(vm.trialAppliesToSelection)
         XCTAssertEqual(vm.ctaTitle, "Subscribe for $14.99/year")
     }
