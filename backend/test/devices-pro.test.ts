@@ -95,12 +95,29 @@ describe("POST /v1/devices — subscription verification", () => {
     expect(await deviceRow()).toEqual({ pro_until: null, app_account_token: null });
   });
 
-  it("does not grant Pro when the receipt's appAccountToken belongs to a different device", async () => {
-    // The JWS is validly signed and correctly scoped, but its appAccountToken
-    // (TOKEN, i.e. DEVICE_ID's own token) doesn't match OTHER_DEVICE_ID — a
-    // valid receipt for one device must not be replayable against another.
+  it("C1: rebinds Pro to the posting device when a verified appAccountToken names a different device, and clears the old row", async () => {
+    // DEVICE_ID purchases first — its own token (TOKEN) lands on its row.
+    await postDevice({ device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) }, testEnv(chain));
+    expect(await deviceRow(DEVICE_ID)).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
+
+    // The same App Store transaction (same JWS, appAccountToken = TOKEN) is
+    // now presented by OTHER_DEVICE_ID — a reinstall/new-device scenario.
     const res = await postDevice(
       { device_id: OTHER_DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) },
+      testEnv(chain),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: true });
+
+    // The entitlement moved: OTHER_DEVICE_ID now carries it...
+    expect(await deviceRow(OTHER_DEVICE_ID)).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
+    // ...and DEVICE_ID's old row lost it, so only one row is ever Pro for this token.
+    expect(await deviceRow(DEVICE_ID)).toEqual({ pro_until: null, app_account_token: null });
+  });
+
+  it("C1: does not grant Pro when the verified appAccountToken isn't a device-id-shaped value", async () => {
+    const res = await postDevice(
+      { device_id: OTHER_DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction({ appAccountToken: "not-a-device-id" })) },
       testEnv(chain),
     );
     expect(res.status).toBe(200);

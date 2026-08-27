@@ -52,13 +52,29 @@ devicesRoute.post("/v1/devices", async (c) => {
 
   // Spec §8: a verification failure must not disturb the device's existing
   // entitlement — the app's own StoreKit entitlement governs the UI, and the
-  // next upsert retries. A transaction whose appAccountToken doesn't match
-  // *this* device must not grant Pro either — otherwise one valid receipt
-  // could be replayed against any attacker-chosen device_id. Either failure
-  // mode writes nothing (upsertDevice leaves pro_until/app_account_token
+  // next upsert retries (upsertDevice leaves pro_until/app_account_token
   // alone when `verified` is null).
+  //
+  // C1 (final review) — a verified JWS whose appAccountToken names a
+  // *different* device id is no longer discarded; it's a rebind candidate.
+  // `entitlement` is non-null only when entitlementFromJWS() walked the JWS's
+  // certificate chain up to Apple's pinned root, verified every signature in
+  // it, and confirmed Apple's own bundle-id/environment claims — nobody can
+  // mint one naming an arbitrary appAccountToken. So the only way to ever
+  // possess a JWS carrying some device's token is to already hold that exact
+  // purchase's receipt: the legitimate purchaser reinstalling or moving to a
+  // new device, which is exactly the case this exists to fix, not an
+  // attacker guessing ids. (A JWS is never logged or persisted — R34 — so
+  // there's no server-side leak surface either; the narrowest theoretical
+  // replay would require capturing someone else's request over TLS or their
+  // own device, the same bar as stealing any other bearer credential.)
+  // `isValidDeviceId` guards against a malformed/garbage token being treated
+  // as a rebind target — it must actually look like a device id.
   const entitlement = await entitlementFromJWS(transactionJws, new Date(), trustAnchor(c.env));
-  const verified = entitlement && entitlement.appAccountToken === id.toLowerCase() ? entitlement : null;
+  const verified =
+    entitlement && (entitlement.appAccountToken === id || isValidDeviceId(entitlement.appAccountToken))
+      ? entitlement
+      : null;
   if (!verified && transactionJws) {
     // Minor #1 — a device id is a stable per-install identifier; log that a
     // verification failed, not which device it was.

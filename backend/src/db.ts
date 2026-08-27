@@ -275,11 +275,23 @@ export interface WatchInput {
 /**
  * Upserts a device row. `pro_until` / `app_account_token` are written only
  * when the caller passes `verified` — a transaction JWS that verified
- * against the App Store trust anchor *and* whose appAccountToken matches
- * this device (spec §8). This is the only place besides the notifications
- * route's own direct `UPDATE` (`routes/appstore.ts`) that writes `pro_until`,
- * so the "an unverified sync never downgrades or clears a subscriber"
- * invariant lives here, once, via the `ON CONFLICT` `COALESCE`.
+ * against the App Store trust anchor *and* whose appAccountToken names a
+ * real device id (spec §8, C1). This is the only place besides the
+ * notifications route's own direct `UPDATE` (`routes/appstore.ts`) that
+ * writes `pro_until`, so the "an unverified sync never downgrades or clears
+ * a subscriber" invariant lives here, once, via the `ON CONFLICT` `COALESCE`.
+ *
+ * C1 — rebind: `verified.appAccountToken` is Apple's permanent
+ * per-subscription identifier, baked into the purchase and unchangeable —
+ * it does not necessarily equal `row.id`, the device posting *today* (a
+ * reinstall mints a new device id; the original App Store transaction still
+ * carries the old one). When it differs, the entitlement is moved rather
+ * than dropped: whichever row currently holds that token is cleared first,
+ * in the same D1 batch (atomic) as the upsert that then writes the token
+ * onto the posting row — so a reader never observes two rows holding the
+ * same `app_account_token`, and `0006_*.sql`'s unique partial index makes
+ * that invariant durable. See routes/devices.ts for why this can't be used
+ * to steal someone else's subscription.
  *
  * devices.transaction_jws is intentionally never written since R34; a later
  * migration drops it.
@@ -290,30 +302,45 @@ export async function upsertDevice(
   now: number,
   verified?: { proUntil: number; appAccountToken: string } | null
 ): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
-         location_id       = COALESCE(excluded.location_id, devices.location_id),
-         categories        = COALESCE(excluded.categories, devices.categories),
-         prefs             = COALESCE(excluded.prefs, devices.prefs),
-         pro_until         = COALESCE(excluded.pro_until, devices.pro_until),
-         app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
-         updated_at        = excluded.updated_at`
-    )
-    .bind(
-      row.id,
-      row.apns_token ?? null,
-      row.location_id ?? null,
-      row.categories ? JSON.stringify(row.categories) : null,
-      row.prefs ? JSON.stringify(row.prefs) : null,
-      verified?.proUntil ?? null,
-      verified?.appAccountToken ?? null,
-      now
-    )
-    .run();
+  const statements: D1PreparedStatement[] = [];
+
+  if (verified && verified.appAccountToken !== row.id) {
+    statements.push(
+      db
+        .prepare(
+          "UPDATE devices SET pro_until = NULL, app_account_token = NULL, updated_at = ? WHERE app_account_token = ?"
+        )
+        .bind(now, verified.appAccountToken)
+    );
+  }
+
+  statements.push(
+    db
+      .prepare(
+        `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
+           location_id       = COALESCE(excluded.location_id, devices.location_id),
+           categories        = COALESCE(excluded.categories, devices.categories),
+           prefs             = COALESCE(excluded.prefs, devices.prefs),
+           pro_until         = COALESCE(excluded.pro_until, devices.pro_until),
+           app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
+           updated_at        = excluded.updated_at`
+      )
+      .bind(
+        row.id,
+        row.apns_token ?? null,
+        row.location_id ?? null,
+        row.categories ? JSON.stringify(row.categories) : null,
+        row.prefs ? JSON.stringify(row.prefs) : null,
+        verified?.proUntil ?? null,
+        verified?.appAccountToken ?? null,
+        now
+      )
+  );
+
+  await db.batch(statements);
 }
 
 export async function getDevice(db: D1Database, id: string): Promise<DeviceRow | null> {
