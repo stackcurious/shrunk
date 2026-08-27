@@ -9,6 +9,19 @@ struct ShrunkProduct: Identifiable, Codable, Hashable {
     let sizeHistory: [SizeRecord]
     let currentPrice: Double?
     let currency: String
+    /// Set in Phase 3 when the live store size disagrees with the latest
+    /// non-Kroger observation (spec §4 step 4). Drives the "Confirm with a
+    /// label photo" card on ResultView.
+    var needsConfirmation: Bool = false
+    /// Store price snapshots, oldest first. Empty unless a store is set.
+    var priceHistory: [PricePoint] = []
+}
+
+/// One observed shelf price at the user's store.
+struct PricePoint: Codable, Hashable {
+    let date: Date
+    let price: Double            // promo when there was one, else regular
+    let perUnitEstimate: Double? // Kroger's own $/unit estimate — display only
 }
 
 struct SizeRecord: Codable, Hashable {
@@ -16,4 +29,20 @@ struct SizeRecord: Codable, Hashable {
     let quantity: Double
     let unit: String            // "oz", "fl oz", "g", "kg", "ml", "l", "count"
     let source: String          // "openfoodfacts", "openfoodfacts_import", "user_report"
+}
+
+extension SizeRecord {
+    /// "mass" | "volume" | "count" | "unknown" — observations of different kinds are never compared.
+    var unitKind: String {
+        switch unit.lowercased().replacingOccurrences(of: " ", with: "") {
+        case "g", "gram", "grams", "kg", "oz", "ounce", "ounces", "lb", "lbs":
+            return "mass"
+        case "ml", "l", "floz", "liter", "litre":
+            return "volume"
+        case "count", "ct", "pk", "pack", "each", "ea":
+            return "count"
+        default:
+            return "unknown"
+        }
+    }
 }

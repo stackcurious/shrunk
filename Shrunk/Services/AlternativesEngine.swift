@@ -1,167 +1,147 @@
 import Foundation
 
-/// Finds competing products in the same category that give more product per
-/// dollar. Ranks by cost-per-oz savings, with no-shrink-history products
-/// preferred as tiebreakers (the user is here because they got shrunk —
-/// don't recommend something that has also shrunk).
+/// Ranks in-stock products in the same category at the user's store by cost per
+/// ounce, cheapest first. Without a store — or when Kroger is unreachable — it
+/// falls back to curated verified cases in the same category (spec §7, §8).
 struct AlternativesEngine {
+    /// Spec §3 — free sees 3 alternatives, Pro sees all of them.
+    private let freeLimit = 3
 
-    let session: URLSession
-    let decoder: JSONDecoder
+    private let store: any StoreDataProviding
+    private let feed: any TrendingFeedProviding
 
-    init(session: URLSession = .shared) {
-        self.session = session
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
-        self.decoder = d
+    init(store: any StoreDataProviding = ShrunkAPIClient.shared,
+         feed: any TrendingFeedProviding = TrendingFeedService.shared) {
+        self.store = store
+        self.feed = feed
     }
 
     func findAlternatives(
         for product: ShrunkProduct,
-        shrinkRecord: ShrinkRecord
+        shrinkRecord: ShrinkRecord,
+        locationId: String?,
+        isPro: Bool
+    ) async -> AlternativesResult {
+        guard !product.category.isEmpty else { return .empty }
+
+        // Only compare like with like. Without a known kind — no size history,
+        // or an "unknown" unit — mass and volume candidates would be ranked
+        // together by numerically-incomparable $/oz vs $/fl oz, so skip the
+        // store search entirely and go straight to curated (spec §7, §8).
+        let scannedKind: String? = shrinkRecord.currentSize
+            .map(\.unitKind)
+            .flatMap { $0 == "unknown" ? nil : $0 }
+
+        if let locationId, let scannedKind {
+            let rows = await storeAlternatives(for: product, record: shrinkRecord, scannedKind: scannedKind, locationId: locationId)
+            if !rows.isEmpty { return cap(rows, isPro: isPro, isCurated: false) }
+        }
+        return cap(await curatedAlternatives(for: product), isPro: isPro, isCurated: true)
+    }
+
+    // MARK: - Store search
+
+    private func storeAlternatives(
+        for product: ShrunkProduct,
+        record: ShrinkRecord,
+        scannedKind: String,
+        locationId: String
     ) async -> [Alternative] {
-        guard !product.category.isEmpty,
-              let currentSize = shrinkRecord.currentSize else { return [] }
-
-        let normalizedCurrent = ShrinkDetector.normalize(currentSize).quantity
-        let currentCPU: Double? = {
-            guard let price = product.currentPrice, normalizedCurrent > 0 else { return nil }
-            return price / normalizedCurrent
-        }()
-
-        let candidates: [ShrunkProduct]
+        let results: [StoreSearchResult]
         do {
-            candidates = try await searchByCategory(product.category)
+            results = try await store.search(term: product.category, locationId: locationId)
         } catch {
-            return []
+            return []   // Kroger never blocks the screen (spec §8)
         }
 
-        return candidates
-            .filter { $0.id != product.id }
-            .compactMap { buildAlternative(from: $0, currentCPU: currentCPU) }
-            .filter { $0.savingsPercent > 0 }
-            .sorted { lhs, rhs in
-                if lhs.hasShrunkBefore != rhs.hasShrunkBefore { return !lhs.hasShrunkBefore }
-                return lhs.savingsPercent > rhs.savingsPercent
+        let scannedCostPerOz = record.costPerUnitNow
+
+        return results
+            .filter { $0.gtin != product.id }
+            .filter { $0.inStock }
+            .filter { $0.unitKind == scannedKind }
+            .compactMap { result -> (StoreSearchResult, Double)? in
+                guard let cost = Self.costPerOunce(result) else { return nil }
+                return (result, cost)
             }
-            .prefix(5)
-            .map { $0 }
+            .sorted { $0.1 < $1.1 }
+            .map { makeAlternative(from: $0.0, costPerOz: $0.1, scannedCostPerOz: scannedCostPerOz) }
     }
 
-    // MARK: - OFF category search
-
-    private func searchByCategory(_ category: String) async throws -> [ShrunkProduct] {
-        let slug = category
-            .lowercased()
-            .replacingOccurrences(of: " ", with: "-")
-            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? category
-
-        guard let url = URL(string: "https://world.openfoodfacts.org/category/\(slug).json?page_size=20") else {
-            return []
-        }
-
-        let (data, response) = try await session.data(from: url)
-        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-            throw ShrunkError.invalidResponse
-        }
-
-        let parsed = try decoder.decode(OFFCategoryResponse.self, from: data)
-        return parsed.products.compactMap { off in
-            guard let code = off.code, !code.isEmpty else { return nil }
-            return OpenFoodFactsService.mapToProduct(
-                current: OFFProduct(
-                    productName: off.productName,
-                    genericName: off.genericName,
-                    brands: off.brands,
-                    quantity: off.quantity,
-                    quantityImported: off.quantityImported,
-                    categoriesTags: off.categoriesTags,
-                    imageUrl: off.imageUrl,
-                    lastModifiedT: off.lastModifiedT,
-                    createdT: off.createdT
-                ),
-                earliest: nil,
-                barcode: code
-            )
-        }
+    /// The candidate's price in the same oz-equivalent space `ShrinkDetector`
+    /// uses, so it is directly comparable with `record.costPerUnitNow`
+    /// (shared with `LivePricePanel.costPerOunce` — Phase 3 review T17).
+    static func costPerOunce(_ result: StoreSearchResult) -> Double? {
+        ShrinkDetector.costPerOunce(price: result.effectivePrice, quantity: result.quantity, unitKind: result.unitKind)
     }
 
-    // MARK: - Ranking
-
-    private func buildAlternative(
-        from candidate: ShrunkProduct,
-        currentCPU: Double?
-    ) -> Alternative? {
-        guard let latest = candidate.sizeHistory.last else { return nil }
-        let normalized = ShrinkDetector.normalize(latest).quantity
-        guard normalized > 0 else { return nil }
-
-        let candidateCPU: Double
-        if let price = candidate.currentPrice {
-            candidateCPU = price / normalized
-        } else {
-            // No price → no honest comparison. Skip.
-            return nil
+    private func makeAlternative(
+        from result: StoreSearchResult,
+        costPerOz: Double,
+        scannedCostPerOz: Double?
+    ) -> Alternative {
+        let savings: Double? = scannedCostPerOz.flatMap { scanned in
+            scanned > 0 ? ((scanned - costPerOz) / scanned) * 100 : nil
         }
 
-        let savings: Double
-        if let currentCPU, currentCPU > 0 {
-            savings = ((currentCPU - candidateCPU) / currentCPU) * 100
+        let verdict: String
+        if let savings, savings > 0 {
+            verdict = "\(Int(savings.rounded()))% cheaper per oz at your store."
+        } else if let price = result.effectivePrice {
+            verdict = "\(price.formattedPrice()) · \(costPerOz.formattedCostPerUnit()) per oz at your store."
         } else {
-            return nil
+            verdict = "In stock at your store."
         }
-
-        let detector = ShrinkDetector()
-        let record = detector.analyze(product: candidate)
-        let hasShrunkBefore = record.verdict.isShrink
-
-        let humanSize: String = {
-            let q = latest.quantity
-            let unit = latest.unit
-            if q == q.rounded() {
-                return "\(Int(q)) \(unit)"
-            }
-            return String(format: "%.1f %@", q, unit)
-        }()
-
-        let verdictLine: String = {
-            let pct = Int(savings.rounded())
-            if hasShrunkBefore {
-                return "\(pct)% cheaper per oz, but has also shrunk recently."
-            } else {
-                return "\(pct)% cheaper per oz. No shrink on record."
-            }
-        }()
 
         return Alternative(
-            id: candidate.id,
-            name: candidate.name,
-            brand: candidate.brand,
-            size: humanSize,
-            costPerUnit: candidateCPU,
+            id: result.gtin ?? result.productId,
+            name: result.description,
+            brand: result.brand,
+            size: result.size ?? "",
+            costPerUnit: costPerOz,
             savingsPercent: savings,
-            hasShrunkBefore: hasShrunkBefore,
-            imageURL: candidate.imageURL,
-            verdict: verdictLine
+            imageURL: result.imageURL,
+            verdict: verdict,
+            source: .store,
+            price: result.effectivePrice,
+            stockLabel: result.stockLabel
         )
     }
-}
 
-// MARK: - OFF category endpoint
+    // MARK: - Curated fallback
 
-private struct OFFCategoryResponse: Codable {
-    let products: [OFFCategoryProduct]
-}
+    private func curatedAlternatives(for product: ShrunkProduct) async -> [Alternative] {
+        let category = product.category.lowercased()
+        return await feed.fetch().trending
+            .filter { $0.barcode != product.id }
+            .filter { $0.category.lowercased() == category }
+            .map { entry in
+                Alternative(
+                    id: entry.barcode,
+                    name: entry.name,
+                    brand: entry.brand,
+                    size: entry.history.last.map { $0.quantity.formattedQuantity(unit: $0.unit) } ?? "",
+                    costPerUnit: nil,
+                    savingsPercent: nil,
+                    imageURL: entry.imageUrl,
+                    verdict: "Verified shrink on record — tap for the evidence.",
+                    source: .curated,
+                    price: nil,
+                    stockLabel: nil
+                )
+            }
+    }
 
-private struct OFFCategoryProduct: Codable {
-    let code: String?
-    let productName: String?
-    let genericName: String?
-    let brands: String?
-    let quantity: String?
-    let quantityImported: String?
-    let categoriesTags: [String]?
-    let imageUrl: String?
-    let lastModifiedT: Int?
-    let createdT: Int?
+    // MARK: - Pro gating
+
+    private func cap(_ rows: [Alternative], isPro: Bool, isCurated: Bool) -> AlternativesResult {
+        guard !isPro, rows.count > freeLimit else {
+            return AlternativesResult(alternatives: rows, hiddenCount: 0, isCurated: isCurated)
+        }
+        return AlternativesResult(
+            alternatives: Array(rows.prefix(freeLimit)),
+            hiddenCount: rows.count - freeLimit,
+            isCurated: isCurated
+        )
+    }
 }

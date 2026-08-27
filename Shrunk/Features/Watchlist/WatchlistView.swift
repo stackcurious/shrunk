@@ -37,6 +37,9 @@ struct WatchlistView: View {
             if vm == nil {
                 vm = WatchlistViewModel(service: WatchlistService(context: modelContext))
             }
+            // Asking here rather than at launch: the user is looking at the
+            // feature the permission is for. Already-answered prompts no-op.
+            await NotificationScheduler.shared.requestPermissionAndRegister()
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView()
@@ -110,15 +113,11 @@ struct WatchlistView: View {
         .scrollIndicators(.hidden)
         .refreshable {
             guard let vm else { return }
-            let results = await vm.refresh()
-            let detected = results.count
+            let detected = await vm.refresh()
             let total = watched.count
-            let message: String
-            if detected == 0 {
-                message = "Checked \(total) product\(total == 1 ? "" : "s") · all stable"
-            } else {
-                message = "\(detected) new shrink\(detected == 1 ? "" : "s") detected!"
-            }
+            let message = detected == 0
+                ? "Checked \(total) product\(total == 1 ? "" : "s") · all stable"
+                : "\(detected) size change\(detected == 1 ? "" : "s") to confirm"
             showToast(message)
         }
     }
@@ -205,14 +204,14 @@ struct WatchlistView: View {
                     .font(.shrunkLargeTitle)
                     .foregroundStyle(Color.ink)
                     .multilineTextAlignment(.center)
-                Text("Watch any product. We check Open Food Facts in the background and alert you the moment it shrinks.")
+                Text("Watch any product. We check Kroger in the background and alert you the moment it shrinks.")
                     .font(.shrunkBody)
                     .foregroundStyle(Color.smoke)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, ShrunkTheme.Spacing.lg)
                     .lineSpacing(2)
             }
-            ShrunkButton("Unlock Shrunk Pro · \(storeKit.product?.displayPrice ?? "$9.99")", icon: "lock.open.fill") {
+            ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
                 showPaywall = true
             }
             .padding(.horizontal, ShrunkTheme.Spacing.lg)

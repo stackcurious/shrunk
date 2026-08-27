@@ -12,6 +12,9 @@ struct ResultView: View {
     @State private var showAlternatives = false
     @State private var showShareCard = false
     @State private var watchedConfirmation: String?
+    @State private var showLabelCapture = false
+    @State private var contributionToast: String?
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     init(barcode: String) {
         self.barcode = barcode
@@ -28,10 +31,47 @@ struct ResultView: View {
             content
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
+                .overlay(alignment: .bottom) { toastOverlay }
         }
         .task(id: barcode) {
+            vm.isPro = storeKit.isProUser
             if let prebake { vm.prebake(product: prebake.product, record: prebake.record) }
             await vm.load(barcode: barcode)
+            // A scan's ShrinkRecord is now final — spec §3.5 counts every
+            // scanned product, not just watched ones (WatchlistService
+            // dedupes so repeat views of the same size don't refile). Gated
+            // to `prebake == nil`: a prebaked ResultView is a curated Browse
+            // card (BrowseView passes `record.product`/`record` straight
+            // from `trending.json`, pre-filtered to shrinks by
+            // BrowseViewModel.applyFeed) — not something the user scanned,
+            // so it must never file an alert or price a ledger entry.
+            if prebake == nil, case .loaded(let product, let record) = vm.state {
+                try? WatchlistService(context: modelContext).recordScannedShrink(product: product, record: record)
+            }
+        }
+        .fullScreenCover(isPresented: $showLabelCapture) {
+            LabelCaptureView(gtin: barcode) { result in
+                contributionToast = ContributeViewModel.toastMessage(for: result)
+                Task { await vm.reload(barcode: barcode) }
+            }
+        }
+        .onChange(of: storeKit.isProUser) { _, isPro in
+            // Minor #4: lift (or re-apply) the alternatives cap the moment
+            // Pro status changes, rather than waiting for a reload.
+            Task { await vm.refreshAlternatives(isPro: isPro) }
+        }
+    }
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if let contributionToast {
+            Toast(message: contributionToast)
+                .padding(.bottom, ShrunkTheme.Spacing.xl)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: contributionToast) {
+                    try? await Task.sleep(nanoseconds: 2_800_000_000)
+                    withAnimation { self.contributionToast = nil }
+                }
         }
     }
 
@@ -72,10 +112,19 @@ struct ResultView: View {
             VStack(spacing: ShrunkTheme.Spacing.xl) {
                 heroSection(product: product, record: record)
                 comparisonRow(record: record)
-                costPerOzSection(record: record)
-                if product.sizeHistory.count >= 2 {
-                    ShrinkHistoryChart(history: product.sizeHistory)
+                if product.needsConfirmation || vm.liveSizeMismatch {
+                    confirmationCard
                         .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                }
+                costPerOzSection(record: record)
+                LivePricePanel(state: vm.livePrice, storeName: storeName)
+                if product.sizeHistory.count >= 2 {
+                    ShrinkHistoryChart(
+                        history: product.sizeHistory,
+                        isPro: storeKit.isProUser,
+                        onUpgrade: { showWatchPaywall = true }
+                    )
+                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 }
                 ctaSection(product: product, record: record)
                     .padding(.horizontal, ShrunkTheme.Spacing.lg)
@@ -86,7 +135,7 @@ struct ResultView: View {
         .background(Color.paper.ignoresSafeArea())
         .sheet(isPresented: $showWatchPaywall) { ProPaywallView() }
         .sheet(isPresented: $showAlternatives) {
-            AlternativesView(product: product, record: record, alternatives: vm.alternatives)
+            AlternativesView(product: product, record: record, result: vm.alternativesResult)
         }
         .sheet(isPresented: $showShareCard) {
             ShareCardView(record: record, product: product)
@@ -224,13 +273,48 @@ struct ResultView: View {
         .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
     }
 
+    /// Shown when the live store size disagrees with our latest observation
+    /// (spec §4 step 4). Phase 3 sets `needsConfirmation`; the flow is live now.
+    private var confirmationCard: some View {
+        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+            HStack(spacing: 8) {
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.verdictWarnDeep)
+                Text("SIZE UNCONFIRMED").shrunkSectionLabel()
+            }
+            Text("The size we're showing might be out of date. A photo of the net-weight line settles it.")
+                .font(.shrunkCallout)
+                .foregroundStyle(Color.smoke)
+                .fixedSize(horizontal: false, vertical: true)
+            ShrunkButton("Confirm with a label photo", icon: "camera.fill", variant: .ghost) {
+                showLabelCapture = true
+            }
+        }
+        .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
+    }
+
     // MARK: - Cost-per-oz
 
     @ViewBuilder
     private func costPerOzSection(record: ShrinkRecord) -> some View {
         if record.costPerUnitNow == nil { EmptyView() } else {
             VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.md) {
-                Text("REAL COST PER OUNCE").shrunkSectionLabel()
+                // When `costPerUnitNow` came from `product.priceHistory`
+                // (`price_snapshots` — Kroger-derived), this card must carry the
+                // same attribution `LivePricePanel` does (spec §9, Phase 3 review
+                // I6). It must NOT show attribution when the price fell back to
+                // `product.currentPrice` with no snapshot history — e.g. curated
+                // Browse cards, whose price is not Kroger data (I6 regression fix).
+                HStack {
+                    Text("REAL COST PER OUNCE").shrunkSectionLabel()
+                    Spacer()
+                    if record.priceIsFromStoreSnapshot {
+                        Text(LivePrice.attribution)
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.smoke)
+                    }
+                }
 
                 if let then = record.costPerUnitThen, let now = record.costPerUnitNow, then > 0 {
                     let pct = ((now - then) / then) * 100
@@ -313,10 +397,10 @@ struct ResultView: View {
     }
 
     private func addToWatchlist(product: ShrunkProduct, record: ShrinkRecord) {
-        guard let currentSize = record.currentSize else { return }
+        guard record.currentSize != nil else { return }
         let service = WatchlistService(context: modelContext)
         do {
-            try service.add(product: product, currentSize: currentSize)
+            try service.add(product: product, record: record)
             watchedConfirmation = product.id
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
@@ -346,33 +430,29 @@ struct ResultView: View {
                 Circle()
                     .fill(Color.mist)
                     .frame(width: 96, height: 96)
-                Image(systemName: "questionmark.app.dashed")
+                Image(systemName: "camera.viewfinder")
                     .font(.system(size: 40, weight: .regular))
                     .foregroundStyle(Color.smoke)
             }
-            Text("Not in our database yet")
+            Text("Not in our database yet — snap the label to add it")
                 .font(.shrunkTitle)
                 .foregroundStyle(Color.ink)
                 .multilineTextAlignment(.center)
                 .padding(.top, ShrunkTheme.Spacing.sm)
-            Text("Barcode \(barcode). Open Food Facts is community-maintained — adding it takes 30 seconds and helps every Shrunk user.")
+                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            Text("Barcode \(barcode). One photo of the net-weight line adds it for every Shrunk user.")
                 .font(.shrunkBody)
                 .foregroundStyle(Color.smoke)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3)
                 .padding(.horizontal, ShrunkTheme.Spacing.lg)
             VStack(spacing: 10) {
-                ShrunkButton("Add it on Open Food Facts", icon: "plus.circle.fill") {
-                    let urlString = "https://world.openfoodfacts.org/cgi/product.pl?type=add&code=\(barcode)"
-                    if let url = URL(string: urlString) {
-                        UIApplication.shared.open(url)
-                    }
+                ShrunkButton("Snap the label", icon: "camera.fill") {
+                    showLabelCapture = true
                 }
-                Button("Close") {
-                    dismiss()
-                }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.smoke)
+                Button("Close") { dismiss() }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.smoke)
             }
             .padding(.horizontal, ShrunkTheme.Spacing.lg)
             .padding(.top, ShrunkTheme.Spacing.md)

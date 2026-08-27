@@ -1,0 +1,66 @@
+import { Hono } from "hono";
+import type { Env } from "../env";
+import { getAcceptedObservations, getProduct, getRecentSnapshots, insertProduct, type ObservationRow, type ProductRow } from "../db";
+import { normalizeGTIN } from "../gtin";
+import { lookupFDC } from "../lookup/fdc";
+import { lookupOFF } from "../lookup/off";
+
+export const productRoute = new Hono<{ Bindings: Env }>();
+
+export async function buildProductResponse(db: D1Database, product: ProductRow, locationId: string | null) {
+  const observations = await getAcceptedObservations(db, product.gtin);
+  const price_snapshots = locationId ? await getRecentSnapshots(db, product.gtin, locationId) : [];
+  return { ...product, observations, price_snapshots, needs_confirmation: needsConfirmation(observations) };
+}
+
+/**
+ * Spec §4 step 4 — the live Kroger size disagrees with everything else we know,
+ * so the app should ask for a label photo. Observations arrive oldest-first.
+ */
+export function needsConfirmation(observations: ObservationRow[]): boolean {
+  const newest = (match: (o: ObservationRow) => boolean) => [...observations].reverse().find(match) ?? null;
+  const kroger = newest((o) => o.source === "kroger");
+  if (!kroger) return false;
+  const other = newest((o) => o.source !== "kroger" && o.unit_kind === kroger.unit_kind);
+  if (!other || other.quantity <= 0) return false;
+  return Math.abs(kroger.quantity - other.quantity) / other.quantity > 0.01;
+}
+
+productRoute.get("/v1/product/:gtin", async (c) => {
+  const gtin = normalizeGTIN(c.req.param("gtin"));
+  if (!gtin) return c.json({ error: "invalid_gtin" }, 400);
+
+  let product = await getProduct(c.env.DB, gtin);
+  if (!product) {
+    product = await createFromLookups(c.env, gtin);
+    if (!product) return c.json({ error: "not_found" }, 404);
+  }
+
+  const locationId = c.req.query("locationId") ?? null;
+  // I7: a locationId means the body may carry Kroger-derived price_snapshots
+  // (store-level prices). Kroger returns `private` on its own price
+  // responses (routes/kroger.ts) — spec §9 says we never widen that, so this
+  // response must not be publicly cacheable for an hour. Without a
+  // locationId, buildProductResponse never queries snapshots at all.
+  c.header("Cache-Control", locationId ? "private, max-age=60" : "public, max-age=3600");
+  return c.json(await buildProductResponse(c.env.DB, product, locationId));
+});
+
+async function createFromLookups(env: Env, gtin: string): Promise<ProductRow | null> {
+  const fdc = await lookupFDC(gtin, env.FDC_API_KEY);
+  let row: ProductRow | null = null;
+  if (fdc) {
+    row = { gtin, name: fdc.name, brand: fdc.brand, category: fdc.category, image_url: null, unit_kind: null };
+  } else {
+    const off = await lookupOFF(gtin);
+    // I8: off.category is a real category (from categories_tags) or "" —
+    // never a hardcoded empty string regardless of what OFF actually had.
+    if (off) row = { gtin, name: off.name, brand: off.brand, category: off.category, image_url: off.imageUrl, unit_kind: null };
+  }
+  if (!row) return null;
+  // C1: an on-miss FDC/OFF lookup, not the bulk FDC importer — tagged
+  // "lookup" so it is distinguishable from the importer's "fdc" rows, though
+  // only "kroger" rows are ever purged.
+  await insertProduct(env.DB, row, "lookup");
+  return row;
+}

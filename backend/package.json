@@ -1,0 +1,34 @@
+{
+  "name": "shrunk-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "migrate:local": "wrangler d1 migrations apply shrunk --local",
+    "migrate:remote": "wrangler d1 migrations apply shrunk --remote",
+    "sync:trending": "cp ../data/trending.json src/data/trending.json",
+    "check:trending": "diff -u ../data/trending.json src/data/trending.json"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "private": "true",
+  "dependencies": {
+    "hono": "^4.13.5"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.86.0"
+  }
+}

@@ -10,21 +10,39 @@ struct ShrinkDetector {
     func analyze(product: ShrunkProduct) -> ShrinkRecord {
         let sorted = product.sizeHistory.sorted { $0.date < $1.date }
 
-        guard sorted.count >= 2 else {
+        // Only compare records of the same kind as the most recent one —
+        // grams vs fluid ounces must never produce a verdict.
+        let sameKind: [SizeRecord] = {
+            guard let latestKind = sorted.last?.unitKind else { return [] }
+            return sorted.filter { $0.unitKind == latestKind }
+        }()
+
+        // The two most recent store snapshots, oldest first.
+        let prices = product.priceHistory.sorted { $0.date < $1.date }
+        let priceNow = prices.last?.price ?? product.currentPrice
+        let priceThen = prices.count >= 2 ? prices[prices.count - 2].price : nil
+        // True only when priceNow actually came from a price_snapshots-backed
+        // PricePoint — not the product.currentPrice fallback used when there's
+        // no snapshot history at all (e.g. curated Browse cards). Only the
+        // former is Kroger-derived and may carry Kroger attribution.
+        let priceIsFromStoreSnapshot = prices.last != nil
+
+        guard sameKind.count >= 2 else {
             return ShrinkRecord(
                 product: product,
                 previousSize: sorted.last,
                 currentSize: sorted.last,
                 shrinkPercent: 0,
                 priceThen: nil,
-                priceNow: product.currentPrice,
+                priceNow: priceNow,
                 costPerUnitThen: nil,
                 costPerUnitNow: nil,
+                priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
                 verdict: .insufficientData
             )
         }
 
-        let normalized = sorted.map(Self.normalize)
+        let normalized = sameKind.map(Self.normalize)
         let current  = normalized.last!
         let previous = normalized.dropLast().last!
 
@@ -32,42 +50,73 @@ struct ShrinkDetector {
         guard previous.quantity > 0 else {
             return ShrinkRecord(
                 product: product,
-                previousSize: sorted[sorted.count - 2],
-                currentSize: sorted.last!,
+                previousSize: sameKind[sameKind.count - 2],
+                currentSize: sameKind.last!,
                 shrinkPercent: 0,
-                priceThen: nil,
-                priceNow: product.currentPrice,
+                priceThen: priceThen,
+                priceNow: priceNow,
                 costPerUnitThen: nil,
-                costPerUnitNow: product.currentPrice.map { $0 / max(current.quantity, 0.0001) },
+                costPerUnitNow: priceNow.map { $0 / max(current.quantity, 0.0001) },
+                priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
                 verdict: .insufficientData
             )
         }
 
+        // C2 plausibility clamp: a same-kind pair from two *different* sources
+        // whose implied ratio is outside a sane single-step range is far more
+        // likely a unit-parsing mismatch between sources (e.g. a multipack
+        // total from one source vs. a per-unit size from another) than a real
+        // shrink/growth — render `.insufficientData` rather than a confident,
+        // wrong verdict. Same-source pairs are never clamped: a real shrink
+        // reported twice by one source is exactly the case this app exists to
+        // catch, however large.
+        if previous.source != current.source {
+            let ratio = current.quantity / previous.quantity
+            guard ratio <= 4 && ratio >= 0.25 else {
+                return ShrinkRecord(
+                    product: product,
+                    previousSize: sameKind[sameKind.count - 2],
+                    currentSize: sameKind.last!,
+                    shrinkPercent: 0,
+                    priceThen: priceThen,
+                    priceNow: priceNow,
+                    costPerUnitThen: nil,
+                    costPerUnitNow: current.quantity > 0 ? priceNow.map { $0 / current.quantity } : nil,
+                    priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
+                    verdict: .insufficientData
+                )
+            }
+        }
+
         let percentChange = ((current.quantity - previous.quantity) / previous.quantity) * 100
 
-        let costPerUnitNow: Double? = product.currentPrice.map { $0 / current.quantity }
-        // Historical pricing is rarely available from OFF — left nil at MVP.
-        let costPerUnitThen: Double? = nil
+        // "Now" is today's price over today's size; "then" is the older snapshot
+        // over the older size — the cost this shopper used to pay. `previous`
+        // is already guarded > 0 above; `current` needs its own guard so a
+        // zero-quantity size record can't divide a real price into `inf`.
+        let costPerUnitNow: Double? = current.quantity > 0 ? priceNow.map { $0 / current.quantity } : nil
+        let costPerUnitThen: Double? = priceThen.map { $0 / previous.quantity }
 
         let verdict: ShrinkRecord.ShrinkVerdict = {
             switch percentChange {
             case ..<(-10):    return .significantShrink
             case -10 ..< -5:  return .moderateShrink
             case -5  ..< -1:  return .minorShrink
-            case -1  ..< 1:   return .unchanged
+            case -1 ..< 1:    return .unchanged
             default:          return .grew
             }
         }()
 
         return ShrinkRecord(
             product: product,
-            previousSize: sorted[sorted.count - 2],
-            currentSize: sorted.last!,
+            previousSize: sameKind[sameKind.count - 2],
+            currentSize: sameKind.last!,
             shrinkPercent: percentChange,
-            priceThen: nil,
-            priceNow: product.currentPrice,
+            priceThen: priceThen,
+            priceNow: priceNow,
             costPerUnitThen: costPerUnitThen,
             costPerUnitNow: costPerUnitNow,
+            priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
             verdict: verdict
         )
     }
@@ -91,5 +140,26 @@ struct ShrinkDetector {
             unit: "oz",
             source: record.source
         )
+    }
+
+    /// The oz-equivalent unit price for a Kroger-shaped quantity (grams |
+    /// millilitres | count) and price, routed through the same `normalize`
+    /// space `analyze` uses for `costPerUnitNow` — so the live panel, the
+    /// alternatives ranking, and the verdict all agree on one number.
+    /// (Phase 3 review M2/T17 — was duplicated in `LivePricePanel` and
+    /// `AlternativesEngine`; both now delegate here.)
+    static func costPerOunce(price: Double?, quantity: Double?, unitKind: String?) -> Double? {
+        guard let price, let quantity, quantity > 0, let unitKind else { return nil }
+        let unit: String
+        switch unitKind {
+        case "mass":   unit = "g"
+        case "volume": unit = "ml"
+        default:       unit = "count"
+        }
+        let normalized = normalize(
+            SizeRecord(date: Date(), quantity: quantity, unit: unit, source: "kroger")
+        ).quantity
+        guard normalized > 0 else { return nil }
+        return price / normalized
     }
 }

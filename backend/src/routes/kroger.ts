@@ -1,0 +1,124 @@
+import { Hono, type Context } from "hono";
+import type { Env } from "../env";
+import { normalizeGTIN } from "../gtin";
+import { KROGER_ATTRIBUTION, KrogerClient, KrogerError } from "../kroger/client";
+import { krogerProductId } from "../kroger/ids";
+import { toLiveProduct } from "../kroger/map";
+import { persistKrogerProduct } from "../kroger/persist";
+import { canonicalDeviceId, hitRateLimit, isValidDeviceId, KROGER_GLOBAL_HOURLY_LIMIT } from "../ratelimit";
+
+type Ctx = Context<{ Bindings: Env }>;
+
+export const krogerRoute = new Hono<{ Bindings: Env }>();
+
+// I4: X-Device-Id must be the UUID the app sends, or the request 400s before
+// touching KV or Kroger at all — an arbitrary header can no longer be used as
+// rate-limit identity (spoofable, and unbounded length risked a KV key over
+// 512 bytes crashing the middleware with a 500).
+krogerRoute.use("/v1/kroger/*", async (c, next) => {
+  // R40 — canonical (lowercase) form, so the rate-limit bucket for a device
+  // is the same regardless of which case the client sends.
+  const deviceId = canonicalDeviceId(c.req.header("x-device-id") ?? "");
+  if (!isValidDeviceId(deviceId)) return c.json({ error: "invalid_device_id" }, 400);
+
+  // I4: a global budget, checked first, so a burst of distinct (but
+  // otherwise valid-looking) device ids cannot collectively exhaust the
+  // shared 10,000/day Kroger quota — the per-device cap alone cannot stop
+  // that.
+  const global = await hitRateLimit(c.env.KV, "global", KROGER_GLOBAL_HOURLY_LIMIT);
+  if (!global.allowed) return c.json({ error: "rate_limited" }, 429);
+
+  const { allowed } = await hitRateLimit(c.env.KV, deviceId);
+  if (!allowed) return c.json({ error: "rate_limited" }, 429);
+  await next();
+});
+
+/**
+ * 401 (key revoked) and 429 (quota) reach the app unchanged so it can show
+ * "Store prices unavailable right now" (spec §8); everything else is a 502.
+ */
+function upstreamError(c: Ctx, err: unknown): Response {
+  const status = err instanceof KrogerError ? err.status : 0;
+  if (status === 401) return c.json({ error: "kroger_upstream", status: 401 }, 401);
+  if (status === 429) return c.json({ error: "kroger_upstream", status: 429 }, 429);
+  return c.json({ error: "kroger_upstream", status }, 502);
+}
+
+krogerRoute.get("/v1/kroger/locations", async (c) => {
+  const zip = (c.req.query("zip") ?? "").replace(/\D/g, "");
+  if (zip.length !== 5) return c.json({ error: "invalid_zip" }, 400);
+
+  try {
+    const { data, cacheControl } = await new KrogerClient(c.env).locations(zip);
+    c.header("Cache-Control", cacheControl ?? "public, max-age=3600");
+    return c.json({
+      locations: data.map((l) => ({
+        locationId: l.locationId,
+        chain: l.chain ?? "",
+        name: l.name ?? "",
+        address: {
+          addressLine1: l.address?.addressLine1 ?? "",
+          city: l.address?.city ?? "",
+          state: l.address?.state ?? "",
+          zipCode: l.address?.zipCode ?? "",
+        },
+        geolocation: { latitude: l.geolocation?.latitude ?? null, longitude: l.geolocation?.longitude ?? null },
+      })),
+      attribution: KROGER_ATTRIBUTION,
+    });
+  } catch (err) {
+    return upstreamError(c, err);
+  }
+});
+
+krogerRoute.get("/v1/kroger/product/:gtin", async (c) => {
+  const gtin = normalizeGTIN(c.req.param("gtin"));
+  if (!gtin) return c.json({ error: "invalid_gtin" }, 400);
+  const locationId = c.req.query("locationId") ?? "";
+  if (!locationId) return c.json({ error: "missing_location" }, 400);
+
+  const productId = krogerProductId(gtin);
+  if (!productId) return c.json({ error: "invalid_gtin" }, 400);
+
+  try {
+    const { data, cacheControl } = await new KrogerClient(c.env).product(productId, locationId);
+    if (!data) return c.json({ error: "not_found" }, 404);
+
+    const live = toLiveProduct(data);
+    if (c.env.KROGER_PERSIST === "on") {
+      // Best-effort: a D1 write failure must never turn a successful
+      // upstream lookup into an error response (spec §9).
+      try {
+        await persistKrogerProduct(c.env, gtin, locationId, live);
+      } catch {
+        // swallowed — the proxied response below still succeeds.
+      }
+    }
+    c.header("Cache-Control", cacheControl ?? "no-store");
+    return c.json({ ...live, gtin, location_id: locationId, attribution: KROGER_ATTRIBUTION });
+  } catch (err) {
+    if (err instanceof KrogerError && err.status === 404) return c.json({ error: "not_found" }, 404);
+    return upstreamError(c, err);
+  }
+});
+
+krogerRoute.get("/v1/kroger/search", async (c) => {
+  const term = (c.req.query("term") ?? "").trim();
+  if (!term) return c.json({ error: "missing_term" }, 400);
+  const locationId = c.req.query("locationId") ?? "";
+  if (!locationId) return c.json({ error: "missing_location" }, 400);
+
+  try {
+    const { data, cacheControl } = await new KrogerClient(c.env).search(term, locationId);
+    // Search results are proxied only — never written to D1 (spec §6.1).
+    const results = data
+      .map(toLiveProduct)
+      .filter((p) => p.regular !== null || p.promo !== null)
+      .sort((a, b) => (a.price_per_base_unit ?? Infinity) - (b.price_per_base_unit ?? Infinity));
+
+    c.header("Cache-Control", cacheControl ?? "no-store");
+    return c.json({ results, attribution: KROGER_ATTRIBUTION });
+  } catch (err) {
+    return upstreamError(c, err);
+  }
+});

@@ -1,149 +1,128 @@
 import Foundation
 
-/// Catch-level savings record derived from a ShrinkAlert + the user's profile.
-/// Computed on-demand so we don't have to migrate the SwiftData store when the
-/// formula changes.
-struct SavingsCatch: Identifiable, Equatable {
-    let id: UUID
+/// One product's annual cost of shrinking, computed from what we actually
+/// observed: the measured size change and the current price at the user's
+/// store (spec §3.5).
+struct SavingsEntry: Identifiable, Equatable {
+    let id: String            // barcode
     let productName: String
     let brand: String
-    let shrinkPercent: Double
+    /// Fraction, not percentage points: a 12.5% shrink is 0.125.
+    let shrinkPercentAbs: Double
+    let currentPrice: Double
+    let annual: Double
     let detectedAt: Date
-    let estimatedAnnualSavings: Double
 }
 
-/// Aggregates a list of alerts into a savings view-model.
-/// All formulas are documented inline so we can defend the numbers if asked.
+/// The savings dashboard's model.
+///
+///     annual = |shrink%| × current price × purchases per year
+///
+/// Every input is observed. Products without a shrink verdict or without a
+/// price contribute nothing — no category averages, no assumed basket, no
+/// invented unit price.
 struct SavingsLedger: Equatable {
-    let totalProtected: Double         // since first catch
-    let thisMonth: Double               // catches in the current calendar month
-    let ongoingAnnual: Double           // sum of per-catch annualized exposure
-    let catches: [SavingsCatch]         // newest first
-    let dailyTotals: [DailyTotal]       // for the chart, oldest first
+    let entries: [SavingsEntry]   // largest annual cost first
+    let totalAnnual: Double
 
-    struct DailyTotal: Identifiable, Equatable {
-        let id = UUID()
-        let date: Date
-        let cumulative: Double
-    }
+    static let empty = SavingsLedger(entries: [], totalAnnual: 0)
 
-    static let empty = SavingsLedger(
-        totalProtected: 0,
-        thisMonth: 0,
-        ongoingAnnual: 0,
-        catches: [],
-        dailyTotals: []
-    )
+    /// Below this the change is inside `ShrinkDetector`'s ±1% unchanged band.
+    private static let shrinkThresholdPercent: Double = -1
 
-    /// Builds a ledger from the SwiftData alert feed + the user's saved profile.
-    static func build(alerts: [ShrinkAlert], profile: OnboardingProfile) -> SavingsLedger {
-        let confirmed = alerts.filter { $0.kind == .newShrink }
-        guard !confirmed.isEmpty else { return .empty }
-
-        let frequency = purchasesPerYear(for: profile.shopFrequency)
-
-        let mapped: [SavingsCatch] = confirmed.map { alert in
-            let annual = estimateAnnualSavings(
-                shrinkPercent: alert.shrinkPercent,
-                purchasesPerYear: frequency
-            )
-            return SavingsCatch(
-                id: alert.id,
-                productName: alert.productName,
-                brand: alert.brand,
-                shrinkPercent: alert.shrinkPercent,
-                detectedAt: alert.createdAt,
-                estimatedAnnualSavings: annual
-            )
-        }
-
-        let sortedNewest = mapped.sorted { $0.detectedAt > $1.detectedAt }
-        let total = mapped.reduce(0) { $0 + $1.estimatedAnnualSavings }
-
-        // "This month" uses the calendar month, not a 30-day rolling window —
-        // matches how users read "monthly" stats.
-        let cal = Calendar.current
-        let thisMonth = mapped
-            .filter { cal.isDate($0.detectedAt, equalTo: Date(), toGranularity: .month) }
-            .reduce(0) { $0 + $1.estimatedAnnualSavings / 12 }
-
-        return SavingsLedger(
-            totalProtected: total,
-            thisMonth: thisMonth,
-            ongoingAnnual: total,
-            catches: sortedNewest,
-            dailyTotals: buildDailyTotals(from: mapped.sorted { $0.detectedAt < $1.detectedAt })
-        )
-    }
-
-    // MARK: - Per-catch math
-    //
-    // Formula (annualized):
-    //     loss_per_purchase = typical_unit_price × |shrinkPercent|
-    //     annual_savings    = loss_per_purchase × purchases_per_year
-    //
-    // We use a fixed `typicalUnitPrice` because OFF rarely publishes pricing.
-    // $5 is the broad grocery-item average (snack bag, drink, cleaning product,
-    // toothpaste) — defensible as a back-of-envelope number; if we ever start
-    // tracking real prices in WatchedProduct we'd replace this.
-
-    private static let typicalUnitPrice: Double = 5.0
-
-    private static func estimateAnnualSavings(shrinkPercent: Double, purchasesPerYear: Double) -> Double {
-        let perPurchase = typicalUnitPrice * abs(shrinkPercent)
-        return perPurchase * purchasesPerYear
-    }
-
-    private static func purchasesPerYear(for freq: ShopFrequency?) -> Double {
-        switch freq {
+    static func purchasesPerYear(for frequency: ShopFrequency) -> Double {
+        switch frequency {
         case .weekly:   return 52
         case .biweekly: return 26
         case .monthly:  return 12
-        case .none:     return 26
         }
     }
 
-    // MARK: - Chart series
+    static func build(
+        alerts: [ShrinkAlert],
+        watchlist: [WatchedProduct],
+        shopFrequency: ShopFrequency
+    ) -> SavingsLedger {
+        let purchases = purchasesPerYear(for: shopFrequency)
 
-    /// Cumulative running total per day for the last 90 days. Used for the
-    /// area chart in the dashboard. If we have fewer than 2 catches, we
-    /// return an empty series — the chart caller hides the chart in that case.
-    private static func buildDailyTotals(from sortedOldestFirst: [SavingsCatch]) -> [DailyTotal] {
-        guard sortedOldestFirst.count >= 2 else { return [] }
+        // Alerts are the fresher observation, so they win a barcode collision.
+        var byBarcode: [String: SavingsEntry] = [:]
 
-        let cal = Calendar.current
-        var runningTotal: Double = 0
-        var dailyTotals: [DailyTotal] = []
-        var lastDay: Date?
-
-        for c in sortedOldestFirst {
-            let day = cal.startOfDay(for: c.detectedAt)
-            runningTotal += c.estimatedAnnualSavings
-            if let last = lastDay, last == day, var existing = dailyTotals.last {
-                existing = DailyTotal(date: day, cumulative: runningTotal)
-                dailyTotals[dailyTotals.count - 1] = existing
-            } else {
-                dailyTotals.append(DailyTotal(date: day, cumulative: runningTotal))
-            }
-            lastDay = day
+        for watched in watchlist {
+            guard let entry = makeEntry(
+                barcode: watched.barcode,
+                productName: watched.productName,
+                brand: watched.brand,
+                shrinkPercent: watched.lastShrinkPercent,
+                price: watched.lastKnownPrice,
+                detectedAt: watched.lastChecked,
+                purchases: purchases
+            ) else { continue }
+            byBarcode[watched.barcode] = entry
         }
 
-        // Anchor a leading zero at the day before the first catch so the line
-        // starts from the bottom rather than at the first catch's value.
-        if let first = dailyTotals.first,
-           let leadingDate = cal.date(byAdding: .day, value: -1, to: first.date) {
-            dailyTotals.insert(DailyTotal(date: leadingDate, cumulative: 0), at: 0)
+        // Only kinds that mean "this really did shrink" (spec §3.5) — a push
+        // digest or an unconfirmed re-scan hint isn't an observed shrink and
+        // must not cost the user a dollar figure it can't back up. Sorted
+        // newest-first here (not just assumed from the caller's @Query
+        // order) so the first qualifying alert per barcode is always the
+        // newest observation — a barcode already claimed by a newer alert is
+        // never overwritten by an older one.
+        var claimedByAlert: Set<String> = []
+        for alert in alerts.sorted(by: { $0.createdAt > $1.createdAt }) where alert.kind.isConfirmedShrink {
+            guard !claimedByAlert.contains(alert.barcode) else { continue }
+            guard let entry = makeEntry(
+                barcode: alert.barcode,
+                productName: alert.productName,
+                brand: alert.brand,
+                shrinkPercent: alert.shrinkPercent,
+                price: alert.currentPrice,
+                detectedAt: alert.createdAt,
+                purchases: purchases
+            ) else { continue }
+            byBarcode[alert.barcode] = entry
+            claimedByAlert.insert(alert.barcode)
         }
 
-        return dailyTotals
+        guard !byBarcode.isEmpty else { return .empty }
+
+        let entries = byBarcode.values.sorted {
+            $0.annual == $1.annual ? $0.id < $1.id : $0.annual > $1.annual
+        }
+        return SavingsLedger(
+            entries: entries,
+            totalAnnual: entries.reduce(0) { $0 + $1.annual }
+        )
+    }
+
+    private static func makeEntry(
+        barcode: String,
+        productName: String,
+        brand: String,
+        shrinkPercent: Double,
+        price: Double?,
+        detectedAt: Date,
+        purchases: Double
+    ) -> SavingsEntry? {
+        guard shrinkPercent < shrinkThresholdPercent else { return nil }
+        guard let price, price > 0 else { return nil }
+
+        let fraction = abs(shrinkPercent) / 100
+        return SavingsEntry(
+            id: barcode,
+            productName: productName,
+            brand: brand,
+            shrinkPercentAbs: fraction,
+            currentPrice: price,
+            annual: fraction * price * purchases,
+            detectedAt: detectedAt
+        )
     }
 }
 
 extension SavingsLedger {
-    /// "$487" — used for the hero number.
-    var totalDisplay: String { Self.currencyString(totalProtected) }
-    var thisMonthDisplay: String { Self.currencyString(thisMonth) }
-    var ongoingAnnualDisplay: String { Self.currencyString(ongoingAnnual) }
+    /// "$487" — the dashboard hero.
+    var totalDisplay: String { Self.currencyString(totalAnnual) }
 
     static func currencyString(_ value: Double) -> String {
         let formatter = NumberFormatter()

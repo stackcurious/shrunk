@@ -3,7 +3,6 @@ import SwiftUI
 struct AlternativeRow: View {
     let alternative: Alternative
     let isBestPick: Bool
-    let isLocked: Bool
     let onTap: () -> Void
 
     var body: some View {
@@ -34,9 +33,9 @@ struct AlternativeRow: View {
                         .lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: isLocked ? "lock.fill" : "chevron.right")
+                    Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .heavy))
-                        .foregroundStyle(isLocked ? Color.shrunkRed : Color.smokeSoft)
+                        .foregroundStyle(Color.smokeSoft)
                 }
 
                 statRow
@@ -48,11 +47,6 @@ struct AlternativeRow: View {
             }
             .padding(ShrunkTheme.Spacing.md)
             .background(Color.surface)
-            .overlay(
-                isLocked
-                ? AnyView(blurOverlay)
-                : AnyView(EmptyView())
-            )
             .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
@@ -82,25 +76,45 @@ struct AlternativeRow: View {
     private var savingsBadge: some View {
         ZStack {
             Circle()
-                .fill(Color.verdictGoodTint)
+                .fill(alternative.savingsPercent.map { $0 > 0 } == true ? Color.verdictGoodTint : Color.mist)
                 .frame(width: 56, height: 56)
             VStack(spacing: -1) {
-                Text("-\(Int(alternative.savingsPercent.rounded()))%")
-                    .font(.system(size: 16, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color.verdictGoodDeep)
-                Text("¢/oz")
+                Text(badgeTop)
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(alternative.savingsPercent.map { $0 > 0 } == true ? Color.verdictGoodDeep : Color.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(badgeBottom)
                     .font(.system(size: 8, weight: .heavy))
                     .tracking(0.6)
-                    .foregroundStyle(Color.verdictGoodDeep)
+                    .foregroundStyle(Color.smoke)
             }
+            .padding(.horizontal, 4)
         }
+    }
+
+    private var badgeTop: String {
+        if let savings = alternative.savingsPercent, savings > 0 { return "-\(Int(savings.rounded()))%" }
+        if let cost = alternative.costPerUnit { return cost.formattedCostPerUnit() }
+        return "✓"
+    }
+
+    private var badgeBottom: String {
+        if alternative.savingsPercent.map({ $0 > 0 }) == true { return "¢/oz" }
+        return alternative.source == .curated ? "verified" : "per oz"
     }
 
     private var statRow: some View {
         HStack(spacing: 8) {
-            miniStat(label: "Cost / oz", value: alternative.costPerUnit.formattedCostPerUnit())
-            miniStat(label: "Shrunk?", value: alternative.hasShrunkBefore ? "Yes" : "No",
-                     tone: alternative.hasShrunkBefore ? .alert : .good)
+            if let cost = alternative.costPerUnit {
+                miniStat(label: "Cost / oz", value: cost.formattedCostPerUnit())
+            }
+            if let price = alternative.price {
+                miniStat(label: "Price", value: price.formattedPrice())
+            }
+            if let stock = alternative.stockLabel {
+                miniStat(label: "Stock", value: stock, tone: stock == "Out of stock" ? .alert : .good)
+            }
         }
     }
 
@@ -135,18 +149,5 @@ struct AlternativeRow: View {
         case .good:  return .verdictGoodTint
         default:     return .mist
         }
-    }
-
-    private var blurOverlay: some View {
-        ZStack {
-            Color.white.opacity(0.55)
-            VStack(spacing: 6) {
-                ProBadge(style: .lock)
-                Text("Pro to unlock")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color.ink)
-            }
-        }
-        .blur(radius: 0.6)
     }
 }

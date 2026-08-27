@@ -1,9 +1,12 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct ShrunkApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var storeKit = StoreKitService.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     @AppStorage("shrunk.has_completed_onboarding")
     private var hasCompletedOnboarding: Bool = false
@@ -18,6 +21,9 @@ struct ShrunkApp: App {
         } catch {
             fatalError("SwiftData container failed to initialize: \(error)")
         }
+
+        // The app delegate writes pushes into this container.
+        PushInbox.shared.container = modelContainer
 
         NotificationScheduler.shared.registerBackgroundTask { [container = modelContainer] in
             await Self.runWatchlistSweep(container: container)
@@ -38,6 +44,13 @@ struct ShrunkApp: App {
                 }
         }
         .modelContainer(modelContainer)
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            let container = modelContainer
+            Task { @MainActor in
+                await WatchlistService(context: ModelContext(container)).syncToBackend()
+            }
+        }
     }
 
     // MARK: - Background sweep
@@ -46,27 +59,29 @@ struct ShrunkApp: App {
     private static func runWatchlistSweep(container: ModelContainer) async {
         let context = ModelContext(container)
         let watchlist = WatchlistService(context: context)
-        let detected = await watchlist.refreshAll()
+
+        // Keep the Worker's copy of the watch list current, then do the
+        // device-side live-size check that files `.unconfirmed` alerts (spec §7).
+        await watchlist.syncToBackend()
 
         let prefsRaw = UserDefaults.standard.string(forKey: NotificationPreferences.appStorageKey)
             ?? NotificationPreferences.default.encoded()
         let prefs = NotificationPreferences.decoded(prefsRaw)
 
-        for (watched, record) in detected where watched.alertEnabled {
-            // Always log the alert to SwiftData so the user sees it in the feed
-            // and the Savings Dashboard counts it. The iOS push is filtered.
-            let alert = ShrinkAlert.newShrink(from: watched, record: record)
-            context.insert(alert)
-            try? context.save()
-
-            if prefs.shouldFire(shrinkPercent: record.shrinkPercent) {
-                await NotificationScheduler.shared.scheduleShrinkAlert(
-                    productName: watched.productName,
-                    brand: watched.brand,
-                    record: record,
-                    barcode: watched.barcode
-                )
-            }
+        for (watched, liveQuantity) in await watchlist.liveSizeCheck() {
+            // A fraction (0...1), not percentage points — `minimumShrinkPercent`
+            // and `shouldFire(shrinkPercent:)` are both documented in fraction
+            // terms. Independent of `ShrinkAlert.unconfirmed`'s own
+            // `shrinkPercent` field, which is percentage points (Minor #2).
+            let percent = watched.lastKnownSize > 0
+                ? (liveQuantity - watched.lastKnownSize) / watched.lastKnownSize
+                : 0
+            guard prefs.shouldFire(shrinkPercent: percent) else { continue }
+            await NotificationScheduler.shared.scheduleLocalAlert(
+                title: "\(watched.productName) may have changed size",
+                body: "Your store lists a different size. Scan it to confirm.",
+                barcode: watched.barcode
+            )
         }
     }
 }
@@ -77,12 +92,20 @@ struct RootView: View {
     @Binding var hasCompletedOnboarding: Bool
 
     var body: some View {
-        if hasCompletedOnboarding {
-            MainTabsView()
-        } else {
-            OnboardingContainerView {
-                hasCompletedOnboarding = true
+        Group {
+            if hasCompletedOnboarding {
+                MainTabsView()
+            } else {
+                OnboardingContainerView {
+                    hasCompletedOnboarding = true
+                }
             }
+        }
+        .sheet(item: Binding<ScannedBarcode?>(
+            get: { PushInbox.shared.pendingBarcode.map { ScannedBarcode(id: $0) } },
+            set: { PushInbox.shared.pendingBarcode = $0?.id }
+        )) { wrapper in
+            ResultView(barcode: wrapper.id)
         }
     }
 }

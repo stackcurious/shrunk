@@ -1,3 +1,5 @@
+> **Superseded on 2026-08-26** by `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md`. Pricing is now a $2.99/mo + $14.99/yr subscription with a 7-day trial, onboarding is four screens, and the quiz-driven "$/yr exposure" forecast is deleted. Kept for history only — do not implement from this file.
+
 # Shrunk v2 — Monetization + Onboarding
 
 ## Decisions locked

@@ -1,29 +1,5 @@
 import Foundation
 
-enum HouseholdSize: String, Codable, CaseIterable, Identifiable {
-    case one, two, threeFour, fivePlus
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .one:        return "Just me"
-        case .two:        return "2 of us"
-        case .threeFour:  return "3–4"
-        case .fivePlus:   return "5 or more"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .one:        return "person.fill"
-        case .two:        return "person.2.fill"
-        case .threeFour:  return "person.3.fill"
-        case .fivePlus:   return "person.3.sequence.fill"
-        }
-    }
-}
-
 enum ShopFrequency: String, Codable, CaseIterable, Identifiable {
     case weekly, biweekly, monthly
 
@@ -37,6 +13,14 @@ enum ShopFrequency: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    var shortLabel: String {
+        switch self {
+        case .weekly:    return "Weekly"
+        case .biweekly:  return "Every 2 wks"
+        case .monthly:   return "Monthly"
+        }
+    }
+
     var icon: String {
         switch self {
         case .weekly:    return "calendar"
@@ -46,8 +30,8 @@ enum ShopFrequency: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// The category set used for personalization. Mirrors `BrowseViewModel.BrowseCategory` in shape
-/// but is kept decoupled — Browse needs OFF slugs, this needs basket weights for the savings math.
+/// The categories a user picks in onboarding. Synced to `/v1/devices` so the
+/// weekly digest can be filtered (spec §6.2).
 enum GroceryCategory: String, Codable, CaseIterable, Identifiable {
     case snacks, drinks, dairy, cleaning, personal, paper
 
@@ -74,57 +58,38 @@ enum GroceryCategory: String, Codable, CaseIterable, Identifiable {
         case .paper:     return "rectangle.stack.fill"
         }
     }
-
-    /// Share of a typical grocery basket this category occupies (USDA-ish averages).
-    var basketShare: Double {
-        switch self {
-        case .snacks:    return 0.12
-        case .drinks:    return 0.15
-        case .dairy:     return 0.15
-        case .cleaning:  return 0.05
-        case .personal:  return 0.08
-        case .paper:     return 0.05
-        }
-    }
-
-    /// Average shrinkflation rate observed in this category over the past 5 years.
-    /// Sourced from our curated catalog (Gatorade 12.5%, Doritos 5.1%, Folgers 14.7%, etc.)
-    /// rounded to defensible category-level averages.
-    var shrinkRate: Double {
-        switch self {
-        case .snacks:    return 0.090
-        case .drinks:    return 0.120
-        case .dairy:     return 0.060
-        case .cleaning:  return 0.080
-        case .personal:  return 0.075
-        case .paper:     return 0.085
-        }
-    }
 }
 
-/// Persisted via @AppStorage as JSON (UserDefaults). Profile drives both
-/// the onboarding reveal and any in-app savings dashboard later.
+/// Persisted via @AppStorage as JSON. Two fields, both of which drive real
+/// behaviour: `categories` filters the digest, `shopFrequency` is the
+/// purchases-per-year multiplier in the savings dashboard (spec §3.5).
 struct OnboardingProfile: Codable, Equatable {
-    var householdSize: HouseholdSize?
-    var shopFrequency: ShopFrequency?
     var categories: Set<GroceryCategory> = []
-    var monthlySpend: Double?
-
-    /// Spend defaulted when the user hasn't set a value yet (still on the slider screen).
-    /// $500/mo is the US median grocery spend for a 2-person household.
-    static let defaultSpend: Double = 500
-    static let minSpend: Double = 150
-    static let maxSpend: Double = 1500
+    var shopFrequency: ShopFrequency = .biweekly
 
     static let empty = OnboardingProfile()
+
+    /// Custom decoding so profiles written before this phase — which carry
+    /// `householdSize` and `monthlySpend`, and may omit `shopFrequency` —
+    /// still decode instead of resetting the user.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        categories = try container.decodeIfPresent(Set<GroceryCategory>.self, forKey: .categories) ?? []
+        shopFrequency = try container.decodeIfPresent(ShopFrequency.self, forKey: .shopFrequency) ?? .biweekly
+    }
+
+    init(categories: Set<GroceryCategory> = [], shopFrequency: ShopFrequency = .biweekly) {
+        self.categories = categories
+        self.shopFrequency = shopFrequency
+    }
 }
 
 extension OnboardingProfile {
     /// JSON round-trip helpers for @AppStorage (UserDefaults stores String).
     func encoded() -> String {
         guard let data = try? JSONEncoder().encode(self),
-              let str = String(data: data, encoding: .utf8) else { return "{}" }
-        return str
+              let string = String(data: data, encoding: .utf8) else { return "{}" }
+        return string
     }
 
     static func decoded(_ raw: String) -> OnboardingProfile {

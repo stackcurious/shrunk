@@ -10,6 +10,10 @@ struct NotificationPreferencesView: View {
 
     @State private var prefs: NotificationPreferences = .default
     @State private var iosStatus: UNAuthorizationStatus = .notDetermined
+    // Guards `.onChange(of: prefs)` from firing on the initial `.task` decode,
+    // which would otherwise fire a spurious `POST /v1/devices` on every screen
+    // open for any user whose stored prefs differ from `.default`.
+    @State private var hasLoadedPrefs = false
 
     var body: some View {
         NavigationStack {
@@ -17,6 +21,7 @@ struct NotificationPreferencesView: View {
                 VStack(spacing: ShrunkTheme.Spacing.lg) {
                     iosAuthorizationCard
                     masterControlsCard
+                    alertKindsCard
                     quietHoursCard
                     thresholdCard
                     footer
@@ -46,9 +51,19 @@ struct NotificationPreferencesView: View {
         .task {
             prefs = NotificationPreferences.decoded(rawPrefs)
             iosStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            hasLoadedPrefs = true
         }
         .onChange(of: prefs) { _, newValue in
+            guard hasLoadedPrefs else { return }
             rawPrefs = newValue.encoded()
+            // The crons read `devices.prefs`, so the switch has to reach the
+            // Worker or it only silences local notifications.
+            Task {
+                await ShrunkAPIClient.shared.syncDevice(
+                    deviceId: DeviceIdentity.current,
+                    transactionJWS: ""
+                )
+            }
         }
     }
 
@@ -116,13 +131,58 @@ struct NotificationPreferencesView: View {
         .shrunkElevation(ShrunkTheme.Elevation.whisper)
     }
 
+    // MARK: - Alert kinds
+
+    private var alertKindsCard: some View {
+        VStack(spacing: 0) {
+            preferenceToggle(
+                title: "Size drops",
+                subtitle: "A product you watch got smaller.",
+                icon: "arrow.down.right.circle.fill",
+                tint: .shrunkRed,
+                isOn: Binding(get: { prefs.sizeDropEnabled }, set: { prefs.sizeDropEnabled = $0 })
+            )
+            Divider().overlay(Color.borderSoft)
+            preferenceToggle(
+                title: "Price per unit up",
+                subtitle: "Up 5% or more at your store.",
+                icon: "chart.line.uptrend.xyaxis",
+                tint: .verdictWarn,
+                isOn: Binding(get: { prefs.priceHikeEnabled }, set: { prefs.priceHikeEnabled = $0 })
+            )
+            Divider().overlay(Color.borderSoft)
+            preferenceToggle(
+                title: "Verified cases",
+                subtitle: "We publish a confirmed shrink for something you watch.",
+                icon: "checkmark.seal.fill",
+                tint: .verdictGood,
+                isOn: Binding(get: { prefs.verifiedCaseEnabled }, set: { prefs.verifiedCaseEnabled = $0 })
+            )
+            Divider().overlay(Color.borderSoft)
+            preferenceToggle(
+                title: "Weekly digest",
+                subtitle: "Monday summary of what shrank in your categories.",
+                icon: "calendar",
+                tint: .shrunkRed,
+                isOn: Binding(get: { prefs.digestEnabled }, set: { prefs.digestEnabled = $0 })
+            )
+        }
+        .background(Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
+                .stroke(Color.borderSoft, lineWidth: 0.5)
+        )
+        .shrunkElevation(ShrunkTheme.Elevation.whisper)
+    }
+
     // MARK: - Quiet hours
 
     private var quietHoursCard: some View {
         VStack(spacing: 0) {
             preferenceToggle(
                 title: "Quiet hours",
-                subtitle: "Don't notify me during this window.",
+                subtitle: "Applies to on-device checks only — server alerts still arrive as they happen.",
                 icon: "moon.zzz.fill",
                 tint: .verdictWarn,
                 isOn: Binding(get: { prefs.quietHoursEnabled }, set: { prefs.quietHoursEnabled = $0 })

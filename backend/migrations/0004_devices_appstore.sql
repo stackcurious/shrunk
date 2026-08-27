@@ -1,0 +1,15 @@
+-- Phase 5 (spec §6.1). devices (including transaction_jws) and watches already
+-- exist from Phase 4's 0003_devices_watches.sql.
+--
+-- R42 review: this migration originally added `devices_app_account_token`,
+-- a lookup index on devices(app_account_token) for the notifications route
+-- and /v1/devices — but 0003_devices_watches.sql already indexes that exact
+-- column (`devices_account`), so the second index was a pure duplicate,
+-- never a different query shape. Replaced with a drop rather than left in
+-- place: no production data exists yet (the Worker is not deployed), so
+-- amending an already-numbered migration in place is free (see
+-- 0002_submissions.sql for the same call). `IF EXISTS` makes this a no-op on
+-- a database applying migrations from scratch (0004 never created the index
+-- under this content) and a real cleanup for any environment that already
+-- ran this migration's original version.
+DROP INDEX IF EXISTS devices_app_account_token;

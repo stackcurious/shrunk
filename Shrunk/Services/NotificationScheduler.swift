@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import UserNotifications
 import BackgroundTasks
 
@@ -25,30 +26,33 @@ final class NotificationScheduler {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
-    // MARK: - Per-shrink alerts
+    /// Asks for permission and, if granted, registers for APNs. The token
+    /// arrives asynchronously in `AppDelegate`.
+    @discardableResult
+    func requestPermissionAndRegister() async -> Bool {
+        let granted = await requestPermission()
+        if granted { UIApplication.shared.registerForRemoteNotifications() }
+        return granted
+    }
 
-    func scheduleShrinkAlert(productName: String, brand: String, record: ShrinkRecord, barcode: String) async {
+    // MARK: - Local alerts
+
+    /// A local notification for something the device worked out by itself —
+    /// today that is only the `BGAppRefresh` live-size mismatch (spec §7).
+    func scheduleLocalAlert(title: String, body: String, barcode: String) async {
         let content = UNMutableNotificationContent()
-        content.title = "\(productName) just shrank"
-        content.body = body(for: record)
+        content.title = title
+        content.body = body
         content.sound = .default
         content.userInfo = ["barcode": barcode]
         content.threadIdentifier = "shrunk-watchlist"
 
         let request = UNNotificationRequest(
-            identifier: "shrink_\(barcode)_\(Int(Date().timeIntervalSince1970))",
+            identifier: "local_\(barcode)_\(Int(Date().timeIntervalSince1970))",
             content: content,
             trigger: nil  // immediate
         )
         try? await UNUserNotificationCenter.current().add(request)
-    }
-
-    private func body(for record: ShrinkRecord) -> String {
-        if let prev = record.previousSize, let curr = record.currentSize {
-            let pct = abs(record.shrinkPercent).formattedPercent()
-            return "\(prev.quantity.formattedQuantity(unit: prev.unit)) → \(curr.quantity.formattedQuantity(unit: curr.unit)) (\(pct) less product)"
-        }
-        return "Tap to see exactly what changed."
     }
 
     // MARK: - Background task

@@ -26,8 +26,8 @@ final class AlertsViewModel {
         switch selectedFilter {
         case .all:       return alerts
         case .new:       return alerts.filter { !$0.isRead }
-        case .confirmed: return alerts.filter { $0.kind == .newShrink }
-        case .watching:  return alerts.filter { $0.kind == .stable || $0.kind == .unconfirmed }
+        case .confirmed: return alerts.filter { $0.kind.isConfirmedShrink }
+        case .watching:  return alerts.filter { !$0.kind.isConfirmedShrink }
         }
     }
 
@@ -42,7 +42,7 @@ final class AlertsViewModel {
     func protectedThisMonth(from alerts: [ShrinkAlert]) -> Double {
         let cal = Calendar.current
         return alerts
-            .filter { $0.kind == .newShrink }
+            .filter { $0.kind.isConfirmedShrink }
             .filter { cal.isDate($0.createdAt, equalTo: Date(), toGranularity: .month) }
             .compactMap { $0.costDeltaPerUnit }
             .reduce(0, +)

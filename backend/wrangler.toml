@@ -1,0 +1,29 @@
+name = "shrunk-api"
+main = "src/worker.ts"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/5 * * * *", "0 */6 * * *", "0 13 * * 1"]
+
+[vars]
+ENV = "dev"
+KROGER_PERSIST = "on"
+PUSH_PROVIDER = "apns"
+APNS_ENV = "sandbox"
+# TestFlight period — flip to "Production" at App Store release (see RELEASE_CHECKLIST)
+APPSTORE_ALLOWED_ENVIRONMENTS = "Sandbox,Production"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "shrunk"
+database_id = "00000000-0000-0000-0000-000000000000"   # replaced in Task 9 after `wrangler d1 create`
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "shrunk-photos"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "00000000000000000000000000000000"   # replaced in Task 11 after `wrangler kv namespace create`

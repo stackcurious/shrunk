@@ -31,6 +31,43 @@ final class BarcodeProcessor: NSObject, ObservableObject {
         .upce, .ean8, .ean13, .code128, .code39, .code93
     ]
 
+    /// Standard UPC-E zero-suppression expansion to UPC-A, then padded to the
+    /// GTIN-13 form the Worker's `normalizeGTIN` accepts (I2). AVFoundation
+    /// delivers `.upce` codes as the raw 8-digit compressed string, not
+    /// expanded — unlike UPC-A, which it already reports as `.ean13`. Without
+    /// this, an 8-digit UPC-E scan (common on small single-serve packages)
+    /// fails `normalizeGTIN`'s 12/13/14-digit check on every request,
+    /// including the eventual `/v1/observations` contribute submission, which
+    /// needs a real canonical gtin to succeed — mapping the 400 alone would
+    /// only get the user to the Contribute screen, not through it.
+    ///
+    /// Digits: N (number system, 0 or 1) D1 D2 D3 D4 D5 D6 C (check digit).
+    /// The expansion rule is keyed on D6 per the GS1 tables; each branch is a
+    /// straight positional zero-insertion with the check digit carried over
+    /// unchanged. Returns nil for anything that isn't exactly 8 digits with a
+    /// valid number system digit.
+    nonisolated static func expandUPCEToGTIN13(_ upce: String) -> String? {
+        guard upce.count == 8 else { return nil }
+        let digits = upce.compactMap(\.wholeNumberValue)
+        guard digits.count == 8 else { return nil }
+        let n = digits[0]
+        guard n == 0 || n == 1 else { return nil }
+        let d1 = digits[1], d2 = digits[2], d3 = digits[3]
+        let d4 = digits[4], d5 = digits[5], d6 = digits[6]
+        let check = digits[7]
+
+        let upcA: [Int]
+        switch d6 {
+        case 0, 1, 2: upcA = [n, d1, d2, d6, 0, 0, 0, 0, d3, d4, d5, check]
+        case 3:       upcA = [n, d1, d2, d3, 0, 0, 0, 0, 0, d4, d5, check]
+        case 4:       upcA = [n, d1, d2, d3, d4, 0, 0, 0, 0, 0, d5, check]
+        default:      upcA = [n, d1, d2, d3, d4, d5, 0, 0, 0, 0, d6, check]
+        }
+        // UPC-A (12 digits) -> GTIN-13 is a leading-zero pad, matching the
+        // Worker's `normalizeGTIN` 12-digit branch.
+        return "0" + upcA.map(String.init).joined()
+    }
+
     func bootstrap() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -134,8 +171,20 @@ extension BarcodeProcessor: AVCaptureMetadataOutputObjectsDelegate {
         from connection: AVCaptureConnection
     ) {
         guard let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-              let value = object.stringValue,
-              !value.isEmpty else { return }
+              let raw = object.stringValue,
+              !raw.isEmpty else { return }
+
+        // UPC-E arrives compressed (8 digits) and unexpanded — canonicalise it
+        // to a GTIN-13 before it ever reaches the API (I2). If expansion fails
+        // (malformed read), drop the detection rather than emit a barcode the
+        // backend can never resolve.
+        let value: String
+        if object.type == .upce {
+            guard let expanded = Self.expandUPCEToGTIN13(raw) else { return }
+            value = expanded
+        } else {
+            value = raw
+        }
 
         Task { @MainActor [weak self] in
             guard let self else { return }

@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var showPaywall: Bool = false
     @State private var showDashboard: Bool = false
     @State private var showNotificationPrefs: Bool = false
+    @State private var showStorePicker: Bool = false
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     var body: some View {
         ScrollView {
@@ -14,17 +16,26 @@ struct SettingsView: View {
                 ShrunkPageHeader(title: "Settings")
                     .padding(.horizontal, -ShrunkTheme.Spacing.lg)  // cancel outer padding
                 accountCard
+                    sectionGroup(title: "Store", subtitle: "Live prices and store alternatives come from the Kroger store you pick. Prices from Kroger.") {
+                        SettingsRow(icon: "cart.fill", iconTint: .shrunkRed,
+                                    label: storeName.isEmpty ? "Choose your store" : storeName) {
+                            showStorePicker = true
+                        }
+                    }
                     sectionGroup(title: "Alerts & notifications", subtitle: "Tune what fires and when. iOS controls master delivery — we control everything else.") {
                         SettingsRow(icon: "bell.badge", iconTint: .shrunkRed, label: "Notification preferences") {
                             showNotificationPrefs = true
                         }
                     }
-                    sectionGroup(title: "Data", subtitle: "Shrunk has no relationship with any brand or manufacturer. Open Food Facts is a nonprofit, community-maintained database.") {
-                        SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts", isLink: true) {
-                            if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
+                    sectionGroup(title: "Data sources", subtitle: "Shrunk has no relationship with any brand or manufacturer. Size history comes from the USDA's public FoodData Central dataset, from shoppers' label photos, and from Kroger.") {
+                        SettingsRow(icon: "building.columns.fill", iconTint: .verdictGood, label: "USDA FoodData Central", isLink: true) {
+                            if let url = URL(string: "https://fdc.nal.usda.gov") { openURL(url) }
                         }
-                        SettingsRow(icon: "plus.circle.fill", iconTint: .verdictGood, label: "Contribute a product", isLink: true) {
-                            if let url = URL(string: "https://world.openfoodfacts.org/contribute") { openURL(url) }
+                        SettingsRow(icon: "cart.fill", iconTint: .verdictGood, label: "Prices from Kroger", isLink: true) {
+                            if let url = URL(string: "https://www.kroger.com") { openURL(url) }
+                        }
+                        SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts (ODbL)", isLink: true) {
+                            if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
                         }
                         SettingsRow(icon: "trash.fill", iconTint: .smoke, label: "Clear scan history") {
                             UserDefaults.standard.removeObject(forKey: "shrunk.recent_barcodes")
@@ -32,6 +43,7 @@ struct SettingsView: View {
                     }
                     sectionGroup(title: "About", subtitle: nil) {
                         SettingsValueRow(icon: "info.circle.fill", iconTint: .smoke, label: "Version", value: versionString)
+                        SettingsValueRow(icon: "number", iconTint: .smoke, label: "Device ID", value: String(DeviceIdentity.current.prefix(8)))
                         SettingsRow(icon: "hand.raised.fill", iconTint: .smoke, label: "Privacy policy", isLink: true) {
                             if let url = URL(string: "https://stackcurious.com/shrunk/privacy") { openURL(url) }
                         }
@@ -58,6 +70,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showNotificationPrefs) {
             NotificationPreferencesView()
+        }
+        .sheet(isPresented: $showStorePicker) {
+            StorePickerView()
         }
     }
 
@@ -98,7 +113,7 @@ struct SettingsView: View {
                     }
                 }
             } else {
-                ShrunkButton("Unlock Shrunk Pro · \(storeKit.product?.displayPrice ?? "$9.99")", icon: "lock.open.fill") {
+                ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
                     showPaywall = true
                 }
                 Button("Restore purchases") {
