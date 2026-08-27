@@ -55,6 +55,11 @@ struct ResultView: View {
                 Task { await vm.reload(barcode: barcode) }
             }
         }
+        .onChange(of: storeKit.isProUser) { _, isPro in
+            // Minor #4: lift (or re-apply) the alternatives cap the moment
+            // Pro status changes, rather than waiting for a reload.
+            Task { await vm.refreshAlternatives(isPro: isPro) }
+        }
     }
 
     @ViewBuilder

@@ -69,6 +69,10 @@ struct ShrunkApp: App {
         let prefs = NotificationPreferences.decoded(prefsRaw)
 
         for (watched, liveQuantity) in await watchlist.liveSizeCheck() {
+            // A fraction (0...1), not percentage points — `minimumShrinkPercent`
+            // and `shouldFire(shrinkPercent:)` are both documented in fraction
+            // terms. Independent of `ShrinkAlert.unconfirmed`'s own
+            // `shrinkPercent` field, which is percentage points (Minor #2).
             let percent = watched.lastKnownSize > 0
                 ? (liveQuantity - watched.lastKnownSize) / watched.lastKnownSize
                 : 0

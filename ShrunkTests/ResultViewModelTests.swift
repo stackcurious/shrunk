@@ -233,4 +233,88 @@ final class ResultViewModelTests: XCTestCase {
         guard case .loaded(let live) = vm.livePrice else { return XCTFail("expected .loaded, got \(vm.livePrice)") }
         XCTAssertEqual(live.regular, 1.89)
     }
+
+    // MARK: - refreshAlternatives(isPro:) (Minor #4)
+    //
+    // `isPro` is otherwise captured once by the view before `load()` runs, so
+    // upgrading to Pro from the history chart's in-screen upgrade row would
+    // otherwise leave the alternatives list capped at 3 until a reload.
+
+    private func candidate(_ index: Int, price: Double) -> StoreSearchResult {
+        StoreSearchResult(
+            gtin: "000000000\(index)0\(index)", productId: "k-\(index)", brand: "Brand",
+            description: "Candidate \(index)", category: "Beverages", imageURL: nil,
+            size: "1000 ml", quantity: 1000, unitKind: "volume", regular: price, promo: 0, stockLevel: "HIGH"
+        )
+    }
+
+    func test_refreshAlternatives_liftsTheFreeCapWhenIsProBecomesTrue() async {
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        let store = StubStoreData()
+        let prices: [Double] = [0.30, 0.10, 0.50, 0.20, 0.40]
+        store.searchResult = .success(zip(1...5, prices).map(candidate))
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSON().utf8))
+            }
+            return (200, Data(self.productJSON().utf8))
+        }
+
+        let vm = makeVM(engine: AlternativesEngine(store: store, feed: StubTrendingFeed()))
+        vm.isPro = false
+        await vm.load(barcode: "0028400642255")
+
+        XCTAssertEqual(vm.alternativesResult.alternatives.count, 3, "free cap")
+        XCTAssertEqual(vm.alternativesResult.hiddenCount, 2)
+
+        await vm.refreshAlternatives(isPro: true)
+
+        XCTAssertEqual(vm.alternativesResult.alternatives.count, 5, "cap lifted after upgrading")
+        XCTAssertEqual(vm.alternativesResult.hiddenCount, 0)
+    }
+
+    func test_refreshAlternatives_reappliesTheCapOnADowngrade() async {
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        let store = StubStoreData()
+        let prices: [Double] = [0.30, 0.10, 0.50, 0.20, 0.40]
+        store.searchResult = .success(zip(1...5, prices).map(candidate))
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSON().utf8))
+            }
+            return (200, Data(self.productJSON().utf8))
+        }
+
+        let vm = makeVM(engine: AlternativesEngine(store: store, feed: StubTrendingFeed()))
+        vm.isPro = true
+        await vm.load(barcode: "0028400642255")
+        XCTAssertEqual(vm.alternativesResult.alternatives.count, 5)
+
+        await vm.refreshAlternatives(isPro: false)
+
+        XCTAssertEqual(vm.alternativesResult.alternatives.count, 3)
+        XCTAssertEqual(vm.alternativesResult.hiddenCount, 2)
+    }
+
+    func test_refreshAlternatives_isANoOpWhenProStatusHasNotActuallyChanged() async {
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        let store = StubStoreData()
+        store.searchResult = .success([candidate(1, price: 1.00)])
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSON().utf8))
+            }
+            return (200, Data(self.productJSON().utf8))
+        }
+
+        let vm = makeVM(engine: AlternativesEngine(store: store, feed: StubTrendingFeed()))
+        vm.isPro = false
+        await vm.load(barcode: "0028400642255")
+        let searchCallsBefore = store.searchTerms.count
+
+        await vm.refreshAlternatives(isPro: false)
+
+        XCTAssertEqual(store.searchTerms.count, searchCallsBefore,
+                        "no redundant fetch when isPro hasn't actually changed")
+    }
 }

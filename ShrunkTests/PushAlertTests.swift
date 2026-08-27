@@ -99,6 +99,9 @@ final class ShrinkAlertFromPushTests: XCTestCase {
         XCTAssertEqual(alert.barcode, "0052000133417")
         XCTAssertEqual(alert.previousQuantity, 946.353)
         XCTAssertEqual(alert.currentQuantity, 828.058)
-        XCTAssertEqual(alert.shrinkPercent, (828.058 - 946.353) / 946.353, accuracy: 0.0001)
+        // Minor #2: percentage points, matching ShrinkRecord.shrinkPercent and
+        // every other consumer of the field — not the bare fraction.
+        XCTAssertEqual(alert.shrinkPercent, (828.058 - 946.353) / 946.353 * 100, accuracy: 0.0001)
+        XCTAssertEqual(alert.shrinkPercent, -12.5, accuracy: 0.01)
     }
 }

@@ -3,6 +3,7 @@ import SwiftData
 
 struct SavingsDashboardView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var storeKit: StoreKitService
 
     @Query(sort: \ShrinkAlert.createdAt, order: .reverse)
     private var alerts: [ShrinkAlert]
@@ -11,6 +12,8 @@ struct SavingsDashboardView: View {
     private var watchlist: [WatchedProduct]
 
     @AppStorage("shrunk.onboarding_profile") private var rawProfile: String = "{}"
+
+    @State private var showPaywall: Bool = false
 
     private var ledger: SavingsLedger {
         SavingsLedger.build(
@@ -22,21 +25,30 @@ struct SavingsDashboardView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: ShrunkTheme.Spacing.lg) {
-                    if ledger.entries.isEmpty {
-                        emptyState
-                            .padding(.top, ShrunkTheme.Spacing.xl)
-                    } else {
-                        hero
-                        methodNote
-                        entriesSection
+            Group {
+                // Minor #3: every current call site (Settings, the Alerts
+                // proGate, the Watchlist hero strip) already presents this
+                // sheet only when Pro, but the screen's own Pro-ness
+                // shouldn't be a property of its presenters — a future deep
+                // link or Browse-card route must not reach the ledger free.
+                if !storeKit.isProUser {
+                    proGate
+                } else if ledger.entries.isEmpty {
+                    emptyState
+                        .padding(.top, ShrunkTheme.Spacing.xl)
+                } else {
+                    ScrollView {
+                        VStack(spacing: ShrunkTheme.Spacing.lg) {
+                            hero
+                            methodNote
+                            entriesSection
+                        }
+                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                        .padding(.bottom, ShrunkTheme.Spacing.xl)
                     }
+                    .scrollIndicators(.hidden)
                 }
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                .padding(.bottom, ShrunkTheme.Spacing.xl)
             }
-            .scrollIndicators(.hidden)
             .background(Color.paper.ignoresSafeArea())
             .navigationTitle("Savings")
             .navigationBarTitleDisplayMode(.inline)
@@ -56,6 +68,45 @@ struct SavingsDashboardView: View {
                 }
             }
         }
+        .sheet(isPresented: $showPaywall) {
+            ProPaywallView()
+        }
+    }
+
+    // MARK: - Pro gate (Minor #3)
+
+    private var proGate: some View {
+        VStack(spacing: ShrunkTheme.Spacing.lg) {
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(LinearGradient.shrunkRedDiagonal)
+                    .frame(width: 110, height: 110)
+                    .shrunkElevation(ShrunkTheme.Elevation.float)
+                Image(systemName: "shield.checkered")
+                    .font(.system(size: 44, weight: .regular))
+                    .foregroundStyle(.white)
+            }
+            VStack(spacing: 8) {
+                Text("Your savings dashboard is a Pro feature")
+                    .font(.shrunkLargeTitle)
+                    .foregroundStyle(Color.ink)
+                    .multilineTextAlignment(.center)
+                Text("See exactly what shrinkflation costs you a year, from observed sizes and prices only.")
+                    .font(.shrunkBody)
+                    .foregroundStyle(Color.smoke)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                    .lineSpacing(2)
+            }
+            ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
+                showPaywall = true
+            }
+            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.top, ShrunkTheme.Spacing.sm)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Hero

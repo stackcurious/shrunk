@@ -168,4 +168,18 @@ final class ResultViewModel: ObservableObject {
         )
         isLoadingAlternatives = false
     }
+
+    /// Minor #4: `isPro` is otherwise captured once, in `.task(id: barcode)`,
+    /// so a user who upgrades from the history chart's in-screen upgrade row
+    /// would keep seeing the free 3-item cap until the result reloads. Called
+    /// from the view's `.onChange(of: storeKit.isProUser)`; re-runs the
+    /// alternatives fetch so the cap lifts (or, on a downgrade, re-applies)
+    /// without a reload. A no-op if nothing has actually changed or nothing
+    /// has loaded yet.
+    func refreshAlternatives(isPro: Bool) async {
+        guard self.isPro != isPro else { return }
+        self.isPro = isPro
+        guard case .loaded(let product, let record) = state else { return }
+        await loadAlternatives(for: product, record: record)
+    }
 }

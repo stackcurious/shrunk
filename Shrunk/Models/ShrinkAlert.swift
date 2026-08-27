@@ -182,6 +182,17 @@ extension ShrinkAlert {
 
     /// The device-side `BGAppRefresh` check found a live size that disagrees
     /// with the last one we recorded (spec §7).
+    ///
+    /// Minor #2: `shrinkPercent` is percentage points everywhere else it's
+    /// used — `ShrinkRecord.shrinkPercent` (`ShrinkDetector`), `SavingsLedger
+    /// .makeEntry`, `AlertRow`, `SavingsDashboardView` — so this multiplies
+    /// by 100 to match, rather than storing a bare fraction. (Harmless today
+    /// only because `.unconfirmed` is excluded everywhere `shrinkPercent` is
+    /// actually read — `Kind.isConfirmedShrink` is false for it — but a
+    /// future surface of it would otherwise under-report by 100×.) This is
+    /// independent of `ShrunkApp.runWatchlistSweep`'s own, separate fraction
+    /// computation for `NotificationPreferences.shouldFire(shrinkPercent:)`,
+    /// which is documented there to want 0...1, not points.
     static func unconfirmed(from watched: WatchedProduct, liveQuantity: Double) -> ShrinkAlert {
         ShrinkAlert(
             barcode: watched.barcode,
@@ -192,7 +203,9 @@ extension ShrinkAlert {
             previousUnit: watched.lastKnownUnit,
             currentQuantity: liveQuantity,
             currentUnit: watched.lastKnownUnit,
-            shrinkPercent: watched.lastKnownSize > 0 ? (liveQuantity - watched.lastKnownSize) / watched.lastKnownSize : 0
+            shrinkPercent: watched.lastKnownSize > 0
+                ? (liveQuantity - watched.lastKnownSize) / watched.lastKnownSize * 100
+                : 0
         )
     }
 }
