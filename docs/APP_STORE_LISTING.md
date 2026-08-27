@@ -1,6 +1,6 @@
-# Shrunk — App Store Listing Copy
+# Shrunk — App Store Listing Copy (v2.0.0)
 
-All fields below are copy-paste ready. Character counts are noted where Apple enforces a limit.
+Copy-paste ready. Character counts are noted where Apple enforces a limit. Every price and feature line here must match `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md` §2 and §3 — if they diverge, the spec wins.
 
 ---
 
@@ -21,24 +21,24 @@ Catch shrinking groceries
 ## Promotional Text (≤170 chars — editable any time without review)
 
 ```
-Same price, less product? Scan any grocery barcode and Shrunk tells you instantly if it shrunk — plus what to buy instead. Independent. No brand pays us.
+Same price, less product? Scan any grocery barcode and Shrunk shows the real size history, today's shelf price, and what to buy instead. No brand pays us.
 ```
-(151 chars)
+(154 chars)
 
-## Keyword Field (≤100 chars, comma-separated, no spaces after commas to save characters)
+## Keyword Field (≤100 chars, comma-separated, no spaces after commas)
 
 ```
-shrinkflation,grocery savings,barcode scanner,price tracker,grocery prices,inflation,deals,coupon
+shrinkflation,grocery savings,barcode scanner,price tracker,unit price,inflation,groceries,deals
 ```
-(97 chars)
+(96 chars)
 
-> Note: do NOT repeat words already in the App Name/Subtitle ("Shrunk", "scanner") — Apple indexes those automatically. Keywords above are chosen to broaden discovery (inflation, deals, coupon) without wasting characters on duplicates.
+> Do not repeat words already in the App Name or Subtitle ("Shrunk", "scanner") — Apple indexes those automatically.
 
-## Primary Category
+## Categories
 
 **Shopping** (primary) · **Food & Drink** (secondary)
 
-**Justification:** The core job-to-be-done is a purchase decision at the shelf — "is this product still worth the price?" — which is squarely a Shopping behavior (comparison, alternatives, savings tracking). Food & Drink is the natural secondary because the catalog is grocery/food products sourced from Open Food Facts, capturing users who browse that category. Shopping has lower competitive density for a utility like this than Food & Drink, improving ranking odds.
+The job-to-be-done is a purchase decision at the shelf — comparison, alternatives, savings tracking — which is Shopping behaviour. Food & Drink is the natural secondary: the catalogue is grocery, and USDA FoodData Central is a food dataset.
 
 ---
 
@@ -47,48 +47,75 @@ shrinkflation,grocery savings,barcode scanner,price tracker,grocery prices,infla
 ```
 They shrunk it. We caught them.
 
-Shrinkflation is when brands quietly shrink a package — fewer chips, less coffee, smaller bottle — while the price stays exactly the same. Over the last five years, common grocery items have lost 5–18% of their size with no price drop. Most people never notice. Shrunk does.
+Shrinkflation is when a brand quietly shrinks the package — fewer chips, less coffee, a smaller bottle — while the price stays exactly the same. Shrunk shows you the receipt.
 
-Point your camera at any grocery barcode. In seconds, Shrunk tells you:
+Point your camera at any grocery barcode. In seconds you get:
 
-• Whether the product shrunk — and by how much
-• The real price-per-unit change, so you see what you're actually paying
-• Better-value alternatives you can buy instead
+• Whether the package shrank, and by how much
+• The size history behind that verdict, with dates
+• Today's price and cost per ounce at your Kroger store
+• Better value alternatives on the same shelf
 
-HOW IT WORKS
-Shrunk reads the barcode, looks the product up in Open Food Facts — a nonprofit, community-maintained database of millions of products — and compares current size to historical size. You get a clear verdict: good value, watch out, or shrunk.
+WHERE THE DATA COMES FROM
+Shrunk is built on the USDA's public FoodData Central dataset, which records package sizes for hundreds of thousands of US grocery products going back years — that's the "before". Live prices and current sizes come from Kroger's official Products API for the store you choose. Verified shrinkflation cases are curated by hand with a published source for every one. And shoppers add what no database has: snap a label, and Shrunk reads the net weight on your phone.
 
-INDEPENDENT BY DESIGN
-No brand pays us. No sponsors. No ads. No tracking. Our data comes from a nonprofit catalog, and our only job is to be on your side at the shelf.
-
-FREE
+FREE, FOREVER
 • Unlimited barcode scans
 • Shrink verdict and size history
-• Top alternatives for any product
+• Current price and cost per unit at your store
+• The browse feed of verified cases
+• Contribute label photos
+• 3 alternatives per scan
 
-SHRUNK PRO — one-time $9.99, yours forever
-• Watchlist: add any product and we check it daily
-• Real-time alerts the moment something you watch shrinks
-• Every ranked alternative, not just the top two
-• Savings dashboard that tracks exactly what you've protected
+SHRUNK PRO
+• Watchlist alerts — a push the moment something you watch gets smaller, or its price per unit jumps 5%
+• Weekly "what shrank this week" digest for your categories
+• Unlimited ranked alternatives at your store, cheapest per unit first
+• Full price and size history charts
+• Savings dashboard built from what you actually scan — no invented numbers
 
-Pro is a single one-time purchase. No subscription. No auto-renew. Pay once, keep it.
+$2.99/month or $14.99/year. New subscribers get a 7-day free trial on the yearly plan.
 
-Stop paying more for less. Catch shrinkflation before it catches you.
+INDEPENDENT BY DESIGN
+No brand pays us. No sponsors. No ads. No account, no login, no tracking. Our only job is to be on your side at the shelf.
+
+Prices from Kroger. Size data from USDA FoodData Central. Product names and images from Open Food Facts (ODbL). Shrunk is not affiliated with any brand or retailer.
+
+Stop paying more for less.
 ```
+
+## Subscription disclosure (required by Apple for auto-renewables)
+
+Apple requires the length, price and renewal terms, plus functional links to the terms and privacy policy, to be visible **in the app's description and on the paywall itself**. Paste this at the end of the App Store description, below the marketing copy:
+
+```
+Shrunk Pro is an auto-renewable subscription.
+
+• Shrunk Pro Yearly — $14.99 per year, with a 7-day free trial for new subscribers
+• Shrunk Pro Monthly — $2.99 per month
+
+Payment is charged to your Apple Account at confirmation of purchase. The subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours before the current period ends. Any unused portion of a free trial is forfeited when you purchase a subscription. Manage your subscription or turn off auto-renew in iOS Settings → your name → Subscriptions after purchase.
+
+Privacy Policy: https://stackcurious.com/shrunk/privacy
+Terms of Service: https://stackcurious.com/shrunk/terms
+```
+
+The in-app paywall already shows plan length, price and both links (Phase 5, Task 8) — confirm on the device build before submitting, because a paywall missing them is a routine rejection.
 
 ---
 
-## What's New (v1.0)
+## What's New (v2.0.0)
 
 ```
-Welcome to Shrunk — the first release.
+Shrunk v2 — every verdict now comes from real, dated observations.
 
-• Scan any grocery barcode and get an instant shrinkflation verdict
-• See real price-per-unit changes and better-value alternatives
-• Shrunk Pro: watch products, get real-time shrink alerts, and track your savings — one-time purchase, no subscription
+• Real size history: hundreds of thousands of US products from the USDA's public FoodData Central dataset, plus verified cases and shopper contributions
+• Live prices: pick your Kroger store and see today's price, cost per unit, and stock, right on the result screen
+• Snap a label: Shrunk reads the net weight on your phone and adds it to a product's history
+• Alternatives that are actually on the shelf at your store, ranked by price per unit
+• Shrunk Pro is now a subscription — $2.99/month or $14.99/year with a 7-day free trial — and every Pro feature is backed by observed data: watchlist alerts, the weekly digest, unlimited alternatives, full history charts, and a savings dashboard computed from what you scan
 
-They shrunk it. We caught them.
+The onboarding quiz and its guessed "yearly exposure" number are gone. We would rather show you one real number than five invented ones.
 ```
 
 ---
@@ -98,17 +125,25 @@ They shrunk it. We caught them.
 - **Support URL:** https://stackcurious.com/shrunk/support
 - **Marketing URL:** https://stackcurious.com/shrunk
 - **Privacy Policy:** https://stackcurious.com/shrunk/privacy
-- **Terms of Service:** https://stackcurious.com/shrunk/terms
+- **Terms of Service (EULA field):** https://stackcurious.com/shrunk/terms
+
+All four must resolve before submission — a 404 on the privacy URL is an automatic rejection.
 
 ---
 
 ## Screenshots
 
-Captured at 1320×2868 (iPhone 6.9" / 17 Pro Max — the required largest size) in `marketing/screenshots/`:
+Required: 6.9" (1320×2868). The four files in `marketing/screenshots/` are **v1 and must not be reused** — they show the lifetime IAP, the removed quiz onboarding, and a Browse tab without live prices.
 
-1. `01_browse.png` — Browse: "Trending shrinks" + "Hall of shame" ranked offenders
-2. `02_watchlist.png` — Watchlist Pro feature gate ("Watching is a Pro feature")
-3. `03_settings.png` — Settings: plan, data sources, version, legal links
-4. `04_alerts.png` — Alerts: "Real-time protection" Pro feature
+Capture six on a physical device running the 2.0.0 build, signed into a StoreKit sandbox account with Pro active, with a Cincinnati Kroger store selected:
 
-Not captured (simulator limitations — see ASC_SETUP.md reviewer note): the live camera scan reticle, the post-scan verdict/result screen, the onboarding savings reveal, and the in-app paywall sheet all require real device interaction (camera + multi-tap flows the simulator's permission dialog blocks). Recommend re-capturing these four on a physical device before final submission, ideally with a Pro-unlocked StoreKit sandbox account so the paywall and dashboard render with data.
+| # | File | Screen | Why |
+|---|---|---|---|
+| 1 | `01_result_shrunk.png` | Result view for a curated product with a clear shrink verdict, size history chart and the live-price panel showing "Prices from Kroger" | The core promise, in one shot |
+| 2 | `02_scan.png` | Scanner with the reticle over a real package | Shows the interaction |
+| 3 | `03_live_price.png` | Result view scrolled to the live-price panel: regular/promo, cost per unit, stock, attribution | The v2 differentiator |
+| 4 | `04_contribute.png` | Label capture confirm sheet with a parsed net weight | The growth loop, and it is free |
+| 5 | `05_alerts.png` | Alerts feed with a `sizeDrop` and a `priceHike` entry | What Pro delivers |
+| 6 | `06_paywall.png` | Paywall with yearly preselected, "Save 58%", the 7-day trial, and the terms/privacy links | Also the screenshot ASC asks for when reviewing the subscription |
+
+Delete `01_browse.png`, `02_watchlist.png`, `03_settings.png` and `04_alerts.png` once the replacements exist, so nobody uploads the v1 set by mistake.
