@@ -1,6 +1,7 @@
 import type { Env } from "./env";
 import app from "./index";
 import { runAlertDrain } from "./alerts";
+import { runWeeklyDigest } from "./digest";
 import { runKrogerSweep } from "./sweep";
 
 /**
@@ -16,6 +17,9 @@ export default {
         break;
       case "0 */6 * * *":
         ctx.waitUntil(runKrogerSweep(env));
+        break;
+      case "0 1 * * 1":
+        ctx.waitUntil(runWeeklyDigest(env));
         break;
     }
   },
