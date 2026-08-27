@@ -5,6 +5,8 @@ export interface PushPayload {
   gtin?: string;
   kind: string;
   collapseId?: string;
+  /** Bare product label, so the client never parses it out of `title`. */
+  productName?: string;
 }
 
 export interface PushResult {

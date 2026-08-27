@@ -104,6 +104,7 @@ describe("alertCopy", () => {
       gtin: GTIN,
       kind: "sizeDrop",
       collapseId: `size_drop:${GTIN}`,
+      productName: "Gatorade Thirst Quencher",
     });
   });
 
@@ -138,6 +139,38 @@ describe("alertCopy", () => {
     const payload = alertCopy({ ...base, kind: "size_drop", brand: null, payload: null }, null);
     expect(payload.title).toBe("A watched product just shrank");
     expect(payload.body).toBe("A smaller size was just observed. Tap to see the history.");
+  });
+
+  it("includes productName from product.name when available", () => {
+    const payload = alertCopy(
+      { ...base, kind: "size_drop", payload: JSON.stringify({ previous_size: "32 fl oz", size: "28 fl oz" }) },
+      { name: "Gatorade Thirst Quencher", brand: "Gatorade" }
+    );
+    expect(payload.productName).toBe("Gatorade Thirst Quencher");
+  });
+
+  it("includes productName from brand when no product", () => {
+    const payload = alertCopy(
+      { ...base, kind: "size_drop", brand: "Doritos", payload: null },
+      null
+    );
+    expect(payload.productName).toBe("Doritos");
+  });
+
+  it("includes productName in all alert kinds", () => {
+    const product = { name: "Gatorade Thirst Quencher", brand: "Gatorade" };
+
+    const sizeDrop = alertCopy({ ...base, kind: "size_drop", payload: JSON.stringify({ previous_size: "32 fl oz", size: "28 fl oz" }) }, product);
+    expect(sizeDrop.productName).toBe("Gatorade Thirst Quencher");
+
+    const priceHike = alertCopy({ ...base, kind: "price_hike", location_id: LOCATION, payload: JSON.stringify({ previous_per_unit: 2, per_unit: 2.1 }) }, product);
+    expect(priceHike.productName).toBe("Gatorade Thirst Quencher");
+
+    const verifiedCase = alertCopy({ ...base, kind: "verified_case", payload: null }, product);
+    expect(verifiedCase.productName).toBe("Gatorade Thirst Quencher");
+
+    const digest = alertCopy({ ...base, kind: "digest", payload: null }, product);
+    expect(digest.productName).toBe("Gatorade Thirst Quencher");
   });
 });
 

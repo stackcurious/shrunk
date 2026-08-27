@@ -153,4 +153,32 @@ describe("APNsSender", () => {
       ok: false, status: 500, invalidToken: false,
     });
   });
+
+  it("includes product_name at the root level when present", async () => {
+    const calls = stubFetch([{ status: 200 }]);
+    await new APNsSender(apnsEnv).send(TOKEN, {
+      title: "Gatorade just shrank",
+      body: "Now 28 fl oz — was 32 fl oz. Tap to see the history.",
+      gtin: "0052000133417",
+      kind: "sizeDrop",
+      collapseId: "size_drop:0052000133417",
+      productName: "Gatorade Thirst Quencher",
+    });
+
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.product_name).toBe("Gatorade Thirst Quencher");
+    expect(body.aps.product_name).toBeUndefined();
+  });
+
+  it("omits product_name when not present", async () => {
+    const calls = stubFetch([{ status: 200 }]);
+    await new APNsSender(apnsEnv).send(TOKEN, {
+      title: "What shrank this week",
+      body: "3 new shrinks in Snacks, 1 in Dairy",
+      kind: "digest",
+    });
+
+    const body = JSON.parse(calls[0].init.body as string);
+    expect(body.product_name).toBeUndefined();
+  });
 });

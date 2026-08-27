@@ -57,6 +57,7 @@ export class APNsSender implements PushSender {
       kind: payload.kind,
     };
     if (payload.gtin) body.gtin = payload.gtin;
+    if (payload.productName) body.product_name = payload.productName;
 
     const res = await fetch(`https://${this.host()}/3/device/${token}`, {
       method: "POST",

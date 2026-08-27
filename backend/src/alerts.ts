@@ -96,9 +96,9 @@ export function alertCopy(job: AlertJobRow, product: { name: string; brand: stri
 
   switch (job.kind) {
     case "size_drop":
-      return { title: `${label} just shrank`, body: sizeDropBody(payload), gtin, kind, collapseId };
+      return { title: `${label} just shrank`, body: sizeDropBody(payload), gtin, kind, collapseId, productName: label };
     case "price_hike":
-      return { title: `${label} costs more per unit`, body: priceHikeBody(payload), gtin, kind, collapseId };
+      return { title: `${label} costs more per unit`, body: priceHikeBody(payload), gtin, kind, collapseId, productName: label };
     case "verified_case":
       return {
         title: `New verified case: ${label}`,
@@ -106,9 +106,10 @@ export function alertCopy(job: AlertJobRow, product: { name: string; brand: stri
         gtin,
         kind,
         collapseId,
+        productName: label,
       };
     default:
-      return { title: `Update on ${label}`, body: "Tap to see what changed.", gtin, kind, collapseId };
+      return { title: `Update on ${label}`, body: "Tap to see what changed.", gtin, kind, collapseId, productName: label };
   }
 }
 

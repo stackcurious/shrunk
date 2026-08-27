@@ -82,6 +82,7 @@ export class FCMSender implements PushSender {
 
     const data: Record<string, string> = { kind: payload.kind };
     if (payload.gtin) data.gtin = payload.gtin;
+    if (payload.productName) data.product_name = payload.productName;
 
     const aps: Record<string, unknown> = {
       // Same `content-available` as the direct APNs path, for the same reason.
@@ -89,6 +90,7 @@ export class FCMSender implements PushSender {
       kind: payload.kind,
     };
     if (payload.gtin) aps.gtin = payload.gtin;
+    if (payload.productName) aps.product_name = payload.productName;
 
     const res = await fetch(`https://fcm.googleapis.com/v1/projects/${this.account().project_id}/messages:send`, {
       method: "POST",
