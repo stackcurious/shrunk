@@ -25,6 +25,11 @@ final class LabelCaptureController: NSObject, ObservableObject {
     // MARK: - Lifecycle
 
     func bootstrap() {
+        if UITestingOverrides.isActive {
+            isAuthorized = true
+            isRunning = true
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true

@@ -54,7 +54,12 @@ struct ScannerView: View {
                ),
                actions: { Button("OK", role: .cancel) {} },
                message: { Text(processor.error ?? "") })
-        .preferredColorScheme(.dark)
+        // Scoped to this subtree, not the window: `.preferredColorScheme` here
+        // is a preference that propagates out of the TabView and forced the
+        // *whole app* dark, which left the status bar drawing white-on-cream
+        // (unreadable) on Browse, Watchlist, Alerts and Settings. The window's
+        // scheme is now chosen per selected tab in `MainTabsView`.
+        .environment(\.colorScheme, .dark)
     }
 
     // MARK: - Camera overlays

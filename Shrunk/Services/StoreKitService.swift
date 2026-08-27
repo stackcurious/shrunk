@@ -69,6 +69,11 @@ final class StoreKitService: ObservableObject {
     // MARK: - Loading
 
     func loadProducts() async {
+        // Screenshot mode: no StoreKit connection on a simulator. Leaving both
+        // products nil with no `loadError` is what the paywall already treats
+        // as "still loading", so it falls back to the spec prices instead of
+        // rendering the "Couldn't load plans" state.
+        if UITestingOverrides.isActive { loadError = nil; return }
         do {
             let fetched = try await Product.products(for: ShrunkProProduct.all)
             monthlyProduct = fetched.first { $0.id == ShrunkProProduct.monthly }
@@ -87,6 +92,7 @@ final class StoreKitService: ObservableObject {
     /// stale value in place, so the paywall falls back to "Subscribe"
     /// instead of advertising a trial it can't back up.
     func refreshTrialEligibility() async {
+        if UITestingOverrides.isActive { isTrialEligible = true; return }
         guard let groupID = yearlyProduct?.subscription?.subscriptionGroupID else {
             isTrialEligible = nil
             return
@@ -135,6 +141,7 @@ final class StoreKitService: ObservableObject {
     // MARK: - Entitlement
 
     func refreshEntitlements() async {
+        if UITestingOverrides.isActive { isProUser = UITestingOverrides.forcesPro; return }
         var snapshots: [ProEntitlement.Snapshot] = []
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }

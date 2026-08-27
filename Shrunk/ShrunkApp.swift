@@ -14,6 +14,10 @@ struct ShrunkApp: App {
     private let modelContainer: ModelContainer
 
     init() {
+        // No-op unless launched by ShrunkUITests with `-ui-testing`. Must run
+        // before the first `@AppStorage` read.
+        UITestingOverrides.prepareDefaults()
+
         // ModelContainer must be created synchronously so the background task
         // callback can re-create a context against the same store URL.
         do {
@@ -21,6 +25,7 @@ struct ShrunkApp: App {
         } catch {
             fatalError("SwiftData container failed to initialize: \(error)")
         }
+        UITestingOverrides.seedFixtures(container: modelContainer)
 
         // The app delegate writes pushes into this container.
         PushInbox.shared.container = modelContainer
@@ -133,5 +138,9 @@ struct MainTabsView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(4)
         }
+        // Only the scanner is a dark screen; every other tab is the light
+        // paper theme, and the status bar has to follow or it renders
+        // white-on-cream.
+        .preferredColorScheme(selectedTab == 0 ? .dark : .light)
     }
 }

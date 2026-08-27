@@ -63,14 +63,32 @@ targets:
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Shrunk.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Shrunk
         BUNDLE_LOADER: $(TEST_HOST)
 
+  # App Store screenshot capture. Drives the real app against the production
+  # Worker and attaches one PNG per store-listing screenshot; see
+  # ShrunkUITests/ScreenshotTests.swift and docs/APP_STORE_LISTING.md.
+  ShrunkUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ShrunkUITests
+    dependencies:
+      - target: Shrunk
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shrunk.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Shrunk
+
 schemes:
   Shrunk:
     build:
       targets:
         Shrunk: all
         ShrunkTests: [test]
+        ShrunkUITests: [test]
     run:
       storeKitConfiguration: Shrunk/Resources/Shrunk.storekit
     test:
       targets:
         - ShrunkTests
+        - ShrunkUITests
