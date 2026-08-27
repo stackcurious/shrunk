@@ -22,6 +22,8 @@ export interface DecodedNotification {
   notificationUUID: string;
   bundleId: string;
   signedTransactionInfo: string | null;
+  /** I4 — Apple sends this in ms; falls back to the verification instant if absent. */
+  signedDateMs: number;
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
@@ -144,5 +146,6 @@ export async function verifyAndDecodeNotification(
     notificationUUID: typeof payload.notificationUUID === "string" ? payload.notificationUUID : "",
     bundleId: typeof data.bundleId === "string" ? data.bundleId : "",
     signedTransactionInfo: typeof data.signedTransactionInfo === "string" ? data.signedTransactionInfo : null,
+    signedDateMs: typeof payload.signedDate === "number" ? payload.signedDate : now.getTime(),
   };
 }

@@ -21,7 +21,12 @@ function testEnv(chain: TestChain, overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function notificationJWS(chain: TestChain, tx: Record<string, unknown>, type = "DID_RENEW") {
+async function notificationJWS(
+  chain: TestChain,
+  tx: Record<string, unknown>,
+  type = "DID_RENEW",
+  notificationOverrides: Record<string, unknown> = {},
+) {
   const inner = await signTestJWS(chain, tx);
   return signTestJWS(chain, {
     notificationType: type,
@@ -29,6 +34,7 @@ async function notificationJWS(chain: TestChain, tx: Record<string, unknown>, ty
     version: "2.0",
     signedDate: Date.now(),
     data: { bundleId: "com.shrunk.app", environment: "Sandbox", signedTransactionInfo: inner },
+    ...notificationOverrides,
   });
 }
 
@@ -146,6 +152,75 @@ describe("POST /v1/appstore/notifications", () => {
         .bind(TOKEN)
         .first<{ pro_until: number | null }>();
       expect(row?.pro_until).toBe(Math.floor(EXPIRES_MS / 1000));
+    });
+  });
+
+  describe("I4: notification ordering and idempotency", () => {
+    it("a duplicate delivery of the same notification is a no-op", async () => {
+      const jws = await notificationJWS(chain, transaction());
+
+      const first = await post({ signedPayload: jws });
+      expect(await first.json()).toMatchObject({ ok: true, updated: true });
+
+      const second = await post({ signedPayload: jws });
+      expect(await second.json()).toMatchObject({ ok: true, updated: false });
+
+      const row = await env.DB.prepare("SELECT pro_until FROM devices WHERE app_account_token = ?")
+        .bind(TOKEN)
+        .first<{ pro_until: number }>();
+      expect(row?.pro_until).toBe(Math.floor(EXPIRES_MS / 1000));
+    });
+
+    it("a retried DID_RENEW that arrives after a REFUND (out of order) cannot undo the refund", async () => {
+      const refundSignedAt = Date.UTC(2026, 7, 1);
+      const revokedAt = Date.UTC(2026, 7, 1, 0, 30);
+      const staleRenewSignedAt = Date.UTC(2026, 6, 20); // earlier than the refund's signedDate
+
+      const refundRes = await post({
+        signedPayload: await notificationJWS(chain, transaction({ revocationDate: revokedAt }), "REFUND", {
+          signedDate: refundSignedAt,
+          notificationUUID: "uuid-refund",
+        }),
+      });
+      expect(await refundRes.json()).toMatchObject({ ok: true, updated: true });
+
+      const staleRenewRes = await post({
+        signedPayload: await notificationJWS(chain, transaction({ expiresDate: EXPIRES_MS }), "DID_RENEW", {
+          signedDate: staleRenewSignedAt,
+          notificationUUID: "uuid-stale-renew",
+        }),
+      });
+      expect(await staleRenewRes.json()).toMatchObject({ ok: true, updated: false });
+
+      const row = await env.DB.prepare("SELECT pro_until FROM devices WHERE app_account_token = ?")
+        .bind(TOKEN)
+        .first<{ pro_until: number }>();
+      expect(row?.pro_until).toBe(Math.floor(revokedAt / 1000)); // still refunded, not restored
+    });
+
+    it("an in-order sequence of distinct notifications still applies each one", async () => {
+      const t1 = Date.UTC(2026, 6, 1);
+      const t2 = Date.UTC(2026, 7, 1);
+      const laterExpiresMs = EXPIRES_MS + 86_400_000;
+
+      await post({
+        signedPayload: await notificationJWS(chain, transaction({ expiresDate: EXPIRES_MS }), "DID_RENEW", {
+          signedDate: t1,
+          notificationUUID: "uuid-seq-1",
+        }),
+      });
+      const secondRes = await post({
+        signedPayload: await notificationJWS(chain, transaction({ expiresDate: laterExpiresMs }), "DID_RENEW", {
+          signedDate: t2,
+          notificationUUID: "uuid-seq-2",
+        }),
+      });
+      expect(await secondRes.json()).toMatchObject({ ok: true, updated: true });
+
+      const row = await env.DB.prepare("SELECT pro_until FROM devices WHERE app_account_token = ?")
+        .bind(TOKEN)
+        .first<{ pro_until: number }>();
+      expect(row?.pro_until).toBe(Math.floor(laterExpiresMs / 1000));
     });
   });
 });

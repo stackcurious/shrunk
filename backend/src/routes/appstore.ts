@@ -53,10 +53,33 @@ appstoreRoute.post("/v1/appstore/notifications", async (c) => {
     return c.json({ ok: true, updated: false, reason: "not_applicable", notificationType: notification.notificationType });
   }
 
+  // I4 — Apple does not guarantee delivery order and retries a failed
+  // delivery for up to three days, so a stale/duplicate notification must
+  // not clobber a more recent one (e.g. a retried DID_RENEW landing after a
+  // REFUND must not restore Pro). Both guards live in the UPDATE's WHERE
+  // clause so the check-and-write is one atomic statement: `updated` stays
+  // false, and the row untouched, whenever either guard fails.
+  //  - duplicate: this exact notificationUUID was already applied.
+  //  - out of order: a notification already applied is signed *after* this one.
+  const signedAtSeconds = Math.floor(notification.signedDateMs / 1000);
+  const notificationUUID = notification.notificationUUID || null;
+
   const result = await c.env.DB.prepare(
-    "UPDATE devices SET pro_until = ?, updated_at = ? WHERE app_account_token = ?",
+    `UPDATE devices
+       SET pro_until = ?, entitlement_updated_at = ?, last_notification_uuid = ?, updated_at = ?
+     WHERE app_account_token = ?
+       AND (last_notification_uuid IS NULL OR last_notification_uuid <> ?)
+       AND (entitlement_updated_at IS NULL OR entitlement_updated_at < ?)`,
   )
-    .bind(proUntil, Math.floor(now.getTime() / 1000), tx.appAccountToken.toLowerCase())
+    .bind(
+      proUntil,
+      signedAtSeconds,
+      notificationUUID,
+      Math.floor(now.getTime() / 1000),
+      tx.appAccountToken.toLowerCase(),
+      notificationUUID,
+      signedAtSeconds,
+    )
     .run();
 
   return c.json({
