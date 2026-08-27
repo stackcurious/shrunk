@@ -4,11 +4,32 @@ import Charts
 struct ShrinkHistoryChart: View {
     let history: [SizeRecord]
     let unitLabel: String
+    let isPro: Bool
+    let hiddenCount: Int
+    let onUpgrade: (() -> Void)?
+
     @State private var selected: SizeRecord?
 
-    init(history: [SizeRecord]) {
-        self.history = history.sorted { $0.date < $1.date }
-        self.unitLabel = history.first?.unit ?? "oz"
+    /// Spec §3.4: Pro sees every observation, free sees the latest two.
+    /// Always oldest-first, so the chart reads left to right in time.
+    static func visibleHistory(_ history: [SizeRecord], isPro: Bool) -> [SizeRecord] {
+        let sorted = history.sorted { $0.date < $1.date }
+        guard !isPro else { return sorted }
+        return Array(sorted.suffix(2))
+    }
+
+    /// How many observations the free tier is not being shown.
+    static func hiddenCount(_ history: [SizeRecord], isPro: Bool) -> Int {
+        isPro ? 0 : max(0, history.count - 2)
+    }
+
+    init(history: [SizeRecord], isPro: Bool, onUpgrade: (() -> Void)? = nil) {
+        let visible = Self.visibleHistory(history, isPro: isPro)
+        self.history = visible
+        self.unitLabel = visible.first?.unit ?? "oz"
+        self.isPro = isPro
+        self.hiddenCount = Self.hiddenCount(history, isPro: isPro)
+        self.onUpgrade = onUpgrade
     }
 
     var body: some View {
@@ -33,6 +54,10 @@ struct ShrinkHistoryChart: View {
             } else {
                 EmptyView()
             }
+
+            if hiddenCount > 0 {
+                upgradeRow
+            }
         }
         .padding(ShrunkTheme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -42,6 +67,37 @@ struct ShrinkHistoryChart: View {
             RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
                 .stroke(Color.border, lineWidth: 1)
         )
+    }
+
+    // MARK: - Pro affordance
+
+    private var upgradeRow: some View {
+        Button {
+            onUpgrade?()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11, weight: .bold))
+                Text("See full history with Pro")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("\(hiddenCount) more")
+                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .foregroundStyle(Color.smoke)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .heavy))
+                    .foregroundStyle(Color.smoke)
+            }
+            .foregroundStyle(Color.shrunkRedDark)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color.shrunkRedLight)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(onUpgrade == nil)
+        .accessibilityLabel("See full history with Pro, \(hiddenCount) more observations")
     }
 
     // MARK: - Chart variant
@@ -136,20 +192,29 @@ struct ShrinkHistoryChart: View {
     }
 }
 
-#Preview("Two-point history") {
-    ShrinkHistoryChart(history: [
-        SizeRecord(date: Date.now.addingTimeInterval(-365 * 24 * 3600), quantity: 32, unit: "oz", source: "openfoodfacts_import"),
-        SizeRecord(date: Date.now, quantity: 28, unit: "oz", source: "openfoodfacts")
-    ])
+#Preview("Free — latest two of four") {
+    ShrinkHistoryChart(
+        history: [
+            SizeRecord(date: .now.addingTimeInterval(-1500 * 24 * 3600), quantity: 32, unit: "oz", source: "fdc"),
+            SizeRecord(date: .now.addingTimeInterval(-900 * 24 * 3600),  quantity: 30, unit: "oz", source: "fdc"),
+            SizeRecord(date: .now.addingTimeInterval(-300 * 24 * 3600),  quantity: 28, unit: "oz", source: "crowd"),
+            SizeRecord(date: .now,                                       quantity: 26, unit: "oz", source: "kroger")
+        ],
+        isPro: false,
+        onUpgrade: {}
+    )
     .padding()
 }
 
-#Preview("Multi-point history") {
-    ShrinkHistoryChart(history: [
-        SizeRecord(date: Date.now.addingTimeInterval(-1500 * 24 * 3600), quantity: 32, unit: "oz", source: "x"),
-        SizeRecord(date: Date.now.addingTimeInterval(-900 * 24 * 3600),  quantity: 30, unit: "oz", source: "x"),
-        SizeRecord(date: Date.now.addingTimeInterval(-300 * 24 * 3600),  quantity: 28, unit: "oz", source: "x"),
-        SizeRecord(date: Date.now,                                       quantity: 26, unit: "oz", source: "x")
-    ])
+#Preview("Pro — all four") {
+    ShrinkHistoryChart(
+        history: [
+            SizeRecord(date: .now.addingTimeInterval(-1500 * 24 * 3600), quantity: 32, unit: "oz", source: "fdc"),
+            SizeRecord(date: .now.addingTimeInterval(-900 * 24 * 3600),  quantity: 30, unit: "oz", source: "fdc"),
+            SizeRecord(date: .now.addingTimeInterval(-300 * 24 * 3600),  quantity: 28, unit: "oz", source: "crowd"),
+            SizeRecord(date: .now,                                       quantity: 26, unit: "oz", source: "kroger")
+        ],
+        isPro: true
+    )
     .padding()
 }

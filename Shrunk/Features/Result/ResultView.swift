@@ -103,8 +103,12 @@ struct ResultView: View {
                 costPerOzSection(record: record)
                 LivePricePanel(state: vm.livePrice, storeName: storeName)
                 if product.sizeHistory.count >= 2 {
-                    ShrinkHistoryChart(history: product.sizeHistory)
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                    ShrinkHistoryChart(
+                        history: product.sizeHistory,
+                        isPro: storeKit.isProUser,
+                        onUpgrade: { showWatchPaywall = true }
+                    )
+                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 }
                 ctaSection(product: product, record: record)
                     .padding(.horizontal, ShrunkTheme.Spacing.lg)
