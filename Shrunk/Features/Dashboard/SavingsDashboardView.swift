@@ -34,22 +34,20 @@ struct SavingsDashboardView: View {
                 if !storeKit.isProUser {
                     proGate
                 } else if ledger.entries.isEmpty {
-                    emptyState
-                        .padding(.top, ShrunkTheme.Spacing.xl)
+                    ScrollView { emptyState.padding(.horizontal, 20).padding(.vertical, 32) }
                 } else {
                     ScrollView {
-                        VStack(spacing: ShrunkTheme.Spacing.lg) {
+                        VStack(spacing: 24) {
                             hero
                             methodNote
                             entriesSection
                         }
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                        .padding(.bottom, ShrunkTheme.Spacing.xl)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 32)
                     }
-                    .scrollIndicators(.hidden)
                 }
             }
-            .background(Color.paper.ignoresSafeArea())
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Savings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -57,12 +55,8 @@ struct SavingsDashboardView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(Color.ink)
-                            .frame(width: 32, height: 32)
-                            .background(Color.mist)
-                            .clipShape(Circle())
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
                     .accessibilityLabel("Close")
                 }
@@ -76,54 +70,36 @@ struct SavingsDashboardView: View {
     // MARK: - Pro gate (Minor #3)
 
     private var proGate: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(LinearGradient.shrunkRedDiagonal)
-                    .frame(width: 110, height: 110)
-                    .shrunkElevation(ShrunkTheme.Elevation.float)
-                Image(systemName: "shield.checkered")
-                    .font(.system(size: 44, weight: .regular))
-                    .foregroundStyle(.white)
-            }
-            VStack(spacing: 8) {
-                Text("Your savings dashboard is a Pro feature")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
-                    .multilineTextAlignment(.center)
-                Text("See exactly what shrinkflation costs you a year, from observed sizes and prices only.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                    .lineSpacing(2)
-            }
-            ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
+        ContentUnavailableView {
+            Label("Your savings dashboard is a Pro feature", systemImage: "shield.checkered")
+        } description: {
+            Text("See exactly what shrinkflation costs you a year, from observed sizes and prices only.")
+        } actions: {
+            Button("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")") {
                 showPaywall = true
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.top, ShrunkTheme.Spacing.sm)
-            Spacer()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Hero
 
     private var hero: some View {
         VStack(spacing: 4) {
-            Text("SHRINKFLATION COSTS YOU")
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(1.2)
-                .foregroundStyle(Color.smoke)
-                .padding(.top, ShrunkTheme.Spacing.md)
+            Text("Shrinkflation costs you")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.top, 16)
             Text(ledger.totalDisplay)
-                .font(.system(size: 76, weight: .heavy, design: .rounded))
-                .foregroundStyle(LinearGradient.shrunkRedDiagonal)
+                .font(.system(size: 64, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(Color.shrunkRed)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
             Text("a year, across \(ledger.entries.count) \(ledger.entries.count == 1 ? "product" : "products") you track")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color.smoke)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -131,56 +107,46 @@ struct SavingsDashboardView: View {
 
     private var methodNote: some View {
         Text("Each product's size drop × its current price at your store × how often you shop. Observed sizes and prices only — nothing estimated.")
-            .font(.system(size: 12))
-            .foregroundStyle(Color.smoke)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
-            .lineSpacing(2)
-            .padding(.horizontal, ShrunkTheme.Spacing.sm)
+            .padding(.horizontal, 8)
     }
 
     // MARK: - Entries
 
     private var entriesSection: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            HStack {
-                Text("PER PRODUCT")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.smoke)
-                Spacer()
-            }
-            VStack(spacing: 8) {
-                ForEach(ledger.entries) { entry in
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Per product")
+                .font(.headline)
+            VStack(spacing: 0) {
+                ForEach(Array(ledger.entries.enumerated()), id: \.element.id) { idx, entry in
                     SavingsEntryRow(entry: entry)
+                    if idx < ledger.entries.count - 1 {
+                        Divider().padding(.leading, 16)
+                    }
                 }
             }
+            .background(Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(Color.verdictGoodTint)
-                    .frame(width: 140, height: 140)
-                    .shrunkElevation(ShrunkTheme.Elevation.float)
-                Image(systemName: "shield.checkered")
-                    .font(.system(size: 56, weight: .light))
-                    .foregroundStyle(Color.verdictGood)
-            }
+        VStack(spacing: 20) {
+            Image(systemName: "shield.checkered")
+                .font(.system(size: 52))
+                .foregroundStyle(Color.verdictGood)
             VStack(spacing: 8) {
                 Text("Nothing to add up yet")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
+                    .font(.title2.bold())
                     .multilineTextAlignment(.center)
                 Text("This page only shows numbers we can back with data — a measured size drop and a real price at your store.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, ShrunkTheme.Spacing.md)
             }
 
             VStack(spacing: 12) {
@@ -200,24 +166,24 @@ struct SavingsDashboardView: View {
                     subtitle: "Size drop × price × how often you shop."
                 )
             }
-            .padding(.top, ShrunkTheme.Spacing.md)
+            .padding(.top, 8)
+            .groupedCard()
         }
         .frame(maxWidth: .infinity)
     }
 
     private func howItWorksRow(icon: String, title: String, subtitle: String) -> some View {
-        HStack(alignment: .top, spacing: ShrunkTheme.Spacing.md) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.title3)
                 .foregroundStyle(Color.shrunkRed)
-            VStack(alignment: .leading, spacing: 1) {
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.headline)
                 Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
-                    .lineSpacing(2)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -231,43 +197,28 @@ private struct SavingsEntryRow: View {
     let entry: SavingsEntry
 
     var body: some View {
-        HStack(spacing: ShrunkTheme.Spacing.md) {
+        HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.productName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.body)
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(percentText)
-                        .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                        .foregroundStyle(Color.shrunkRedDark)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.shrunkRedLight)
-                        .clipShape(Capsule())
-                    Text(priceText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color.smoke)
-                }
+                Text("\(percentText) · \(priceText)")
+                    .font(.footnote)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
-            Spacer()
+            Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 0) {
                 Text(SavingsLedger.currencyString(entry.annual))
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .font(.headline)
+                    .monospacedDigit()
                     .foregroundStyle(Color.shrunkRedDark)
                 Text("per year")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.smoke)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
+        .padding(16)
     }
 
     private var percentText: String {

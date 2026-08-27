@@ -11,57 +11,83 @@ struct SettingsView: View {
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: ShrunkTheme.Spacing.lg) {
-                ShrunkPageHeader(title: "Settings")
-                    .padding(.horizontal, -ShrunkTheme.Spacing.lg)  // cancel outer padding
-                accountCard
-                    sectionGroup(title: "Store", subtitle: "Live prices and store alternatives come from the Kroger store you pick. Prices from Kroger.") {
-                        SettingsRow(icon: "cart.fill", iconTint: .shrunkRed,
-                                    label: storeName.isEmpty ? "Choose your store" : storeName) {
-                            showStorePicker = true
-                        }
+        NavigationStack {
+            List {
+                accountSection
+
+                Section {
+                    SettingsRow(icon: "cart.fill", iconTint: .shrunkRed,
+                                label: storeName.isEmpty ? "Choose your store" : storeName) {
+                        showStorePicker = true
                     }
-                    sectionGroup(title: "Alerts & notifications", subtitle: "Tune what fires and when. iOS controls master delivery — we control everything else.") {
-                        SettingsRow(icon: "bell.badge", iconTint: .shrunkRed, label: "Notification preferences") {
-                            showNotificationPrefs = true
-                        }
-                    }
-                    sectionGroup(title: "Data sources", subtitle: "Shrunk has no relationship with any brand or manufacturer. Size history comes from the USDA's public FoodData Central dataset, from shoppers' label photos, and from Kroger.") {
-                        SettingsRow(icon: "building.columns.fill", iconTint: .verdictGood, label: "USDA FoodData Central", isLink: true) {
-                            if let url = URL(string: "https://fdc.nal.usda.gov") { openURL(url) }
-                        }
-                        SettingsRow(icon: "cart.fill", iconTint: .verdictGood, label: "Prices from Kroger", isLink: true) {
-                            if let url = URL(string: "https://www.kroger.com") { openURL(url) }
-                        }
-                        SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts (ODbL)", isLink: true) {
-                            if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
-                        }
-                        SettingsRow(icon: "trash.fill", iconTint: .smoke, label: "Clear scan history") {
-                            UserDefaults.standard.removeObject(forKey: "shrunk.recent_barcodes")
-                        }
-                    }
-                    sectionGroup(title: "About", subtitle: nil) {
-                        SettingsValueRow(icon: "info.circle.fill", iconTint: .smoke, label: "Version", value: versionString)
-                        SettingsValueRow(icon: "number", iconTint: .smoke, label: "Device ID", value: String(DeviceIdentity.current.prefix(8)))
-                        SettingsRow(icon: "hand.raised.fill", iconTint: .smoke, label: "Privacy policy", isLink: true) {
-                            if let url = URL(string: "https://stackcurious.com/shrunk/privacy") { openURL(url) }
-                        }
-                        SettingsRow(icon: "doc.text.fill", iconTint: .smoke, label: "Terms of service", isLink: true) {
-                            if let url = URL(string: "https://stackcurious.com/shrunk/terms") { openURL(url) }
-                        }
-                        SettingsRow(icon: "star.fill", iconTint: .verdictWarn, label: "Rate Shrunk") {
-                            requestReview()
-                        }
-                        SettingsShareRow()
-                    }
-                    positioningFooter
+                } header: {
+                    Text("Store")
+                } footer: {
+                    Text("Live prices and store alternatives come from the Kroger store you pick. Prices from Kroger.")
                 }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.bottom, 100)
+
+                Section {
+                    SettingsRow(icon: "bell.badge", iconTint: .shrunkRed, label: "Notification preferences") {
+                        showNotificationPrefs = true
+                    }
+                } header: {
+                    Text("Alerts & notifications")
+                } footer: {
+                    Text("Tune what fires and when. iOS controls master delivery — we control everything else.")
+                }
+
+                Section {
+                    SettingsRow(icon: "building.columns.fill", iconTint: .verdictGood, label: "USDA FoodData Central", isLink: true) {
+                        if let url = URL(string: "https://fdc.nal.usda.gov") { openURL(url) }
+                    }
+                    SettingsRow(icon: "cart.fill", iconTint: .verdictGood, label: "Prices from Kroger", isLink: true) {
+                        if let url = URL(string: "https://www.kroger.com") { openURL(url) }
+                    }
+                    SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts (ODbL)", isLink: true) {
+                        if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
+                    }
+                    SettingsRow(icon: "trash.fill", iconTint: .secondary, label: "Clear scan history") {
+                        UserDefaults.standard.removeObject(forKey: "shrunk.recent_barcodes")
+                    }
+                } header: {
+                    Text("Data sources")
+                } footer: {
+                    Text("Shrunk has no relationship with any brand or manufacturer. Size history comes from the USDA's public FoodData Central dataset, from shoppers' label photos, and from Kroger.")
+                }
+
+                Section("About") {
+                    LabeledContent {
+                        Text(versionString).monospacedDigit()
+                    } label: {
+                        Label("Version", systemImage: "info.circle.fill")
+                    }
+                    LabeledContent {
+                        Text(String(DeviceIdentity.current.prefix(8))).monospacedDigit()
+                    } label: {
+                        Label("Device ID", systemImage: "number")
+                    }
+                    SettingsRow(icon: "hand.raised.fill", iconTint: .secondary, label: "Privacy policy", isLink: true) {
+                        if let url = URL(string: "https://stackcurious.com/shrunk/privacy") { openURL(url) }
+                    }
+                    SettingsRow(icon: "doc.text.fill", iconTint: .secondary, label: "Terms of service", isLink: true) {
+                        if let url = URL(string: "https://stackcurious.com/shrunk/terms") { openURL(url) }
+                    }
+                    SettingsRow(icon: "star.fill", iconTint: .verdictWarn, label: "Rate Shrunk") {
+                        requestReview()
+                    }
+                    ShareLink(item: URL(string: "https://stackcurious.com/shrunk")!) {
+                        Label("Share Shrunk", systemImage: "square.and.arrow.up")
+                    }
+                }
+
+                Section {
+                    positioningFooter
+                        .listRowBackground(Color.clear)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Settings")
         }
-        .scrollIndicators(.hidden)
-        .background(Color.paper.ignoresSafeArea())
         .sheet(isPresented: $showPaywall) {
             ProPaywallView()
         }
@@ -76,101 +102,55 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Account hero
+    // MARK: - Account
 
-    private var accountCard: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(storeKit.isProUser ? AnyShapeStyle(LinearGradient.shrunkRedDiagonal) : AnyShapeStyle(Color.mist))
-                        .frame(width: 56, height: 56)
-                    Image(systemName: storeKit.isProUser ? "checkmark.seal.fill" : "person.fill")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(storeKit.isProUser ? .white : Color.smoke)
-                }
+    private var accountSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: storeKit.isProUser ? "checkmark.seal.fill" : "person.crop.circle")
+                    .font(.title2)
+                    .foregroundStyle(storeKit.isProUser ? Color.shrunkRed : Color.secondary)
+                    .frame(width: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(storeKit.isProUser ? "Shrunk Pro" : "Free plan")
-                        .font(.shrunkHeadline)
-                        .foregroundStyle(Color.ink)
-                    Text(storeKit.isProUser ? "Active — thanks for supporting independence." : "Watching, alerts, full alternatives are Pro.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smoke)
-                        .lineLimit(2)
+                        .font(.headline)
+                    Text(storeKit.isProUser
+                         ? "Active — thanks for supporting independence."
+                         : "Watching, alerts, full alternatives are Pro.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 if storeKit.isProUser {
                     ProBadge(style: .pill)
                 }
             }
+            .padding(.vertical, 4)
+
             if storeKit.isProUser {
-                HStack(spacing: 8) {
-                    smallButton("Savings", icon: "chart.line.uptrend.xyaxis") {
-                        showDashboard = true
-                    }
-                    smallButton("Restore", icon: "arrow.clockwise") {
-                        Task { await storeKit.restore() }
-                    }
-                }
-            } else {
-                ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
-                    showPaywall = true
+                SettingsRow(icon: "chart.line.uptrend.xyaxis", iconTint: .shrunkRed, label: "Savings") {
+                    showDashboard = true
                 }
                 Button("Restore purchases") {
                     Task { await storeKit.restore() }
                 }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.smoke)
-            }
-        }
-        .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
-    }
+            } else {
+                Button {
+                    showPaywall = true
+                } label: {
+                    Label("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")",
+                          systemImage: "lock.open.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
-    private func smallButton(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .bold))
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .foregroundStyle(Color.ink)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity)
-            .background(Color.mist)
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Section group
-
-    private func sectionGroup<Content: View>(title: String, subtitle: String?, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            Text(title.uppercased())
-                .font(.system(size: 11, weight: .heavy))
-                .tracking(0.8)
-                .foregroundStyle(Color.smoke)
-                .padding(.horizontal, ShrunkTheme.Spacing.sm)
-
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                    .stroke(Color.borderSoft, lineWidth: 0.5)
-            )
-            .shrunkElevation(ShrunkTheme.Elevation.whisper)
-
-            if let subtitle {
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.smoke)
-                    .padding(.horizontal, ShrunkTheme.Spacing.sm)
-                    .lineSpacing(2)
+                Button("Restore purchases") {
+                    Task { await storeKit.restore() }
+                }
             }
         }
     }
@@ -180,14 +160,14 @@ struct SettingsView: View {
     private var positioningFooter: some View {
         VStack(spacing: 4) {
             Text("They shrunk it. We caught them.")
-                .font(.system(size: 13, weight: .heavy))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color.shrunkRed)
             Text("Independent. No brand pays us. Ever.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.smoke)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, ShrunkTheme.Spacing.lg)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Helpers
@@ -205,8 +185,10 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Settings rows
+// MARK: - Settings row
 
+/// A tappable inset-grouped cell: tinted SF Symbol, title, and the disclosure
+/// (chevron for in-app, `arrow.up.right` for an external link).
 private struct SettingsRow: View {
     let icon: String
     let iconTint: Color
@@ -224,95 +206,18 @@ private struct SettingsRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(iconTint.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(iconTint)
+            HStack {
+                Label {
+                    Text(label).foregroundStyle(Color(.label))
+                } icon: {
+                    Image(systemName: icon).foregroundStyle(iconTint)
                 }
-                Text(label)
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Color.ink)
-                Spacer()
+                Spacer(minLength: 8)
                 Image(systemName: isLink ? "arrow.up.right" : "chevron.right")
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(Color.smokeSoft)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.md)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .background(Color.surface)
-            .overlay(
-                Rectangle()
-                    .fill(Color.borderSoft)
-                    .frame(height: 0.5),
-                alignment: .bottom
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct SettingsValueRow: View {
-    let icon: String
-    let iconTint: Color
-    let label: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(iconTint.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(iconTint)
-            }
-            Text(label)
-                .font(.system(size: 15))
-                .foregroundStyle(Color.ink)
-            Spacer()
-            Text(value)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(Color.smoke)
-        }
-        .padding(.horizontal, ShrunkTheme.Spacing.md)
-        .padding(.vertical, 12)
-        .overlay(
-            Rectangle()
-                .fill(Color.borderSoft)
-                .frame(height: 0.5),
-            alignment: .bottom
-        )
-    }
-}
-
-private struct SettingsShareRow: View {
-    var body: some View {
-        ShareLink(item: URL(string: "https://stackcurious.com/shrunk")!) {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.shrunkRed.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: "square.and.arrow.up.fill")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.shrunkRed)
-                }
-                Text("Share Shrunk")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.ink)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(Color.smokeSoft)
-            }
-            .padding(.horizontal, ShrunkTheme.Spacing.md)
-            .padding(.vertical, 12)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

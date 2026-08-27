@@ -95,33 +95,30 @@ struct LabelCaptureView: View {
         VStack {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .heavy))
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(Color.black.opacity(0.45))
-                        .clipShape(Circle())
                 }
                 .accessibilityLabel("Close")
                 Spacer()
             }
-            .padding(ShrunkTheme.Spacing.md)
+            .padding(16)
 
             Spacer()
 
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.white.opacity(0.85), lineWidth: 2)
                 .frame(height: 110)
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                .padding(.horizontal, 20)
 
             Text("Line up the net weight — \"NET WT 12 OZ\"")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(Color.black.opacity(0.5))
-                .clipShape(Capsule())
-                .padding(.top, ShrunkTheme.Spacing.md)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.top, 16)
 
             Spacer()
 
@@ -137,37 +134,35 @@ struct LabelCaptureView: View {
             }
             .disabled(camera.isCapturing || !camera.isRunning)
             .accessibilityLabel("Take label photo")
-            .padding(.bottom, ShrunkTheme.Spacing.xl)
+            .padding(.bottom, 32)
         }
     }
 
     private func busyOverlay(message: String) -> some View {
         ZStack {
             Color.black.opacity(0.6).ignoresSafeArea()
-            VStack(spacing: ShrunkTheme.Spacing.sm) {
+            VStack(spacing: 12) {
                 ProgressView().controlSize(.large).tint(.white)
                 Text(message)
-                    .font(.shrunkCallout)
+                    .font(.subheadline)
                     .foregroundStyle(.white)
             }
         }
     }
 
     private var permissionPrompt: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.8))
+        ContentUnavailableView {
+            Label("Camera access needed", systemImage: "camera.fill")
+        } description: {
             Text("Camera access is required to photograph a label.")
-                .font(.shrunkBody)
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-            ShrunkButton("Open Settings", variant: .ghost) {
+        } actions: {
+            Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
-        .padding(ShrunkTheme.Spacing.xl)
     }
 }

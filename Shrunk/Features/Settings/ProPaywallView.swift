@@ -97,27 +97,29 @@ struct ProPaywallView: View {
     @EnvironmentObject private var storeKit: StoreKitService
     @Environment(\.dismiss) private var dismiss
 
+    /// Opens large so the whole disclosure block is reachable; draggable down
+    /// to medium (spec §3, "Presentation").
+    @State private var detent: PresentationDetent = .large
+
     var body: some View {
         NavigationStack {
             ProPaywallContent()
-                .background(Color.paper.ignoresSafeArea())
+                .background(Color(.systemGroupedBackground))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             dismiss()
                         } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 13, weight: .heavy))
-                                .foregroundStyle(Color.ink)
-                                .frame(width: 32, height: 32)
-                                .background(Color.mist)
-                                .clipShape(Circle())
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
                         }
                         .accessibilityLabel("Close")
                     }
                 }
         }
+        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDragIndicator(.visible)
         .onChange(of: storeKit.isProUser) { _, isPro in
             if isPro { dismiss() }
         }
@@ -146,25 +148,20 @@ struct ProPaywallContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: ShrunkTheme.Spacing.lg) {
+            VStack(spacing: 24) {
                 hero
-                    .padding(.top, ShrunkTheme.Spacing.md)
+                    .padding(.top, 8)
                 if vm.isTrialEligible == true {
                     trialCallout
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 }
                 planPicker
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 valueProps
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 ctaSection
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 legal
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
             }
-            .padding(.bottom, ShrunkTheme.Spacing.xl)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 32)
         }
-        .scrollIndicators(.hidden)
         .task { await load() }
         .alert(
             "Couldn't complete purchase",
@@ -197,23 +194,16 @@ struct ProPaywallContent: View {
     // MARK: Hero
 
     private var hero: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient.shrunkRedDiagonal)
-                    .frame(width: 110, height: 110)
-                    .shrunkElevation(ShrunkTheme.Elevation.float)
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundStyle(.white)
-            }
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(Color.shrunkRed)
             VStack(spacing: 4) {
                 Text("Shrunk Pro")
-                    .font(.shrunkDisplay)
-                    .foregroundStyle(Color.ink)
+                    .font(.largeTitle.bold())
                 Text("Catch every shrink on the shelf you actually shop.")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color.smoke)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
         }
@@ -222,34 +212,22 @@ struct ProPaywallContent: View {
     // MARK: Trial callout
 
     private var trialCallout: some View {
-        HStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(Color.verdictGoodTint)
-                    .frame(width: 44, height: 44)
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Color.verdictGood)
-            }
+        HStack(spacing: 12) {
+            Image(systemName: "gift.fill")
+                .font(.title3)
+                .foregroundStyle(Color.verdictGood)
+                .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Your first 7 days are free")
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundStyle(Color.ink)
+                    .font(.headline)
                 Text("On the yearly plan. Cancel any time before it ends and you pay nothing.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.verdictGood.opacity(0.25), lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
+        .groupedCard()
     }
 
     // MARK: Plans
@@ -279,45 +257,43 @@ struct ProPaywallContent: View {
         return Button {
             vm.selectedPlan = plan
         } label: {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.shrunkRed : Color.smokeSoft)
+            HStack(spacing: 12) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(isSelected ? Color.shrunkRed : Color(.tertiaryLabel))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(.system(size: 16, weight: .heavy))
-                            .foregroundStyle(Color.ink)
+                            .font(.headline)
                         if let badge {
                             Text(badge)
-                                .font(.system(size: 11, weight: .heavy))
-                                .foregroundStyle(Color.white)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color.verdictGood)
-                                .clipShape(Capsule())
+                                .background(Color.verdictGood, in: Capsule())
                         }
                     }
                     Text(caption)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smoke)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 Text(price)
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color.ink)
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
             }
-            .padding(ShrunkTheme.Spacing.md)
-            .background(isSelected ? Color.shrunkRedLight : Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
+            .foregroundStyle(Color(.label))
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                    .stroke(isSelected ? Color.shrunkRed : Color.borderSoft,
-                            lineWidth: isSelected ? 2 : 0.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isSelected ? Color.shrunkRed : Color.clear, lineWidth: 2)
             )
-            .shrunkElevation(isSelected ? ShrunkTheme.Elevation.card : ShrunkTheme.Elevation.whisper)
-            .animation(.spring(response: 0.3, dampingFraction: 0.78), value: isSelected)
+            .animation(.easeOut(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
@@ -327,7 +303,7 @@ struct ProPaywallContent: View {
     // MARK: Value props
 
     private var valueProps: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             valueRow(icon: "bell.badge.fill", color: .shrunkRed,
                      title: "Watchlist alerts",
                      body: "Push the moment a watched product shrinks or its price per unit jumps 5%.")
@@ -344,37 +320,30 @@ struct ProPaywallContent: View {
                      title: "Real savings dashboard",
                      body: "What each shrink actually costs you a year, from observed sizes and prices.")
         }
+        .background(Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func valueRow(icon: String, color: Color, title: String, body: String) -> some View {
-        HStack(alignment: .top, spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(color.opacity(0.14))
-                    .frame(width: 40, height: 40)
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(color)
-            }
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.headline)
                 Text(body)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
-                    .lineSpacing(1)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
+        .padding(16)
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 56)
+        }
     }
 
     // MARK: CTA
@@ -390,8 +359,8 @@ struct ProPaywallContent: View {
                 }
                 if let skipTitle, let onSkip {
                     Button(skipTitle) { onSkip() }
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.smoke)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
@@ -401,11 +370,10 @@ struct ProPaywallContent: View {
         VStack(spacing: 10) {
             VStack(spacing: 4) {
                 Text("Couldn't load plans")
-                    .font(.system(size: 15, weight: .heavy))
-                    .foregroundStyle(Color.ink)
+                    .font(.headline)
                 Text(message)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -414,8 +382,8 @@ struct ProPaywallContent: View {
             }
             if let skipTitle, let onSkip {
                 Button(skipTitle) { onSkip() }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.smoke)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -447,8 +415,7 @@ struct ProPaywallContent: View {
                 }
             }
             .disabled(storeKit.purchaseInProgress)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(Color.smoke)
+            .font(.subheadline)
 
             HStack(spacing: 16) {
                 Button("Terms") {
@@ -458,26 +425,25 @@ struct ProPaywallContent: View {
                     if let url = URL(string: "https://stackcurious.com/shrunk/privacy") { openURL(url) }
                 }
             }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color.smoke)
+            .font(.subheadline)
 
             Text(vm.fineprint)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.smokeSoft)
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(ProPaywallViewModel.autoRenewalDisclosure)
-                .font(.system(size: 11))
-                .foregroundStyle(Color.smokeSoft)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("Independent. No brand pays us. Ever.")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.shrunkRed)
         }
-        .padding(.top, ShrunkTheme.Spacing.sm)
+        .padding(.top, 8)
     }
 }
 

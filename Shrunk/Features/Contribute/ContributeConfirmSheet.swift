@@ -8,35 +8,38 @@ struct ContributeConfirmSheet: View {
     @FocusState private var quantityFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.lg) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Check the size")
-                    .font(.shrunkTitle)
-                    .foregroundStyle(Color.ink)
+                    .font(.title2.bold())
                 if vm.sourceLine.isEmpty {
                     Text("We couldn't read a net-content line. Type the size from the label.")
-                        .font(.shrunkCallout)
-                        .foregroundStyle(Color.smoke)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 } else {
                     Text("From the label: \(vm.sourceLine)")
-                        .font(.shrunkMonoSmall)
-                        .foregroundStyle(Color.smoke)
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
             }
 
-            VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-                Text("QUANTITY").shrunkSectionLabel()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Quantity")
+                    .font(.headline)
                 TextField("0", text: $vm.quantityText)
                     .keyboardType(.decimalPad)
                     .focused($quantityFocused)
-                    .font(.shrunkMonoBig)
-                    .foregroundStyle(Color.ink)
-                    .padding(ShrunkTheme.Spacing.md)
-                    .background(Color.mist)
-                    .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
+                    .font(.title.weight(.semibold))
+                    .monospacedDigit()
+                    .padding(12)
+                    .background(Color(.tertiarySystemFill),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                Text("UNIT").shrunkSectionLabel()
+                Text("Unit")
+                    .font(.headline)
+                    .padding(.top, 4)
                 Picker("Unit", selection: $vm.unitKind) {
                     ForEach(UnitKind.allCases, id: \.self) { kind in
                         Text(kind.displayLabel).tag(kind)
@@ -47,7 +50,7 @@ struct ContributeConfirmSheet: View {
 
             Spacer(minLength: 0)
 
-            VStack(spacing: ShrunkTheme.Spacing.sm) {
+            VStack(spacing: 8) {
                 ShrunkButton(
                     "Submit",
                     icon: "checkmark",
@@ -60,8 +63,8 @@ struct ContributeConfirmSheet: View {
                 ShrunkButton("Retake photo", icon: "arrow.counterclockwise", variant: .ghost, action: onRetake)
             }
         }
-        .padding(ShrunkTheme.Spacing.lg)
-        .background(Color.paper.ignoresSafeArea())
+        .padding(20)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .onAppear { quantityFocused = vm.quantityText.isEmpty }
     }
 }

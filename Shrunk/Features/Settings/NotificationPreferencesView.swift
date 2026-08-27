@@ -17,20 +17,17 @@ struct NotificationPreferencesView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: ShrunkTheme.Spacing.lg) {
-                    iosAuthorizationCard
-                    masterControlsCard
-                    alertKindsCard
-                    quietHoursCard
-                    thresholdCard
-                    footer
+            Form {
+                authorizationSection
+                masterSection
+                alertKindsSection
+                quietHoursSection
+                thresholdSection
+
+                Section {
+                    footer.listRowBackground(Color.clear)
                 }
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                .padding(.vertical, ShrunkTheme.Spacing.lg)
             }
-            .scrollIndicators(.hidden)
-            .background(Color.paper.ignoresSafeArea())
             .navigationTitle("Notifications")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -38,13 +35,10 @@ struct NotificationPreferencesView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(Color.ink)
-                            .frame(width: 32, height: 32)
-                            .background(Color.mist)
-                            .clipShape(Circle())
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel("Close")
                 }
             }
         }
@@ -67,53 +61,45 @@ struct NotificationPreferencesView: View {
         }
     }
 
-    // MARK: - iOS authorization card
+    // MARK: - iOS authorization
 
-    private var iosAuthorizationCard: some View {
+    @ViewBuilder
+    private var authorizationSection: some View {
         let granted = iosStatus == .authorized || iosStatus == .provisional
-        return HStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(granted ? Color.verdictGoodTint : Color.shrunkRedLight)
-                    .frame(width: 44, height: 44)
+        Section {
+            HStack(spacing: 12) {
                 Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 19, weight: .bold))
+                    .font(.title3)
                     .foregroundStyle(granted ? Color.verdictGood : Color.shrunkRed)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(granted ? "Notifications are on" : "Notifications need permission")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundStyle(Color.ink)
-                Text(granted ? "iOS will deliver Shrunk alerts." : "Without this, we can detect shrinks but can't tell you.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
-            if !granted {
-                Button("Open") {
-                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
-                        openURL(url)
-                    }
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(granted ? "Notifications are on" : "Notifications need permission")
+                        .font(.headline)
+                    Text(granted
+                         ? "iOS will deliver Shrunk alerts."
+                         : "Without this, we can detect shrinks but can't tell you.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.shrunkRed)
+                Spacer(minLength: 0)
+                if !granted {
+                    Button("Open") {
+                        if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                            openURL(url)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
+            .padding(.vertical, 4)
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
     }
 
-    // MARK: - Master controls
+    // MARK: - Master
 
-    private var masterControlsCard: some View {
-        VStack(spacing: 0) {
+    private var masterSection: some View {
+        Section {
             preferenceToggle(
                 title: "Pause all alerts",
                 subtitle: "Keep watching but don't notify me right now.",
@@ -122,19 +108,12 @@ struct NotificationPreferencesView: View {
                 isOn: Binding(get: { prefs.paused }, set: { prefs.paused = $0 })
             )
         }
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
     }
 
     // MARK: - Alert kinds
 
-    private var alertKindsCard: some View {
-        VStack(spacing: 0) {
+    private var alertKindsSection: some View {
+        Section("What fires") {
             preferenceToggle(
                 title: "Size drops",
                 subtitle: "A product you watch got smaller.",
@@ -142,7 +121,6 @@ struct NotificationPreferencesView: View {
                 tint: .shrunkRed,
                 isOn: Binding(get: { prefs.sizeDropEnabled }, set: { prefs.sizeDropEnabled = $0 })
             )
-            Divider().overlay(Color.borderSoft)
             preferenceToggle(
                 title: "Price per unit up",
                 subtitle: "Up 5% or more at your store.",
@@ -150,7 +128,6 @@ struct NotificationPreferencesView: View {
                 tint: .verdictWarn,
                 isOn: Binding(get: { prefs.priceHikeEnabled }, set: { prefs.priceHikeEnabled = $0 })
             )
-            Divider().overlay(Color.borderSoft)
             preferenceToggle(
                 title: "Verified cases",
                 subtitle: "We publish a confirmed shrink for something you watch.",
@@ -158,7 +135,6 @@ struct NotificationPreferencesView: View {
                 tint: .verdictGood,
                 isOn: Binding(get: { prefs.verifiedCaseEnabled }, set: { prefs.verifiedCaseEnabled = $0 })
             )
-            Divider().overlay(Color.borderSoft)
             preferenceToggle(
                 title: "Weekly digest",
                 subtitle: "Monday summary of what shrank in your categories.",
@@ -167,19 +143,12 @@ struct NotificationPreferencesView: View {
                 isOn: Binding(get: { prefs.digestEnabled }, set: { prefs.digestEnabled = $0 })
             )
         }
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
     }
 
     // MARK: - Quiet hours
 
-    private var quietHoursCard: some View {
-        VStack(spacing: 0) {
+    private var quietHoursSection: some View {
+        Section {
             preferenceToggle(
                 title: "Quiet hours",
                 subtitle: "Applies to on-device checks only — server alerts still arrive as they happen.",
@@ -189,99 +158,62 @@ struct NotificationPreferencesView: View {
             )
 
             if prefs.quietHoursEnabled {
-                Divider().overlay(Color.borderSoft)
                 hourPickerRow(
                     label: "From",
                     hour: Binding(get: { prefs.quietHoursStartHour }, set: { prefs.quietHoursStartHour = $0 })
                 )
-                Divider().overlay(Color.borderSoft)
                 hourPickerRow(
                     label: "Until",
                     hour: Binding(get: { prefs.quietHoursEndHour }, set: { prefs.quietHoursEndHour = $0 })
                 )
             }
         }
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
     }
 
     private func hourPickerRow(label: String, hour: Binding<Int>) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 15))
-                .foregroundStyle(Color.ink)
-                .padding(.leading, ShrunkTheme.Spacing.md)
-            Spacer()
-            Picker(label, selection: hour) {
-                ForEach(0..<24, id: \.self) { h in
-                    Text(NotificationPreferences.hourLabel(h)).tag(h)
-                }
+        Picker(label, selection: hour) {
+            ForEach(0..<24, id: \.self) { h in
+                Text(NotificationPreferences.hourLabel(h)).tag(h)
             }
-            .pickerStyle(.menu)
-            .tint(Color.shrunkRed)
-            .padding(.trailing, 4)
         }
-        .padding(.vertical, 10)
     }
 
     // MARK: - Threshold
 
-    private var thresholdCard: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.shrunkRedLight)
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "ruler.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color.shrunkRed)
+    private var thresholdSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent {
+                    Text(thresholdLabel)
+                        .font(.headline)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.shrunkRedDark)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Minimum shrink size")
+                        Text("Ignore changes below this threshold.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 1) {
+
+                Slider(
+                    value: Binding(
+                        get: { prefs.minimumShrinkPercent },
+                        set: { prefs.minimumShrinkPercent = $0 }
+                    ),
+                    in: 0.01...0.20,
+                    step: 0.01
+                ) {
                     Text("Minimum shrink size")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.ink)
-                    Text("Ignore changes below this threshold.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smoke)
+                } minimumValueLabel: {
+                    Text("1%").font(.caption2).monospacedDigit().foregroundStyle(.secondary)
+                } maximumValueLabel: {
+                    Text("20%").font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text(thresholdLabel)
-                    .font(.system(size: 16, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(Color.shrunkRedDark)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.shrunkRedLight)
-                    .clipShape(Capsule())
             }
-            Slider(
-                value: Binding(
-                    get: { prefs.minimumShrinkPercent },
-                    set: { prefs.minimumShrinkPercent = $0 }
-                ),
-                in: 0.01...0.20,
-                step: 0.01
-            )
-            .tint(Color.shrunkRed)
-            HStack {
-                Text("1%").font(.system(size: 11)).foregroundStyle(Color.smokeSoft)
-                Spacer()
-                Text("20%").font(.system(size: 11)).foregroundStyle(Color.smokeSoft)
-            }
+            .padding(.vertical, 4)
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
     }
 
     private var thresholdLabel: String {
@@ -291,44 +223,31 @@ struct NotificationPreferencesView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             Text("Background sweeps run roughly daily, when iOS allows.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.smokeSoft)
             Text("You can also pull-to-refresh your Watchlist any time.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.smokeSoft)
         }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
         .multilineTextAlignment(.center)
-        .padding(.top, ShrunkTheme.Spacing.md)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Shared toggle row
 
     private func preferenceToggle(title: String, subtitle: String, icon: String, tint: Color, isOn: Binding<Bool>) -> some View {
-        HStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(tint.opacity(0.14))
-                    .frame(width: 40, height: 40)
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(tint)
+        Toggle(isOn: isOn) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } icon: {
+                Image(systemName: icon).foregroundStyle(tint)
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 8)
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .tint(Color.shrunkRed)
         }
-        .padding(ShrunkTheme.Spacing.md)
     }
 }

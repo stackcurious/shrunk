@@ -12,10 +12,10 @@ struct AlternativesView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: ShrunkTheme.Spacing.md) {
+                VStack(spacing: 16) {
                     headerStrip
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                        .padding(.top, ShrunkTheme.Spacing.md)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
 
                     if vm.alternatives.isEmpty {
                         EmptyStateView(
@@ -26,12 +26,12 @@ struct AlternativesView: View {
                     } else {
                         if vm.isCurated {
                             Text("Verified cases in this category")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.smoke)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                                .padding(.horizontal, 20)
                         }
-                        VStack(spacing: ShrunkTheme.Spacing.md) {
+                        VStack(spacing: 12) {
                             ForEach(Array(vm.alternatives.enumerated()), id: \.element.id) { idx, alt in
                                 AlternativeRow(
                                     alternative: alt,
@@ -40,31 +40,30 @@ struct AlternativesView: View {
                                 )
                             }
                         }
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                        .padding(.horizontal, 20)
 
                         if !storeKit.isProUser, vm.hiddenCount > 0 {
                             unlockMoreCTA
-                                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                                .padding(.horizontal, 20)
                         }
                     }
 
                     if !vm.isCurated {
                         Text(LivePrice.attribution)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.smoke)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity)
-                            .padding(.top, ShrunkTheme.Spacing.sm)
+                            .padding(.top, 8)
                     }
                 }
-                .padding(.bottom, ShrunkTheme.Spacing.xl)
+                .padding(.bottom, 32)
             }
-            .background(Color.paper)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Alternatives")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
-                        .foregroundStyle(Color.shrunkRed)
                         .fontWeight(.semibold)
                 }
             }
@@ -83,59 +82,43 @@ struct AlternativesView: View {
     // MARK: - Header strip
 
     private var headerStrip: some View {
-        HStack(alignment: .top, spacing: ShrunkTheme.Spacing.sm) {
+        HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Comparing against")
-                    .font(.system(size: 11, weight: .semibold))
-                    .tracking(0.4)
-                    .foregroundStyle(Color.smoke)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Text(vm.headerCostPerUnitText())
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
                     .lineLimit(2)
             }
-            Spacer()
+            Spacer(minLength: 8)
             if vm.sourceRecord.verdict.isShrink {
                 Text("you're overpaying")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(0.4)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.shrunkRed)
-                    .clipShape(Capsule())
+                    .background(Color.shrunkRed, in: Capsule())
             }
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                .stroke(Color.border, lineWidth: 1)
-        )
+        .groupedCard()
     }
 
     private var unlockMoreCTA: some View {
-        VStack(spacing: ShrunkTheme.Spacing.sm) {
+        VStack(spacing: 12) {
             HStack(spacing: 6) {
                 ProBadge(style: .pill)
                 Text("\(vm.hiddenCount) more alternatives")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.headline)
+                    .monospacedDigit()
             }
             ShrunkButton("Unlock with Pro", icon: "lock.open.fill") {
                 vm.showPaywall = true
             }
         }
-        .padding(ShrunkTheme.Spacing.md)
         .frame(maxWidth: .infinity)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                .stroke(Color.border, lineWidth: 1)
-        )
+        .groupedCard()
     }
 
 }

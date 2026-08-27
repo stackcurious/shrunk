@@ -7,27 +7,21 @@ struct StoreStep: View {
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.md) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Where do you shop?")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
+                    .font(.largeTitle.bold())
                 Text("Pick your Kroger and every scan shows the shelf price and the real cost per ounce. You can change it any time in Settings.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .lineSpacing(3)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
 
             if !storeName.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Color.verdictGoodDeep)
-                    Text(storeName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.ink)
-                }
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                Label(storeName, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.verdictGoodDeep)
+                    .padding(.horizontal, 20)
             }
 
             StorePickerView(embedded: true)

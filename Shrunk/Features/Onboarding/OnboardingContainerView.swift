@@ -10,15 +10,15 @@ struct OnboardingContainerView: View {
 
     var body: some View {
         ZStack {
-            Color.paper.ignoresSafeArea()
+            Color(.systemGroupedBackground).ignoresSafeArea()
             VStack(spacing: 0) {
                 topBar
                 progressBar
                 pageContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 ctaSection
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                    .padding(.bottom, ShrunkTheme.Spacing.lg)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
             }
         }
         .onChange(of: vm.profile) { _, profile in
@@ -43,58 +43,39 @@ struct OnboardingContainerView: View {
     private var topBar: some View {
         HStack {
             if vm.step == .welcome {
-                HStack(spacing: 6) {
-                    Image(systemName: "barcode.viewfinder")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.shrunkRed)
-                    Text("SHRUNK")
-                        .font(.system(size: 13, weight: .heavy))
-                        .tracking(1.6)
-                        .foregroundStyle(Color.ink)
-                }
+                Label("SHRUNK", systemImage: "barcode.viewfinder")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.shrunkRed)
             } else {
                 Button {
                     vm.back()
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 15, weight: .heavy))
-                        .foregroundStyle(Color.ink)
-                        .frame(width: 36, height: 36)
-                        .background(Color.mist)
-                        .clipShape(Circle())
+                        .font(.headline)
                 }
                 .accessibilityLabel("Back")
             }
             Spacer()
             if vm.step.allowsSkip {
                 Button("Skip") { vm.skipStore() }
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.smoke)
+                    .font(.body)
             }
         }
-        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+        .padding(.horizontal, 20)
         .frame(height: 52)
     }
 
     @ViewBuilder
     private var progressBar: some View {
         if vm.step.showsProgress {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.border)
-                        .frame(height: 4)
-                    Capsule()
-                        .fill(LinearGradient.shrunkRedDiagonal)
-                        .frame(width: geo.size.width * vm.progressFraction, height: 4)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: vm.progressFraction)
-                }
-            }
-            .frame(height: 4)
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.bottom, ShrunkTheme.Spacing.md)
+            ProgressView(value: vm.progressFraction)
+                .progressViewStyle(.linear)
+                .animation(.easeOut(duration: 0.3), value: vm.progressFraction)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+                .accessibilityLabel("Setup progress")
         } else {
-            Color.clear.frame(height: 4 + ShrunkTheme.Spacing.md)
+            Color.clear.frame(height: 4 + 16)
         }
     }
 
@@ -120,8 +101,7 @@ struct OnboardingContainerView: View {
             ShrunkButton(ctaTitle, icon: "arrow.right", isLoading: false) {
                 vm.advance()
             }
-            .opacity(vm.canAdvance ? 1 : 0.35)
-            .allowsHitTesting(vm.canAdvance)
+            .disabled(!vm.canAdvance)
             .animation(.easeOut(duration: 0.15), value: vm.canAdvance)
         }
     }
@@ -142,24 +122,21 @@ private struct WelcomeStep: View {
     @State private var arrowDrop: CGFloat = -10
 
     var body: some View {
-        VStack(spacing: ShrunkTheme.Spacing.xl) {
-            Spacer(minLength: ShrunkTheme.Spacing.md)
+        VStack(spacing: 32) {
+            Spacer(minLength: 16)
             illustration
                 .frame(maxWidth: .infinity)
-            VStack(spacing: ShrunkTheme.Spacing.md) {
+            VStack(spacing: 12) {
                 Text("They're shrinking your groceries.")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
+                    .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
-                    .lineSpacing(2)
                 Text("Same price. Less product. Scan a barcode and see exactly what changed.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.smoke)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, ShrunkTheme.Spacing.md)
+                    .padding(.horizontal, 16)
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
             Spacer()
         }
     }
@@ -172,26 +149,27 @@ private struct WelcomeStep: View {
                 .blur(radius: 12)
                 .opacity(0.7)
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.surface)
+                .fill(Color(.secondarySystemGroupedBackground))
                 .frame(width: 156, height: 196)
                 .rotationEffect(.degrees(-6))
                 .offset(x: -22, y: 6)
-                .shrunkElevation(ShrunkTheme.Elevation.card)
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.surface)
+                .fill(Color(.secondarySystemGroupedBackground))
                 .frame(width: 156, height: 196)
                 .overlay(
                     VStack(alignment: .leading, spacing: 8) {
-                        Capsule().fill(Color.mist).frame(width: 80, height: 8)
-                        Capsule().fill(Color.mist).frame(width: 110, height: 8)
-                        Capsule().fill(Color.mist).frame(width: 60, height: 8)
+                        Capsule().fill(Color(.tertiarySystemFill)).frame(width: 80, height: 8)
+                        Capsule().fill(Color(.tertiarySystemFill)).frame(width: 110, height: 8)
+                        Capsule().fill(Color(.tertiarySystemFill)).frame(width: 60, height: 8)
                         Spacer()
                         Capsule()
                             .fill(Color.shrunkRedLight)
                             .frame(width: 90, height: 24)
                             .overlay(
                                 Text("$1.89")
-                                    .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                                    .font(.footnote.weight(.semibold))
+                                    .monospacedDigit()
                                     .foregroundStyle(Color.shrunkRedDark)
                             )
                     }
@@ -199,14 +177,13 @@ private struct WelcomeStep: View {
                 )
                 .rotationEffect(.degrees(4))
                 .offset(x: 18, y: -2)
-                .shrunkElevation(ShrunkTheme.Elevation.card)
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
             ZStack {
                 Circle()
-                    .fill(LinearGradient.shrunkRedDiagonal)
+                    .fill(Color.shrunkRed)
                     .frame(width: 78, height: 78)
-                    .shrunkElevation(ShrunkTheme.Elevation.float)
                 Image(systemName: "arrow.down")
-                    .font(.system(size: 32, weight: .black))
+                    .font(.system(size: 32, weight: .bold))
                     .foregroundStyle(.white)
             }
             .offset(x: 84, y: arrowDrop)
@@ -229,23 +206,16 @@ private struct CategoriesStep: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.lg) {
-                VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-                    Text("WHAT YOU BUY")
-                        .font(.system(size: 11, weight: .heavy))
-                        .tracking(1.2)
-                        .foregroundStyle(Color.smoke)
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text("What do you buy most?")
-                        .font(.shrunkLargeTitle)
-                        .foregroundStyle(Color.ink)
-                        .lineSpacing(2)
+                        .font(.largeTitle.bold())
                         .fixedSize(horizontal: false, vertical: true)
                     Text("We'll watch these categories and send you the weekly digest.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color.smoke)
-                        .lineSpacing(2)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.top, ShrunkTheme.Spacing.sm)
+                .padding(.top, 8)
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(GroceryCategory.allCases) { category in
@@ -258,10 +228,9 @@ private struct CategoriesStep: View {
                     }
                 }
 
-                VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("How often do you shop?")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.ink)
+                        .font(.headline)
                     Picker("How often do you shop?", selection: Binding(
                         get: { vm.profile.shopFrequency },
                         set: { vm.selectFrequency($0) }
@@ -272,15 +241,14 @@ private struct CategoriesStep: View {
                     }
                     .pickerStyle(.segmented)
                     Text("Sets how many times a year we count each shrink against you.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smokeSoft)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.top, ShrunkTheme.Spacing.sm)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.bottom, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .scrollIndicators(.hidden)
     }
 }
 
@@ -292,30 +260,30 @@ private struct CategoryToggle: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(isSelected ? Color.shrunkRed : Color.shrunkRedLight)
-                        .frame(width: 50, height: 50)
-                    Image(systemName: category.icon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(isSelected ? .white : Color.shrunkRed)
-                }
+                Image(systemName: category.icon)
+                    .font(.title)
+                    .foregroundStyle(Color.shrunkRed)
+                    .frame(height: 36)
                 Text(category.label)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(Color(.label))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 18)
-            .background(isSelected ? Color.shrunkRedLight : Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
+            .background(Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                    .stroke(isSelected ? Color.shrunkRed : Color.borderSoft,
-                            lineWidth: isSelected ? 2 : 0.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isSelected ? Color.shrunkRed : Color.clear, lineWidth: 2)
             )
-            .shrunkElevation(isSelected ? ShrunkTheme.Elevation.card : ShrunkTheme.Elevation.whisper)
-            .scaleEffect(isSelected ? 1.02 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.78), value: isSelected)
+            .overlay(alignment: .topTrailing) {
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.shrunkRed)
+                        .padding(8)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: isSelected)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
