@@ -146,4 +146,11 @@ describe("APNsSender", () => {
       ok: false, status: 500, invalidToken: false,
     });
   });
+
+  it("does not blame the token for a 500 whose body happens to mention BadDeviceToken", async () => {
+    stubFetch([{ status: 500, body: JSON.stringify({ reason: "BadDeviceToken" }) }]);
+    expect(await new APNsSender(apnsEnv).send(TOKEN, { title: "a", body: "b", kind: "sizeDrop" })).toEqual({
+      ok: false, status: 500, invalidToken: false,
+    });
+  });
 });

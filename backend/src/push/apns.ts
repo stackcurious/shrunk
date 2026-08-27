@@ -69,7 +69,7 @@ export class APNsSender implements PushSender {
     return {
       ok: false,
       status: res.status,
-      invalidToken: res.status === 410 || text.includes("BadDeviceToken"),
+      invalidToken: res.status === 410 || (res.status === 400 && text.includes("BadDeviceToken")),
     };
   }
 }
