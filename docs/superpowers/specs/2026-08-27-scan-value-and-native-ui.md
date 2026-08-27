@@ -30,8 +30,8 @@ Root cause of the Watch bug: `ResultView.addToWatchlist` and `WatchlistService.a
 | Not found | "Not in our database yet" (existing) | — | Snap the label | — |
 
 Watch button semantics (`ResultViewModel.watchOutcome(record:isPro:) -> WatchOutcome` — pure, unit-tested):
+- `.needsLabel` when there is no current size (button title "Snap the label to start tracking") — checked **before** the paywall: label capture is free and is the only action that can unblock watching, so a size-less product must never paywall (ruling 2026-08-27, wave 1)
 - `.paywall` when `!isPro`
-- `.needsLabel` when there is no current size (button title "Snap the label to start tracking")
 - `.watch` otherwise → `WatchlistService.add` (which now accepts a single observation) → toast "Watching ‹name› — we'll alert you if it shrinks or its price per oz jumps"; button becomes "On your watchlist" (disabled), as today.
 - `.alreadyWatched` when `WatchlistService.fetch(barcode:)` returns a row → button starts in the watched state (today it forgets on re-open).
 
