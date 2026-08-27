@@ -39,6 +39,7 @@ krogerRoute.use("/v1/kroger/*", async (c, next) => {
  */
 function upstreamError(c: Ctx, err: unknown): Response {
   const status = err instanceof KrogerError ? err.status : 0;
+  if (status === 0) console.error("kroger: unexpected upstream failure", err instanceof Error ? `${err.name}: ${err.message}` : String(err));
   if (status === 401) return c.json({ error: "kroger_upstream", status: 401 }, 401);
   if (status === 429) return c.json({ error: "kroger_upstream", status: 429 }, 429);
   return c.json({ error: "kroger_upstream", status }, 502);

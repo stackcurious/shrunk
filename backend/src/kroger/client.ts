@@ -61,7 +61,9 @@ export const KROGER_BATCH_LIMIT = 50;
 export class KrogerClient {
   constructor(
     private readonly env: Env,
-    private readonly fetchImpl: typeof fetch = fetch,
+    // Wrapped so `this.fetchImpl(...)` never invokes the global fetch with a class instance as `this`
+    // (workerd throws "Illegal invocation" for that; vitest's stub does not, which is why tests never saw it).
+    private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   /** Client-credentials token, cached in KV for 25 minutes. */
