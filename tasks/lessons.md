@@ -10,3 +10,7 @@
 ## 2026-08-26 — simulator crash during a subagent test run
 - The user surfaced a SIGABRT crash report from the simulator: a new XCTest force-cast a JSON request body (`as! [String: String]`) whose values were arrays/objects → `swift_dynamicCastFailure` aborts the whole test process, so the run ends with **no** `Executed … tests` line.
 - Rule: briefs and dispatches say "never `as!` on decoded JSON in tests — `as? [String: Any]` and assert per key"; a report without a literal `Executed … tests` / `** TEST SUCCEEDED **` pair is a failed run, and the newest `~/Library/Logs/DiagnosticReports/Shrunk-*.ips` names the test (frame list of the faulting thread).
+
+## 2026-08-27 — identifier casing surfaced late (phase-5 review C3 / R40–R42)
+- The iOS app minted uppercase UUIDs, the Worker stored ids as sent, and a new admin route lowercased — three phases in, nothing had defined the canonical form.
+- Rule: the spec/plan must name the canonical representation of every cross-system identifier (case, padding, encoding) and one normaliser per side; reviewers check "who normalises, where" for any id that crosses a boundary.
