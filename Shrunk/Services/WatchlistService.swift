@@ -67,14 +67,22 @@ final class WatchlistService {
 
     // MARK: - Backend sync
 
-    /// Fire and forget — the UI never waits on the network (spec §8).
+    /// Fire and forget — the UI never waits on the network (spec §8). A local
+    /// CRUD change always syncs, even to push an emptied list.
     private func scheduleSync() {
-        Task { await syncToBackend() }
+        Task { await syncToBackend(force: true) }
     }
 
     /// Posts the whole watch list to `/v1/devices`; the Worker replaces its
     /// copy wholesale (spec §6.1). Never throws.
-    func syncToBackend() async {
+    ///
+    /// Periodic/foreground callers (`ShrunkApp`'s scenePhase and BGAppRefresh
+    /// paths) leave `force` at its default and skip the network call when the
+    /// list is empty — there's nothing new for the Worker to learn. A caller
+    /// that just changed the list (add/remove/toggle, via `scheduleSync`)
+    /// passes `force: true` so removing the last watch still tells the Worker
+    /// to clear its copy.
+    func syncToBackend(force: Bool = false) async {
         let payload: [DeviceWatch]
         do {
             payload = try all().map {
@@ -83,6 +91,7 @@ final class WatchlistService {
         } catch {
             return
         }
+        guard force || !payload.isEmpty else { return }
         await sync.syncDevice(
             deviceId: DeviceIdentity.current,
             transactionJWS: "",
@@ -121,12 +130,27 @@ final class WatchlistService {
             else { continue }
 
             item.lastChecked = Date()
-            if abs(quantity - item.lastKnownSize) / item.lastKnownSize > 0.01 {
-                context.insert(ShrinkAlert.unconfirmed(from: item, liveQuantity: quantity))
-                mismatches.append((item, quantity))
-            }
+            guard abs(quantity - item.lastKnownSize) / item.lastKnownSize > 0.01 else { continue }
+
+            let alreadyFiled = (try? alreadyFiledUnconfirmedAlert(barcode: item.barcode, liveQuantity: quantity)) ?? false
+            guard !alreadyFiled else { continue }
+
+            context.insert(ShrinkAlert.unconfirmed(from: item, liveQuantity: quantity))
+            mismatches.append((item, quantity))
         }
         try? context.save()
         return mismatches
+    }
+
+    /// True when an `.unconfirmed` alert already sits in the feed for this
+    /// barcode at this exact live quantity, so `liveSizeCheck()` doesn't
+    /// re-file (and re-push) the same hint on every refresh. A live size that
+    /// changes again is still new information and gets its own alert.
+    private func alreadyFiledUnconfirmedAlert(barcode: String, liveQuantity: Double) throws -> Bool {
+        let unconfirmedRaw = ShrinkAlert.Kind.unconfirmed.rawValue
+        let descriptor = FetchDescriptor<ShrinkAlert>(
+            predicate: #Predicate { $0.barcode == barcode && $0.kindRaw == unconfirmedRaw }
+        )
+        return try context.fetch(descriptor).contains { $0.currentQuantity == liveQuantity }
     }
 }

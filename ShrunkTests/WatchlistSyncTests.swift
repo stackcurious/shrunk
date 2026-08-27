@@ -154,4 +154,57 @@ final class WatchlistSyncTests: XCTestCase {
         let mismatches = await service.liveSizeCheck()
         XCTAssertTrue(mismatches.isEmpty)
     }
+
+    func test_liveSizeCheckDoesNotRefileTheSameUnconfirmedAlert() async throws {
+        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        store.live["0052000133417"] = livePrice("0052000133417", quantity: 828.058)
+
+        let first = await service.liveSizeCheck()
+        XCTAssertEqual(first.count, 1)
+
+        let second = await service.liveSizeCheck()
+        XCTAssertTrue(second.isEmpty, "the same mismatch shouldn't be re-filed on the next refresh")
+
+        let filed = try alerts()
+        XCTAssertEqual(filed.count, 1)
+    }
+
+    func test_liveSizeCheckFilesANewAlertWhenTheLiveSizeChangesAgain() async throws {
+        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        store.live["0052000133417"] = livePrice("0052000133417", quantity: 828.058)
+        let first = await service.liveSizeCheck()
+        XCTAssertEqual(first.count, 1)
+
+        store.live["0052000133417"] = livePrice("0052000133417", quantity: 709.765)
+        let second = await service.liveSizeCheck()
+        XCTAssertEqual(second.count, 1)
+        XCTAssertEqual(second[0].1, 709.765)
+
+        let filed = try alerts()
+        XCTAssertEqual(filed.count, 2)
+    }
+
+    func test_syncToBackendSkipsANetworkCallForAnEmptyWatchlist() async throws {
+        await service.syncToBackend()
+        XCTAssertTrue(sync.calls.isEmpty, "a periodic/foreground sync with nothing watched has nothing to tell the Worker")
+    }
+
+    func test_removingTheLastWatchStillSyncsTheEmptyList() async throws {
+        let added = expectation(description: "added")
+        sync.onSync = { added.fulfill() }
+        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        await fulfillment(of: [added], timeout: 2)
+
+        let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))
+        let callsBeforeRemove = sync.calls.count
+
+        let removed = expectation(description: "removed")
+        sync.onSync = { removed.fulfill() }
+        try service.remove(watched)
+        await fulfillment(of: [removed], timeout: 2)
+
+        let callsAfterRemove = sync.calls.count
+        XCTAssertEqual(callsAfterRemove - callsBeforeRemove, 1, "removing the last watch must still sync exactly once")
+        XCTAssertEqual(sync.calls.last ?? nil, [])
+    }
 }
