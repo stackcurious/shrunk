@@ -118,7 +118,7 @@ Supporting facts if a reviewer asks:
 
 - **No account, no login.** There is no user identity to link anything to.
 - **Scan history stays on the device** (`UserDefaults`) and is never uploaded.
-- **Kroger requests carry only the barcode and the store id** — never the device id or push token.
+- **Kroger-proxied requests** (`/v1/kroger/*`) carry the barcode/ZIP and store id, plus the same `X-Device-Id` header every API call carries (used for rate limiting) — never the push token.
 - **Photos are transient.** They exist in R2 only while a submission is pending human review and are deleted on accept and on reject alike.
 
 ---
