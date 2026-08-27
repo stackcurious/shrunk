@@ -17,3 +17,19 @@ protocol TrendingFeedProviding: Sendable {
 }
 
 extension TrendingFeedService: TrendingFeedProviding {}
+
+/// The device-upsert seam used by the watchlist. Phase 5 adds its own
+/// two-argument `DeviceSyncing` protocol on top of the same method.
+protocol WatchlistSyncing: Sendable {
+    @discardableResult
+    func syncDevice(
+        deviceId: String,
+        transactionJWS: String,
+        apnsToken: String?,
+        locationId: String?,
+        categories: [String]?,
+        watches: [DeviceWatch]?
+    ) async -> Bool
+}
+
+extension ShrunkAPIClient: WatchlistSyncing {}

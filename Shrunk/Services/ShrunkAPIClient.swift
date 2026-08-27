@@ -14,6 +14,9 @@ actor ShrunkAPIClient {
         return URL(string: "https://shrunk-api.REPLACE-ME.workers.dev")!   // set to the URL printed by `wrangler deploy`
     }
 
+    /// `@AppStorage` key holding the APNs device token as lowercase hex.
+    static let apnsTokenKey = "apnsToken"
+
     private let baseURL: URL
     private let session: URLSession
     private let decoder = JSONDecoder()
@@ -159,6 +162,56 @@ actor ShrunkAPIClient {
         body.appendString("--\(boundary)--\r\n")
         return body
     }
+
+    /// Upserts this device on the Worker (spec §6.1). Never throws — a failed
+    /// sync must not disturb the UI (spec §8). Every parameter after
+    /// `transactionJWS` is read from local storage when left nil; `watches: nil`
+    /// omits the key entirely so the server keeps the set it already has.
+    @discardableResult
+    func syncDevice(
+        deviceId: String,
+        transactionJWS: String,
+        apnsToken: String? = nil,
+        locationId: String? = nil,
+        categories: [String]? = nil,
+        watches: [DeviceWatch]? = nil
+    ) async -> Bool {
+        let defaults = UserDefaults.standard
+        let resolvedToken = apnsToken ?? defaults.string(forKey: Self.apnsTokenKey)
+        let resolvedLocation = locationId ?? defaults.string(forKey: "storeLocationId")
+        let resolvedCategories = categories ?? OnboardingProfile
+            .decoded(defaults.string(forKey: "shrunk.onboarding_profile") ?? "{}")
+            .categories
+            .map(\.feedCategory)
+            .sorted()
+        let prefs = NotificationPreferences
+            .decoded(defaults.string(forKey: NotificationPreferences.appStorageKey) ?? "{}")
+            .kindTogglePayload
+
+        let body = DeviceSyncBody(
+            deviceId: deviceId,
+            apnsToken: resolvedToken?.isEmpty == false ? resolvedToken : nil,
+            locationId: resolvedLocation?.isEmpty == false ? resolvedLocation : nil,
+            categories: resolvedCategories.isEmpty ? nil : resolvedCategories,
+            prefs: prefs,
+            watches: watches,
+            transactionJWS: transactionJWS.isEmpty ? nil : transactionJWS
+        )
+
+        var request = URLRequest(url: baseURL.appending(path: "v1/devices"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(deviceId, forHTTPHeaderField: "X-Device-Id")
+        request.httpBody = try? JSONEncoder().encode(body)
+
+        do {
+            let (_, response) = try await session.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            return (200...299).contains(status)
+        } catch {
+            return false
+        }
+    }
 }
 
 // MARK: - Wire format
@@ -237,6 +290,42 @@ struct ProductDTO: Decodable {
             needsConfirmation: needs_confirmation ?? false,
             priceHistory: prices
         )
+    }
+}
+
+// MARK: - Device sync wire format
+
+/// One watched product as `POST /v1/devices` expects it.
+struct DeviceWatch: Encodable, Equatable, Sendable {
+    let gtin: String
+    let brand: String
+    let alertEnabled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case gtin, brand
+        case alertEnabled = "alert_enabled"
+    }
+}
+
+/// Optional fields are dropped by the encoder when nil, which is exactly the
+/// "leave this alone" semantics the Worker implements.
+private struct DeviceSyncBody: Encodable {
+    let deviceId: String
+    let apnsToken: String?
+    let locationId: String?
+    let categories: [String]?
+    let prefs: [String: Bool]?
+    let watches: [DeviceWatch]?
+    let transactionJWS: String?
+
+    enum CodingKeys: String, CodingKey {
+        case deviceId = "device_id"
+        case apnsToken = "apns_token"
+        case locationId = "location_id"
+        case categories
+        case prefs
+        case watches
+        case transactionJWS = "transaction_jws"
     }
 }
 
