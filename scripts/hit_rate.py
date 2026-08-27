@@ -13,7 +13,8 @@ from fdc.gtin import normalize_gtin  # noqa: E402
 
 def fetch(api: str, gtin: str) -> tuple[int, dict | None]:
     try:
-        with urllib.request.urlopen(f"{api}/v1/product/{gtin}", timeout=20) as r:
+        req = urllib.request.Request(f"{api}/v1/product/{gtin}", headers={"User-Agent": "shrunk-hit-rate/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
             return r.status, json.load(r)
     except urllib.error.HTTPError as e:
         return e.code, None
