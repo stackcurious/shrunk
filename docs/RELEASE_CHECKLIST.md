@@ -388,6 +388,31 @@ works — confirm at least one `SKTestSession`-backed test (e.g.
      entitlement in production — see the comment above `APPSTORE_ALLOWED_ENVIRONMENTS`
      in `backend/wrangler.toml` and its doc comment in `backend/src/env.ts`.
    - `npx wrangler deploy` to apply both.
+5. **Immediately after that flip (and again after any future `APNS_ENV` change),
+   send one real push and confirm delivery — do not wait for a routine alert.**
+   An `APNS_ENV` / `aps-environment` mismatch (Worker still pointed at the sandbox
+   host while the build carries the `production` entitlement, or the reverse)
+   makes Apple answer `400 BadDeviceToken` — indistinguishable from a genuinely
+   dead token. As the code stands, `runAlertDrain` (`backend/src/alerts.ts`)
+   treats that response as a dead token and runs
+   `UPDATE devices SET apns_token = NULL WHERE id = ?`, so a slipped flip doesn't
+   just miss one push — it silently deregisters every Pro device it touches, up
+   to 40 per five-minute drain tick, and the only recovery is each user
+   relaunching the app to re-register. Verify the flip landed clean before that
+   can compound:
+   ```bash
+   cd /Users/drao/Projects/shrunk/backend
+   npx wrangler d1 execute shrunk --remote --command "SELECT id, apns_token IS NOT NULL AS has_token FROM devices WHERE pro_until > unixepoch() LIMIT 5;"
+   curl -X POST "$API/v1/admin/verified-case" -H "Authorization: Bearer $ADMIN_SECRET" \
+     -H "Content-Type: application/json" -d '{"gtin":"<a gtin a Pro device is watching>","brand":null}'
+   npx wrangler tail --format pretty   # watch the next */5 * * * * drain
+   ```
+   Expected: the tail shows a successful send (not a `400`/`BadDeviceToken` line)
+   to the device(s) queried above, and a re-run of the same `SELECT` still shows
+   `has_token = 1` for them afterward. If you see `apns_token` go to `NULL` on a
+   device that should still be registered, the environments are still mismatched
+   — re-check `APNS_ENV` in `backend/wrangler.toml` against the build's
+   `aps-environment` before doing anything else.
 
 ## Acceptance
 
@@ -412,7 +437,7 @@ Fill this table in as you go — it is the answer to "did we ever actually do th
 | Cloudflare Workers Paid | | |
 | D1 `shrunk` created and migrated | | `database_id` in `wrangler.toml` |
 | R2 `shrunk-photos` created | | |
-| KV `KROGER` created | | id in `wrangler.toml` |
+| KV namespace created (binding `KV`) | | id in `wrangler.toml` |
 | All secrets set | | `npx wrangler secret list` |
 | FDC release imported | | `scripts/out/report.json` line |
 | Curated catalogue seeded | | `SELECT source, COUNT(*) FROM observations` |

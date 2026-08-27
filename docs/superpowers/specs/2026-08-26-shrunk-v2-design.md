@@ -23,7 +23,7 @@ Research (same day) established the data landscape:
 
 - **Backend:** Cloudflare Workers (Paid, $5/mo), D1, R2, Cron Triggers. Chosen over Vercel because Vercel's Hobby plan forbids commercial use ($20/mo minimum) and Cloudflare's free-tier write cap (100k D1 writes/day) is too low for the FDC import.
 - **Data:** FDC + curated + crowdsourced form the owned history. Kroger is proxied live and, per the user's decision, **also snapshotted** while a written-permission request is pending with Kroger. Kroger-derived rows are tagged and purgeable in one command.
-- **Pricing:** auto-renewable subscription, `com.shrunk.pro.monthly` $2.99 and `com.shrunk.pro.yearly` $14.99 with a 7-day introductory free trial. The `com.shrunk.pro.lifetime` non-consumable is removed (no purchases exist).
+- **Pricing:** auto-renewable subscription, `com.shrunk.pro.monthly` $2.99 and `com.shrunk.pro.yearly` $14.99. The 7-day introductory free trial applies to `com.shrunk.pro.yearly` only (R32) — the monthly plan has no introductory offer. The `com.shrunk.pro.lifetime` non-consumable is removed (no purchases exist).
 - **US only.** Barcodes are stored as 13-digit zero-padded GTINs (FDC and Kroger both use this form).
 - **Timeline:** ~6 weeks part-time to App Store submission; Walmart, Android, and admin polish are out of scope.
 

@@ -36,7 +36,7 @@ If you allow notifications, Apple issues a push token for this install and we st
 
 ## Purchases
 
-Shrunk Pro is an auto-renewable subscription sold by Apple. Apple handles payment; we never see your card, your Apple Account, or your billing details. Our server receives Apple's cryptographically signed transaction, verifies it, and stores only an expiry date plus the random purchase token the app generated, so your subscription survives a reinstall.
+Shrunk Pro is an auto-renewable subscription sold by Apple. Apple handles payment; we never see your card, your Apple Account, or your billing details. Our server receives Apple's cryptographically signed transaction, verifies it, and stores an expiry date plus the random purchase token the app generated, so your subscription survives a reinstall — alongside two internal bookkeeping fields (a timestamp and a notification id) that only make sure Apple's renewal updates are applied in the right order and are never applied twice. Neither identifies you beyond what the purchase token already does.
 
 ## Who else sees this data
 
