@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { getDevice, replaceWatches, upsertDevice, type WatchInput } from "../db";
+import { getDevice, replaceWatches, type WatchInput } from "../db";
 import type { Env } from "../env";
 import { canonicalCategory } from "../categories";
 import { normalizeGTIN } from "../gtin";
+import { entitlementFromJWS, trustAnchor } from "../appstore/entitlement";
 
 /** Spec §3 says "unlimited items"; 500 is the abuse ceiling, not a product limit. */
 export const MAX_WATCHES = 500;
@@ -29,20 +30,45 @@ devicesRoute.post("/v1/devices", async (c) => {
     return c.json({ error: "too_many_watches" }, 400);
   }
 
+  const transactionJws = text(body.transaction_jws, 8192);
+
+  // Spec §8: a verification failure must not disturb the device's existing
+  // entitlement — the app's own StoreKit entitlement governs the UI, and the
+  // next upsert retries. Only a verified, correctly-scoped transaction writes.
+  const entitlement = await entitlementFromJWS(transactionJws, new Date(), trustAnchor(c.env));
+  if (!entitlement && transactionJws) {
+    console.warn("devices: transaction_jws did not verify for", id);
+  }
+
   const now = Math.floor(Date.now() / 1000);
-  await upsertDevice(
-    c.env.DB,
-    {
+  const cats = categories(body.categories);
+  const prf = prefs(body.prefs);
+
+  await c.env.DB.prepare(
+    `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, transaction_jws, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
+       location_id       = COALESCE(excluded.location_id, devices.location_id),
+       categories        = COALESCE(excluded.categories, devices.categories),
+       prefs             = COALESCE(excluded.prefs, devices.prefs),
+       pro_until         = COALESCE(excluded.pro_until, devices.pro_until),
+       app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
+       transaction_jws   = COALESCE(excluded.transaction_jws, devices.transaction_jws),
+       updated_at        = excluded.updated_at`
+  )
+    .bind(
       id,
-      apns_token: text(body.apns_token, MAX_TOKEN_LENGTH),
-      location_id: text(body.location_id, 32),
-      categories: categories(body.categories),
-      prefs: prefs(body.prefs),
-      app_account_token: text(body.app_account_token, 64),
-      transaction_jws: text(body.transaction_jws, 8192),
-    },
-    now
-  );
+      text(body.apns_token, MAX_TOKEN_LENGTH),
+      text(body.location_id, 32),
+      cats ? JSON.stringify(cats) : null,
+      prf ? JSON.stringify(prf) : null,
+      entitlement?.proUntil ?? null,
+      entitlement?.appAccountToken ?? null,
+      transactionJws,
+      now
+    )
+    .run();
 
   if (Array.isArray(rawWatches)) {
     await replaceWatches(c.env.DB, id, watches(rawWatches));
