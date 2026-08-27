@@ -33,9 +33,9 @@ async function seedDevice(id: string, locationId: string | null) {
   ).bind(id, locationId).run();
 }
 
-async function seedWatch(deviceId: string, gtin: string) {
-  await env.DB.prepare("INSERT INTO watches (device_id, gtin, brand, alert_enabled) VALUES (?, ?, 'Gatorade', 1)")
-    .bind(deviceId, gtin)
+async function seedWatch(deviceId: string, gtin: string, alertEnabled: number = 1) {
+  await env.DB.prepare("INSERT INTO watches (device_id, gtin, brand, alert_enabled) VALUES (?, ?, 'Gatorade', ?)")
+    .bind(deviceId, gtin, alertEnabled)
     .run();
 }
 
@@ -114,5 +114,18 @@ describe("runKrogerSweep pair selection", () => {
     const { client, batches } = fakeClient();
     expect(await runKrogerSweep(env, client)).toEqual({ pairs: 0, snapshots: 0, sizeDrops: 0, priceHikes: 0 });
     expect(batches).toHaveLength(0);
+  });
+
+  it("sweeps muted watches (alert_enabled = 0)", async () => {
+    await seedDevice("dev-1", LOCATION);
+    await seedWatch("dev-1", GTIN_WATCHED, 0);
+
+    const { client, batches } = fakeClient();
+    const result = await runKrogerSweep(on(), client);
+
+    expect(result.pairs).toBe(1);
+    expect(batches).toHaveLength(1);
+    expect(batches[0].locationId).toBe(LOCATION);
+    expect(batches[0].ids).toHaveLength(1);
   });
 });
