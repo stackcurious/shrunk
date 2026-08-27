@@ -202,7 +202,7 @@ struct AlertsFeedView: View {
                     .padding(.horizontal, ShrunkTheme.Spacing.lg)
                     .lineSpacing(2)
             }
-            ShrunkButton("Unlock Shrunk Pro · \(storeKit.product?.displayPrice ?? "$9.99")", icon: "lock.open.fill") {
+            ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
                 showPaywall = true
             }
             .padding(.horizontal, ShrunkTheme.Spacing.lg)

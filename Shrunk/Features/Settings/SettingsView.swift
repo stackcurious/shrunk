@@ -109,7 +109,7 @@ struct SettingsView: View {
                     }
                 }
             } else {
-                ShrunkButton("Unlock Shrunk Pro · \(storeKit.product?.displayPrice ?? "$9.99")", icon: "lock.open.fill") {
+                ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
                     showPaywall = true
                 }
                 Button("Restore purchases") {

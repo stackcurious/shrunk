@@ -59,7 +59,7 @@ struct ProPaywallView: View {
             }
         }
         .task {
-            if storeKit.product == nil {
+            if storeKit.yearlyProduct == nil {
                 await storeKit.loadProducts()
             }
         }
@@ -188,7 +188,7 @@ struct ProPaywallView: View {
     private var ctaSection: some View {
         VStack(spacing: 8) {
             ShrunkButton(
-                "Unlock for \(storeKit.displayPrice)",
+                "Unlock for \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")",
                 icon: "lock.open.fill",
                 isLoading: purchaseInProgress
             ) {
@@ -204,8 +204,12 @@ struct ProPaywallView: View {
     private func runPurchase() async {
         purchaseInProgress = true
         defer { purchaseInProgress = false }
+        guard let product = storeKit.yearlyProduct else {
+            purchaseError = StoreKitError.productNotLoaded.errorDescription
+            return
+        }
         do {
-            try await storeKit.purchase()
+            try await storeKit.purchase(product)
         } catch {
             purchaseError = error.localizedDescription
         }

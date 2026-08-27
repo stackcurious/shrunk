@@ -151,8 +151,9 @@ struct OnboardingContainerView: View {
 
     @MainActor
     private func runPurchase() async {
+        guard let product = storeKit.yearlyProduct else { return }
         do {
-            try await storeKit.purchase()
+            try await storeKit.purchase(product)
         } catch {
             // Errors surface inside PaywallStep via storeKit.loadError.
         }
@@ -765,7 +766,7 @@ private struct PaywallStep: View {
 
                 VStack(spacing: 10) {
                     ShrunkButton(
-                        "Unlock for \(storeKit.displayPrice)",
+                        "Unlock for \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")",
                         icon: "lock.open.fill",
                         isLoading: purchaseInProgress
                     ) {
