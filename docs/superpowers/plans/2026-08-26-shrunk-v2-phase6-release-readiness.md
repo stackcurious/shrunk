@@ -42,6 +42,8 @@ scripts/tests/test_hit_rate.py               NEW  covers the verdict() duplicate
 scripts/hit_rate.py                          MOD  collapse consecutive same-size observations (spec §5.1)
 scripts/fdc/importer.py                      MOD  Product gains image_url (default None)
 scripts/acceptance.md                        NEW  spec §10 acceptance run: procedure + results tables
+Shrunk/Services/ShrinkDetector.swift         MOD  same duplicate-size collapse as hit_rate.py (spec §5.1)
+ShrunkTests/ShrinkDetectorTests.swift        MOD  pins the duplicate-size collapse
 README.md                                    REWRITE  monorepo map, run, deploy, data flow, CI
 CLAUDE.md                                    NEW  conventions for future sessions
 backend/README.md                            REWRITE  complete endpoint/binding/secret/cron tables
@@ -59,7 +61,47 @@ docs/superpowers/specs/…-shrunk-v2-design.md MOD  evidence lines: §6.5 spike,
 
 ---
 
+### Task 0: Confirm Phases 3–5 have landed
+
+This plan assumes `feat/v2-real-data` already has `GET /v1/feed`, push infrastructure and its three cron triggers, `POST /v1/admin/verified-case`, `POST /v1/appstore/notifications`, and the subscription rework of `StoreKitService` / `docs/ASC_SETUP.md` §2 — Phase 4 and Phase 5 work. Every other task in this plan writes CI, docs, an App Store listing, a curated seeder, or an acceptance run against that surface; running ahead of it produces CI that is green for the wrong reasons and paperwork describing a build that cannot do what it claims. Task 3 Step 1 and Task 6 Step 1 already check their own narrower slice of this before writing; this task is the same check, once, for everything the other eight tasks assume without checking.
+
+**Files:** none — this task only runs commands.
+
+- [ ] **Step 1: Check every Phase 3–5 artifact this plan depends on**
+
+```bash
+cd /Users/drao/Projects/shrunk
+grep -q feedRoute backend/src/index.ts \
+  && echo "ok   GET /v1/feed mounted (Phase 4)" \
+  || echo "MISS GET /v1/feed not mounted — land Phase 4 first"
+ls backend/src/push/PushSender.ts >/dev/null 2>&1 \
+  && echo "ok   push sender exists (Phase 4)" \
+  || echo "MISS backend/src/push/PushSender.ts missing — land Phase 4 first"
+grep -n "^crons" backend/wrangler.toml
+grep -rq "admin/verified-case" backend/src/routes \
+  && echo "ok   POST /v1/admin/verified-case (Phase 4)" \
+  || echo "MISS /v1/admin/verified-case — land Phase 4 first"
+grep -rq "appstore/notifications" backend/src \
+  && echo "ok   POST /v1/appstore/notifications (Phase 5)" \
+  || echo "MISS /v1/appstore/notifications — land Phase 5 first"
+if grep -q "pro.lifetime" Shrunk/Services/StoreKitService.swift; then
+  echo "MISS StoreKitService still sells com.shrunk.pro.lifetime — land Phase 5 first"
+else
+  echo "ok   no lifetime IAP (Phase 5)"
+fi
+grep -q "pro.yearly\|pro.monthly" Shrunk/Services/StoreKitService.swift \
+  && echo "ok   subscription products present (Phase 5)" \
+  || echo "MISS StoreKitService has no subscription products — land Phase 5 first"
+grep -n "^## 2\." docs/ASC_SETUP.md
+```
+
+Expected: every scripted line prints `ok`; the `crons` line lists three schedules — `*/5 * * * *` (alert drain), `0 */6 * * *` (Kroger sweep), `0 1 * * 1` (weekly digest); `## 2.` reads `## 2. Subscriptions`, not `## 2. In-App Purchase`. **Any `MISS`, fewer than three crons, or `## 2. In-App Purchase` means a prior phase has not landed — stop and land it (see "Prior plans this one closes out" above) before starting Task 1.** Re-run this whenever picking the plan back up after a gap; the branch may have moved since you last checked.
+
+---
+
 ### Task 1: CI on every push
+
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
 
 **Files:**
 - Create: `.github/workflows/ci.yml`
@@ -274,7 +316,7 @@ if __name__ == "__main__":
 cd /Users/drao/Projects/shrunk/scripts && python3 -m pytest tests -q
 cd /Users/drao/Projects/shrunk && python3 scripts/check_repo_data.py
 ```
-Expected: every pytest passes (43 existing + 6 new), then `repo data OK: …`. If the checker reports drift in `Shrunk/Resources/trending.json`, fix the drift with the command in the message — do not relax the check.
+Expected: every pytest passes (46 existing + 6 new), then `repo data OK: …`. If the checker reports drift in `Shrunk/Resources/trending.json`, fix the drift with the command in the message — do not relax the check.
 
 - [ ] **Step 5: Write the workflow**
 
@@ -286,8 +328,6 @@ name: CI
 on:
   push:
     branches: ["**"]
-  pull_request:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -376,6 +416,7 @@ jobs:
 ```
 
 Notes for whoever touches this again:
+- No `pull_request:` trigger, deliberately: this is a single-repo workflow (no forks), and `push: branches: ["**"]` already runs on every commit to an open PR's branch. Adding `pull_request:` alongside it would double-run every job on every push to a PR branch — a `push` event carries `github.ref = refs/heads/<branch>` while the matching `pull_request` event carries `github.ref = refs/pull/<n>/merge`, so the `concurrency` group below would not dedupe them. GitHub's required-status-checks UI reads status from push-triggered runs on the head branch fine.
 - `Shrunk.xcodeproj` is git-ignored, so `xcodegen generate` is mandatory before any `xcodebuild` call.
 - `CODE_SIGNING_ALLOWED=NO` is what lets a runner with no certificates build the app and its test host; the simulator SDK needs no provisioning profile, and the `aps-environment` entitlement is inert there.
 - The simulator name is discovered rather than hard-coded because GitHub rotates runner images; locally the destination is `platform=iOS Simulator,name=BabSnap iPhone 17`.
@@ -431,6 +472,8 @@ Record the outcome (protected / not available) in `docs/RELEASE_CHECKLIST.md` wh
 ---
 
 ### Task 2: Monorepo README and a CLAUDE.md of conventions
+
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
 
 **Files:**
 - Modify: `README.md` (full rewrite — the current text describes the v1 OFF-only app and a $9.99 lifetime IAP)
@@ -549,7 +592,7 @@ Full first-time setup — Cloudflare account, D1, KV, R2, every secret, the Krog
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push and PR:
+`.github/workflows/ci.yml` runs on every push — including every push to an open PR's branch, so there is no separate `pull_request` trigger to double it up:
 
 | Job | Runner | What it proves |
 |---|---|---|
@@ -849,10 +892,12 @@ git commit -m "docs: complete backend endpoint reference; data feed now served f
 
 ### Task 4: Privacy policy, terms, and in-app attribution
 
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
+
 **Files:**
 - Create: `docs/PRIVACY_POLICY.md`
 - Create: `docs/TERMS.md`
-- Modify: `Shrunk/Features/Settings/SettingsView.swift:22-31` (the "Data" section) and `:34` (the About section)
+- Modify: `Shrunk/Features/Settings/SettingsView.swift:30-40` (the "Data" section) and `:41-53` (the "About" section)
 
 **Interfaces:**
 - Consumes: `DeviceIdentity.current` (`Shrunk/Services/DeviceIdentity.swift`) — a per-install UUID string.
@@ -1073,6 +1118,8 @@ git commit -m "docs: privacy policy and terms; credit every data source in Setti
 
 ### Task 5: App Store listing copy for v2
 
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
+
 **Files:**
 - Modify: `docs/APP_STORE_LISTING.md` (full rewrite — every section sells the v1 $9.99 lifetime IAP and names Open Food Facts as the data source)
 
@@ -1110,7 +1157,7 @@ Catch shrinking groceries
 ```
 Same price, less product? Scan any grocery barcode and Shrunk shows the real size history, today's shelf price, and what to buy instead. No brand pays us.
 ```
-(153 chars)
+(154 chars)
 
 ## Keyword Field (≤100 chars, comma-separated, no spaces after commas)
 
@@ -1423,6 +1470,8 @@ git commit -m "docs: ASC app privacy answers, capabilities, export compliance an
 
 Spec §5.2 lists `curated` as a first-class source (confidence 1.0, accepted on insert) and §10 requires 35/35 curated products to produce a verdict. Nothing in Phases 1–5 ever writes a curated observation: the FDC importer only *cross-checks* `data/trending.json` in its report, and `/v1/feed` reads its own bundled copy at request time. FDC is food-only, so paper, cleaning and personal-care entries would have no history at all and the acceptance run could not pass. This task closes that gap.
 
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
+
 **Files:**
 - Create: `scripts/seed_curated.py`
 - Modify: `scripts/fdc/importer.py` (`Product` gains `image_url`, `write_sql` emits it)
@@ -1430,7 +1479,7 @@ Spec §5.2 lists `curated` as a first-class source (confidence 1.0, accepted on 
 
 **Interfaces:**
 - Consumes: `parse_package_weight(raw) -> ParsedQuantity | None` (`scripts/fdc/normalize.py`), `normalize_gtin(raw) -> str | None` (`scripts/fdc/gtin.py`), and `Product`, `Observation`, `ImportResult`, `write_sql` (`scripts/fdc/importer.py`).
-- Produces: `build_curated_rows(entries: list[dict]) -> ImportResult` and `write_curated_sql(result: ImportResult, out_path: Path) -> None` in `scripts/seed_curated.py`. `write_curated_sql` writes `DELETE FROM observations WHERE source='curated';` as its first line, then delegates to `write_sql`, so re-seeding is idempotent.
+- Produces: `build_curated_rows(entries: list[dict]) -> ImportResult` and `write_curated_sql(result: ImportResult, out_path: Path) -> None` in `scripts/seed_curated.py`. `write_curated_sql` writes `DELETE FROM observations WHERE source='curated';` as its first line, then an `INSERT INTO products ... ON CONFLICT(gtin) DO UPDATE SET ...` upsert for every curated product — **not** `write_sql`'s `INSERT OR IGNORE`, which would silently no-op on a GTIN the FDC importer already loaded, dropping the curated `image_url`/name/brand/category — before delegating the observations to `write_sql`. Both the observation purge and the product upsert make re-seeding idempotent, including metadata corrections.
 - Produces: CLI `python3 scripts/seed_curated.py --curated data/trending.json --out scripts/out/curated.sql`, printing `products=N observations=M skipped=K`.
 - Changes: `Product` becomes `Product(gtin, name, brand, category, unit_kind, image_url=None)` — the new field is last and defaulted, so the FDC importer's construction is unchanged and emits `NULL` exactly as before.
 
@@ -1535,6 +1584,27 @@ def test_sql_purges_previous_curated_rows_first(tmp_path):
     assert any("'curated'" in line for line in lines)
     assert any("'https://images.openfoodfacts.org/x.jpg'" in line for line in lines)
     assert all(line.endswith(";") for line in lines)
+
+
+def test_reseeding_after_an_image_url_edit_changes_the_emitted_sql(tmp_path):
+    # write_sql's INSERT OR IGNORE would silently no-op on a GTIN the FDC
+    # importer already loaded, dropping the curated image_url. Re-seeding
+    # must actually change the emitted SQL for an already-known GTIN, which
+    # only an upsert (ON CONFLICT DO UPDATE) delivers.
+    first = tmp_path / "first.sql"
+    write_curated_sql(build_curated_rows([GATORADE]), first)
+    first_sql = first.read_text()
+
+    edited = dict(GATORADE, image_url="https://images.openfoodfacts.org/y.jpg")
+    second = tmp_path / "second.sql"
+    write_curated_sql(build_curated_rows([edited]), second)
+    second_sql = second.read_text()
+
+    assert "'https://images.openfoodfacts.org/x.jpg'" in first_sql
+    assert "'https://images.openfoodfacts.org/y.jpg'" in second_sql
+    assert "'https://images.openfoodfacts.org/x.jpg'" not in second_sql
+    assert "ON CONFLICT(gtin) DO UPDATE SET" in second_sql
+    assert "image_url=excluded.image_url" in second_sql
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -1604,7 +1674,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fdc.gtin import normalize_gtin  # noqa: E402
-from fdc.importer import ImportResult, Observation, Product, write_sql  # noqa: E402
+from fdc.importer import ImportResult, Observation, Product, _q, write_sql  # noqa: E402
 from fdc.normalize import parse_package_weight  # noqa: E402
 
 SAME_SIZE_TOLERANCE = 0.01  # spec §5.1: within 1% is the same size
@@ -1689,12 +1759,36 @@ def build_curated_rows(entries: list[dict]) -> ImportResult:
 
 
 def write_curated_sql(result: ImportResult, out_path: Path) -> None:
-    """Purge previous curated rows, then emit the same statement shape as the FDC importer."""
+    """Purge previous curated rows, then upsert every curated product's
+    metadata before delegating observations to the shared writer.
+
+    `write_sql`'s `INSERT OR IGNORE` would silently no-op on a GTIN the FDC
+    importer already loaded — most of the curated catalogue's food items —
+    dropping the curated `image_url`, name, brand and category. Writing our
+    own `ON CONFLICT(gtin) DO UPDATE SET ...` here first means a corrected
+    curated entry always overwrites what FDC (or an earlier curated seed)
+    left behind; `write_sql`'s own `INSERT OR IGNORE` for the same rows,
+    emitted afterwards, is then a harmless no-op.
+    """
+    now = int(datetime.now(tz=timezone.utc).timestamp())
     out_path.parent.mkdir(parents=True, exist_ok=True)
     body_path = out_path.with_suffix(".body.sql")
     write_sql(result, body_path)
     with out_path.open("w", encoding="utf-8") as out:
         out.write("DELETE FROM observations WHERE source='curated';\n")
+        products = list(result.products.values())
+        if products:
+            values = ", ".join(
+                f"({_q(p.gtin)}, {_q(p.name)}, {_q(p.brand)}, {_q(p.category)}, {_q(p.image_url)}, {_q(p.unit_kind)}, {now}, {now})"
+                for p in products
+            )
+            out.write(
+                "INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES "
+                + values +
+                " ON CONFLICT(gtin) DO UPDATE SET name=excluded.name, brand=excluded.brand, "
+                "category=excluded.category, image_url=excluded.image_url, unit_kind=excluded.unit_kind, "
+                "updated_at=excluded.updated_at;\n"
+            )
         out.write(body_path.read_text(encoding="utf-8"))
     body_path.unlink()
 
@@ -1725,7 +1819,7 @@ if __name__ == "__main__":
 ```bash
 cd /Users/drao/Projects/shrunk/scripts && python3 -m pytest tests -q
 ```
-Expected: every test passes, including the six new `test_seed_curated` cases and the untouched `test_importer` suite (the `image_url` default keeps `test_write_sql_batches_and_escapes` green).
+Expected: every test passes, including the seven new `test_seed_curated` cases and the untouched `test_importer` suite (the `image_url` default keeps `test_write_sql_batches_and_escapes` green — `write_sql` itself is unchanged; the upsert lives only in `write_curated_sql`).
 
 - [ ] **Step 6: Generate the real seed and read it**
 
@@ -2024,17 +2118,22 @@ git commit -m "chore: release runbook; record APNs spike and Kroger permission d
 
 ### Task 9: The acceptance run (spec §10)
 
-Spec §10, verbatim: *"scanning all 35 curated products yields a verdict for 35/35; a 30-item kitchen scan yields history for ≥60% of food items; a Kroger store set in Cincinnati shows live prices for ≥25 of those 30."* The first is scriptable; the other two need a person, a phone and a kitchen. This task makes the scripted part exact and gives the manual part a form to fill in.
+Spec §10, verbatim: *"scanning all 35 curated products yields a verdict for 35/35; a 30-item kitchen scan yields history for ≥60% of food items; a Kroger store set in Cincinnati shows live prices for ≥25 of those 30."* The first is scriptable; the other two need a person, a phone and a kitchen — specifically the TestFlight build Task 10 produces, so this task scripts and scaffolds everything that does not need that build, and Task 10's own closing step runs the rest once it exists.
+
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
 
 **Files:**
 - Modify: `scripts/hit_rate.py` (`verdict` collapses duplicates and sorts explicitly)
 - Create: `scripts/tests/test_hit_rate.py`
 - Create: `scripts/acceptance.md`
+- Modify: `Shrunk/Services/ShrinkDetector.swift` (apply the same duplicate-size collapse on the device, spec §5.1)
+- Modify: `ShrunkTests/ShrinkDetectorTests.swift`
 
 **Interfaces:**
 - Consumes: `$API` from Task 8, and a deployed Worker with both FDC and curated observations loaded.
 - Produces: `verdict(observations: list[dict]) -> str` returning one of `"no history"`, `"1 point"`, `"shrink -X.X%"` or `"no shrink (+X.X%)"`; and the summary line `found=N/35 with_history=N/35 shrink_detected=N/35`.
-- Produces: `scripts/acceptance.md` with filled results tables — the artefact `docs/ASC_SETUP.md`'s checklist and Task 11's PR body point at.
+- Produces: `ShrinkDetector.collapseDuplicateSizes(_:) -> [SizeRecord]`, the on-device counterpart of `hit_rate.py`'s `_collapse`, applied inside `analyze()`'s `sameKind` filter.
+- Produces: `scripts/acceptance.md`, authored in full here with §A's scripted result filled in. §A's on-device spot-check and Sections B–E need the TestFlight build and are completed in Task 10 Step 10 — the finished file is what `docs/ASC_SETUP.md`'s checklist and Task 11's PR body point at.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2133,9 +2232,93 @@ cd /Users/drao/Projects/shrunk/scripts && python3 -m pytest tests -q
 ```
 Expected: everything green.
 
-> `ShrinkDetector` (iOS) selects the two most recent same-kind observations without this collapse. If the kitchen scan in Step 6 shows a curated product reading "unchanged" while `hit_rate.py` calls it a shrink, that is the same duplicate problem on the device: apply the identical collapse in `ShrinkDetector.analyze` — after filtering to the dominant kind and before taking the last two records, drop any record within 1% of its predecessor — and add an XCTest that pins it, exactly like `test_a_duplicate_size_from_another_source_does_not_flatten_the_verdict` above.
+- [ ] **Step 5: Apply the same duplicate collapse to `ShrinkDetector` (iOS)**
 
-- [ ] **Step 5: Run the scripted acceptance against production**
+`Shrunk/Services/ShrinkDetector.swift::analyze()` has the same bug `verdict` just had: it takes `sameKind[sameKind.count - 2]` / `sameKind.last!` directly, with no de-duplication. A curated product whose two most recent same-kind observations — say a curated "after" size and an FDC "after" observation confirming the same size — are within 1% of each other reads `.unchanged` on the device even though the fixed `hit_rate.py` now correctly calls it a shrink. Fix it the same way, on the device.
+
+First, the failing test. Add to `ShrunkTests/ShrinkDetectorTests.swift`, in the "Cross-unit comparison" section:
+
+```swift
+func test_duplicateSizeFromAnotherSource_doesNotFlattenTheVerdict() {
+    // Spec §5.1: two observations within 1% are the same size. A curated
+    // "after" and an FDC "after" observation of the same size must not
+    // become the two most recent records and wash the shrink out to
+    // "unchanged" — mirrors hit_rate.py's
+    // test_a_duplicate_size_from_another_source_does_not_flatten_the_verdict.
+    let now = Date()
+    let product = ShrunkProduct(
+        id: "test", name: "Test", brand: "", category: "", imageURL: nil,
+        sizeHistory: [
+            SizeRecord(date: now.addingTimeInterval(-2 * 86_400), quantity: 32, unit: "oz", source: "curated"),
+            SizeRecord(date: now.addingTimeInterval(-1 * 86_400), quantity: 28, unit: "oz", source: "curated"),
+            SizeRecord(date: now,                                  quantity: 28, unit: "oz", source: "fdc")
+        ],
+        currentPrice: nil, currency: "USD"
+    )
+    let record = detector.analyze(product: product)
+    XCTAssertTrue(record.verdict.isShrink)
+    XCTAssertEqual(record.shrinkPercent, -12.5, accuracy: 0.01)
+}
+```
+
+Run it to confirm it fails:
+
+```bash
+cd /Users/drao/Projects/shrunk
+xcodegen generate >/dev/null && xcodebuild test -scheme Shrunk \
+  -destination 'platform=iOS Simulator,name=BabSnap iPhone 17' \
+  -only-testing:ShrunkTests/ShrinkDetectorTests/test_duplicateSizeFromAnotherSource_doesNotFlattenTheVerdict \
+  -quiet 2>&1 | tail -20
+```
+Expected: fails — `record.verdict` comes back `.unchanged` (0%), because `analyze()` compares the two most recent records without collapsing the duplicate 28oz.
+
+Now fix `Shrunk/Services/ShrinkDetector.swift`. Add a collapse helper and call it inside the `sameKind` closure, right after the kind filter — everything downstream already reads from `sameKind`, so nothing else in the function changes:
+
+```swift
+    /// Drop consecutive same-kind records that normalize within 1% of their
+    /// predecessor (spec §5.1: within 1% is the same size) — otherwise two
+    /// sources independently confirming the same physical size can crowd out
+    /// the real shrink between the size before them and the size after.
+    ///
+    /// Only drops a record once two are already banked: a two-point history
+    /// must never collapse down to one, or a legitimate "unchanged" verdict
+    /// (two observations within 1% of each other, and nothing else) would
+    /// wrongly read as "not enough history" instead — see
+    /// `test_unchanged_withinOnePercent`.
+    private static func collapseDuplicateSizes(_ records: [SizeRecord]) -> [SizeRecord] {
+        var kept: [SizeRecord] = []
+        for record in records {
+            if kept.count >= 2, let last = kept.last {
+                let normalizedQuantity = Self.normalize(record).quantity
+                let lastNormalizedQuantity = Self.normalize(last).quantity
+                if lastNormalizedQuantity > 0,
+                   abs(normalizedQuantity - lastNormalizedQuantity) / lastNormalizedQuantity <= 0.01 {
+                    continue
+                }
+            }
+            kept.append(record)
+        }
+        return kept
+    }
+```
+
+```swift
+        let sameKind: [SizeRecord] = {
+            guard let latestKind = sorted.last?.unitKind else { return [] }
+            return Self.collapseDuplicateSizes(sorted.filter { $0.unitKind == latestKind })
+        }()
+```
+
+Run the suite to confirm green:
+
+```bash
+cd /Users/drao/Projects/shrunk
+xcodegen generate >/dev/null && xcodebuild test -scheme Shrunk \
+  -destination 'platform=iOS Simulator,name=BabSnap iPhone 17' -quiet 2>&1 | tail -20
+```
+Expected: the whole `ShrunkTests` suite passes, including the new test.
+
+- [ ] **Step 6: Run the scripted acceptance against production**
 
 ```bash
 cd /Users/drao/Projects/shrunk
@@ -2150,7 +2333,7 @@ Expected: `found=35/35 with_history=35/35 shrink_detected=35/35`.
 - `found` below 35 means `/v1/product` 404'd or errored for a barcode — curl that one gtin and read the error.
 - `shrink_detected` below `with_history` means a curated product genuinely does not read as a shrink; look at that product's observations before touching the code, because a wrong curated entry is more likely than a wrong detector.
 
-- [ ] **Step 6: Write `scripts/acceptance.md`**
+- [ ] **Step 7: Write `scripts/acceptance.md`**
 
 ````markdown
 # Shrunk — acceptance run (spec §10)
@@ -2275,40 +2458,37 @@ Spot-check the arithmetic on three: compare the app's cost-per-unit against the 
 **Signed off:** ____ on ____
 ````
 
-- [ ] **Step 7: Do the manual run and fill the file in**
+- [ ] **Step 8: Fill in §A's scripted result**
 
-Scan the 30 items, fill every table, tick the boxes. If a threshold misses, fix the cause and re-run that section — a threshold in the spec is not negotiable by editing the spec.
-
-- [ ] **Step 8: Record the result in the spec**
-
-Append one line to spec §10, immediately after the "Acceptance before submission" bullet:
-
-```markdown
-  Acceptance run YYYY-MM-DD on build 2.0.0 (2): curated 35/35 with history, 35/35 shrink detected; kitchen scan NN/NN food items with history (NN%); live prices NN/30 at Kroger <store> Cincinnati. Full record: `scripts/acceptance.md`.
-```
+No TestFlight build exists yet at this point in the plan — Task 10 is what produces one — so this step only fills in what does not need a device. Paste Step 6's summary line into `scripts/acceptance.md`'s §A "Summary line" blank, and record any script failures in §A's failure table. Leave §A's on-device spot-check table and Sections B–E blank: they need a phone and the TestFlight build, and are completed in Task 10 Step 10 once that build exists.
 
 - [ ] **Step 9: Commit**
 
 ```bash
 cd /Users/drao/Projects/shrunk
 git add scripts/hit_rate.py scripts/tests/test_hit_rate.py scripts/acceptance.md \
-  docs/superpowers/specs/2026-08-26-shrunk-v2-design.md
-git commit -m "test(scripts): collapse duplicate sizes in the hit-rate verdict; record the acceptance run" -- \
+  Shrunk/Services/ShrinkDetector.swift ShrunkTests/ShrinkDetectorTests.swift
+git commit -m "test(scripts,ios): collapse duplicate sizes in the hit-rate verdict and ShrinkDetector; scaffold the acceptance run" -- \
   scripts/hit_rate.py scripts/tests/test_hit_rate.py scripts/acceptance.md \
-  docs/superpowers/specs/2026-08-26-shrunk-v2-design.md
+  Shrunk/Services/ShrinkDetector.swift ShrunkTests/ShrinkDetectorTests.swift
 ```
 
 ---
 
 ### Task 10: Version 2.0.0, the TestFlight build, and release notes
 
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
+
 **Files:**
 - Modify: `project.yml` (`MARKETING_VERSION`, `CURRENT_PROJECT_VERSION`)
 - Create: `ExportOptions.plist` (repo root)
+- Modify: `scripts/acceptance.md` (fill in §A's on-device spot-check and Sections B–E, deferred from Task 9)
+- Modify: `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md` (§10 acceptance results line)
 
 **Interfaces:**
-- Consumes: `$API` and the ASC configuration from Task 8; the What's New copy from Task 5.
+- Consumes: `$API` and the ASC configuration from Task 8; the What's New copy from Task 5; the scaffolded `scripts/acceptance.md` from Task 9.
 - Produces: `build/Shrunk.xcarchive` and `build/export/Shrunk.ipa` (both under the git-ignored `build/`), a processed TestFlight build, and the "What to Test" text.
+- Produces: the completed `scripts/acceptance.md` and the spec §10 evidence line — Task 9 could not produce either, because both need this task's TestFlight build on a real phone.
 
 - [ ] **Step 1: Bump the version**
 
@@ -2429,14 +2609,42 @@ git commit -m "chore: 2.0.0 (2) and App Store export options" -- project.yml Exp
 git push origin feat/v2-real-data
 ```
 
+- [ ] **Step 10: Run the device-dependent acceptance sections and record the result**
+
+Task 9 already produced the scripted 35/35 curated result (`scripts/out/acceptance-hitrate.txt`) and the `scripts/acceptance.md` scaffold with §A's scripted result filled in. Everything left needs a phone and this specific build, not the simulator — do it once build 2.0.0 (2) has finished processing in TestFlight (Step 6/7 above) and you can install it.
+
+Fill in the **Build**, **Date**, **Device**, **Store** and **API** line at the top of `scripts/acceptance.md`, then work through:
+- §A's on-device spot-check (three products, cross-checked against the script)
+- §B — 30-item kitchen scan, ≥60% of food items with history
+- §C — Cincinnati Kroger live prices, ≥25/30
+- §D — subscription and push, end to end
+- §E — degradation (spec §8)
+
+Tick every box in the Result line and sign off. If a threshold misses, fix the cause and re-run that section — a threshold in the spec is not negotiable by editing the spec.
+
+Then append one line to spec §10, immediately after the "Acceptance before submission" bullet:
+
+```markdown
+  Acceptance run YYYY-MM-DD on build 2.0.0 (2): curated 35/35 with history, 35/35 shrink detected; kitchen scan NN/NN food items with history (NN%); live prices NN/30 at Kroger <store> Cincinnati. Full record: `scripts/acceptance.md`.
+```
+
+```bash
+cd /Users/drao/Projects/shrunk
+git add scripts/acceptance.md docs/superpowers/specs/2026-08-26-shrunk-v2-design.md
+git commit -m "test: complete the device-dependent acceptance run on the 2.0.0 TestFlight build" -- \
+  scripts/acceptance.md docs/superpowers/specs/2026-08-26-shrunk-v2-design.md
+```
+
 ---
 
 ### Task 11: Open the PR, wait for CI, merge, tag `v2.0.0`
 
+**Precondition:** Task 0 passed. If it did not, stop and land the missing phase before starting this task.
+
 **Files:** none — this task only runs commands.
 
 **Interfaces:**
-- Consumes: the four status-check contexts from Task 1 (`backend`, `scripts`, `fixtures`, `ios`), the acceptance results from Task 9, and the version from Task 10.
+- Consumes: the four status-check contexts from Task 1 (`backend`, `scripts`, `fixtures`, `ios`), the scripted acceptance result from Task 9 and the completed acceptance run and spec evidence line from Task 10 Step 10, and the version from Task 10.
 - Produces: a merge commit on `main` and the annotated tag `v2.0.0`.
 
 - [ ] **Step 1: Make sure the branch is clean and pushed**
@@ -2517,10 +2725,11 @@ BODY
 )"
 ```
 
-Then replace every `NN` and `YYYY-MM-DD` with the real numbers from Step 2 and the dates from Task 8:
+Then replace every `NN` and `YYYY-MM-DD` with the real numbers from Step 2 and the dates from Task 8 — either in the browser, or by editing a local copy of the body:
 
 ```bash
 gh pr view --web     # edit the body in the browser, or:
+gh pr view --json body -q .body > /tmp/pr-body.md   # dump the current body, then edit /tmp/pr-body.md by hand
 gh pr edit --body-file /tmp/pr-body.md
 ```
 A PR body with `NN` left in it is not done.
@@ -2535,7 +2744,14 @@ Expected: `backend`, `scripts`, `fixtures` and `ios` all pass. If a job fails, f
 
 - [ ] **Step 5: Walk the pre-submission checklist one last time**
 
-Open `docs/ASC_SETUP.md` and confirm every box is ticked, and that `scripts/acceptance.md` is filled in with all three thresholds met. This is the last point where stopping is cheap.
+Open `docs/ASC_SETUP.md` and confirm every box is ticked, and that `scripts/acceptance.md` is filled in with all three thresholds met. Then confirm the recorded run actually matches this build, not an older one:
+
+```bash
+cd /Users/drao/Projects/shrunk
+grep -n "^\*\*Build:\*\*" scripts/acceptance.md
+grep -n "MARKETING_VERSION\|CURRENT_PROJECT_VERSION" project.yml
+```
+Expected: the `Build:` line in `scripts/acceptance.md` names the same version and build number as `project.yml` (`2.0.0 (2)`). A results file filled in against a different build is not evidence for this one — re-run Task 10 Step 10 against the current build before merging. This is the last point where stopping is cheap.
 
 - [ ] **Step 6: Merge with a merge commit**
 
