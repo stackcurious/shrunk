@@ -26,6 +26,7 @@ class Product:
     brand: str
     category: str
     unit_kind: str
+    image_url: str | None = None
 
 
 @dataclass
@@ -36,7 +37,7 @@ class Observation:
     raw_text: str
     observed_at: int
     source: str
-    source_ref: str
+    source_ref: str | None
     confidence: float
 
 
@@ -161,7 +162,7 @@ def write_sql(result: ImportResult, out_path: Path, batch: int = 200) -> None:
         for i in range(0, len(products), batch):
             # One statement per line so the file can be split by line count for upload.
             values = ", ".join(
-                f"({_q(p.gtin)}, {_q(p.name)}, {_q(p.brand)}, {_q(p.category)}, NULL, {_q(p.unit_kind)}, {now}, {now})"
+                f"({_q(p.gtin)}, {_q(p.name)}, {_q(p.brand)}, {_q(p.category)}, {_q(p.image_url)}, {_q(p.unit_kind)}, {now}, {now})"
                 for p in products[i:i + batch]
             )
             out.write("INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES "
