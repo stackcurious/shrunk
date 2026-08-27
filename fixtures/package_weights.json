@@ -29,5 +29,8 @@
   { "input": "1 lb 4 oz", "quantity": 566.99, "unit_kind": "mass", "note": "compound imperial: 20 oz" },
   { "input": "1/2 Gallon", "quantity": 1892.705, "unit_kind": "volume", "note": "leading simple fraction: half gallon" },
   { "input": "1/4 lb", "quantity": 113.398, "unit_kind": "mass", "note": "leading simple fraction: quarter pound" },
-  { "input": "12/12 fl oz", "quantity": 354.882, "unit_kind": "volume", "note": "not a fraction: numerator equals denominator (12-pack of 12 fl oz)" }
+  { "input": "12/12 fl oz", "quantity": 4258.584, "unit_kind": "volume", "note": "R45: not a fraction — leading count multiplies (12-pack of 12 fl oz)" },
+  { "input": "6/16.9 fl oz", "quantity": 2998.753, "unit_kind": "volume", "note": "R45: leading count multiplies (6-pack of 16.9 fl oz)" },
+  { "input": "2/1 lb", "quantity": 907.184, "unit_kind": "mass", "note": "R45: leading count multiplies (2-pack of 1 lb)" },
+  { "input": "12 ct / 12 fl oz", "quantity": 4258.584, "unit_kind": "volume", "note": "R45: leading 'N ct' segment multiplies the per-unit size" }
 ]
