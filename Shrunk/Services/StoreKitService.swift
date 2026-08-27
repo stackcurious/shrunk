@@ -113,6 +113,7 @@ final class StoreKitService: ObservableObject {
 
         do {
             try await AppStore.sync()
+            loadError = nil
         } catch {
             loadError = error.localizedDescription
         }

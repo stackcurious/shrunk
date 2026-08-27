@@ -187,4 +187,23 @@ final class StoreKitConfigurationTests: XCTestCase {
         await service.refreshTrialEligibility()
         XCTAssertFalse(service.isTrialEligible, "the introductory offer is used once per group")
     }
+
+    // MARK: - Restore (P5-T8 fix round 2)
+
+    /// A stale `loadError` from an earlier failed restore/load must not survive a
+    /// restore that subsequently succeeds — otherwise the paywall's restore alert
+    /// appends old error text to "No purchases to restore." even though `AppStore
+    /// .sync()` just succeeded. `setSimulatedError(forAPI:)` deterministically forces
+    /// `AppStore.sync()` to fail, then succeed, within one test.
+    func test_restore_clearsAStaleLoadErrorOnceItSucceeds() async throws {
+        try await requireStoreKitSession()
+
+        try await session.setSimulatedError(.generic(.unknown), forAPI: .appStoreSync)
+        await service.restore()
+        XCTAssertNotNil(service.loadError, "the simulated AppStore.sync() failure should have set loadError")
+
+        try await session.setSimulatedError(nil, forAPI: .appStoreSync)
+        await service.restore()
+        XCTAssertNil(service.loadError, "a successful restore must clear a stale loadError")
+    }
 }
