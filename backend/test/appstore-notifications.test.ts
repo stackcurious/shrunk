@@ -7,9 +7,18 @@ import { newTestChain, signTestJWS, type TestChain } from "./helpers/mint-cert";
 const TOKEN = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
 const EXPIRES_MS = Date.UTC(2026, 8, 26); // 2026-09-26T00:00:00Z
 
-/** The env the route sees, with the generated root as its trust anchor. */
-function testEnv(chain: TestChain) {
-  return { ...env, APPSTORE_ROOT_CA_B64: bytesToBase64(chain.rootDer) };
+/**
+ * The env the route sees, with the generated root as its trust anchor.
+ * I3: fixtures below are Sandbox transactions (TestFlight/dev), so allow
+ * both by default; the environment-allowlist tests override this.
+ */
+function testEnv(chain: TestChain, overrides: Record<string, unknown> = {}) {
+  return {
+    ...env,
+    APPSTORE_ROOT_CA_B64: bytesToBase64(chain.rootDer),
+    APPSTORE_ALLOWED_ENVIRONMENTS: "Sandbox,Production",
+    ...overrides,
+  };
 }
 
 async function notificationJWS(chain: TestChain, tx: Record<string, unknown>, type = "DID_RENEW") {
@@ -109,5 +118,34 @@ describe("POST /v1/appstore/notifications", () => {
     const res = await post({ nope: true });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_body" });
+  });
+
+  describe("I3: environment allowlist", () => {
+    it("ignores a Sandbox transaction when only Production is allowed (the default)", async () => {
+      const res = await post(
+        { signedPayload: await notificationJWS(chain, transaction()) },
+        testEnv(chain, { APPSTORE_ALLOWED_ENVIRONMENTS: "Production" }),
+      );
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, updated: false, reason: "environment_not_allowed" });
+
+      const row = await env.DB.prepare("SELECT pro_until FROM devices WHERE app_account_token = ?")
+        .bind(TOKEN)
+        .first<{ pro_until: number | null }>();
+      expect(row?.pro_until).toBeNull();
+    });
+
+    it("applies a Production transaction when only Production is allowed", async () => {
+      const res = await post(
+        { signedPayload: await notificationJWS(chain, transaction({ environment: "Production" })) },
+        testEnv(chain, { APPSTORE_ALLOWED_ENVIRONMENTS: "Production" }),
+      );
+      expect(await res.json()).toMatchObject({ ok: true, updated: true });
+
+      const row = await env.DB.prepare("SELECT pro_until FROM devices WHERE app_account_token = ?")
+        .bind(TOKEN)
+        .first<{ pro_until: number | null }>();
+      expect(row?.pro_until).toBe(Math.floor(EXPIRES_MS / 1000));
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
-import { proUntilSeconds, trustAnchor } from "../appstore/entitlement";
+import { allowedAppstoreEnvironments, proUntilSeconds, trustAnchor } from "../appstore/entitlement";
 import { verifyAndDecode, verifyAndDecodeNotification } from "../appstore/jws";
 
 export const appstoreRoute = new Hono<{ Bindings: Env }>();
@@ -34,6 +34,18 @@ appstoreRoute.post("/v1/appstore/notifications", async (c) => {
   if (!tx) {
     console.warn("appstore: transaction signature did not verify", notification.notificationUUID);
     return c.json({ error: "invalid_signature" }, 401);
+  }
+
+  // I3 — an environment this Worker doesn't accept (Sandbox in production,
+  // by default) is ignored entirely: no Pro grant, no state written.
+  // See appstore/entitlement.ts.
+  if (!allowedAppstoreEnvironments(c.env).has(tx.environment)) {
+    return c.json({
+      ok: true,
+      updated: false,
+      reason: "environment_not_allowed",
+      notificationType: notification.notificationType,
+    });
   }
 
   const proUntil = proUntilSeconds(tx);

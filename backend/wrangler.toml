@@ -11,6 +11,7 @@ ENV = "dev"
 KROGER_PERSIST = "on"
 PUSH_PROVIDER = "apns"
 APNS_ENV = "sandbox"
+APPSTORE_ALLOWED_ENVIRONMENTS = "Production"
 
 [[d1_databases]]
 binding = "DB"

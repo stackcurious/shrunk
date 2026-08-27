@@ -7,6 +7,24 @@ export function trustAnchor(env: { APPSTORE_ROOT_CA_B64?: string }): Uint8Array 
 }
 
 /**
+ * I3 — the App Store `environment` claims this Worker will grant/apply
+ * entitlements for. Defaults to Production-only: without this, anyone with a
+ * free Apple sandbox tester account can produce a genuine, chain-valid JWS
+ * (sandbox subscriptions renew in minutes) and mint real Pro. TestFlight
+ * purchases are Sandbox, so a dev/TestFlight Worker sets
+ * `APPSTORE_ALLOWED_ENVIRONMENTS="Sandbox,Production"` (env.ts, wrangler.toml).
+ */
+export function allowedAppstoreEnvironments(env: { APPSTORE_ALLOWED_ENVIRONMENTS?: string }): Set<string> {
+  const raw = env.APPSTORE_ALLOWED_ENVIRONMENTS ?? "Production";
+  return new Set(
+    raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+  );
+}
+
+/**
  * The unix second at which Pro lapses for this transaction, or null when the
  * transaction must not grant anything: a foreign bundle id, or a transaction
  * with no expiry (a non-subscription purchase).
@@ -31,10 +49,14 @@ export async function entitlementFromJWS(
   jws: string | null | undefined,
   now: Date,
   rootDer?: Uint8Array,
+  allowedEnvironments: Set<string> = allowedAppstoreEnvironments({}),
 ): Promise<VerifiedEntitlement | null> {
   if (!jws) return null;
   const tx = await verifyAndDecode(jws, now, rootDer);
   if (!tx || !tx.appAccountToken) return null;
+  // I3 — a transaction from an environment this Worker doesn't accept grants
+  // nothing, same as any other verification failure.
+  if (!allowedEnvironments.has(tx.environment)) return null;
   const proUntil = proUntilSeconds(tx);
   if (proUntil == null) return null;
   return { appAccountToken: tx.appAccountToken.toLowerCase(), proUntil };

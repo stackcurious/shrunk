@@ -26,4 +26,15 @@ export interface Env {
    * verifies against Apple.
    */
   APPSTORE_ROOT_CA_B64?: string;
+  /**
+   * I3 (final review) — comma-separated allowlist of App Store `environment`
+   * claims ("Sandbox" | "Production") this Worker accepts, checked against
+   * both a device-posted transaction JWS and a Server Notifications V2
+   * payload. Defaults to `"Production"` when unset — see
+   * `appstore/entitlement.ts`'s `allowedAppstoreEnvironments`. Set to
+   * `"Sandbox,Production"` for a TestFlight/dev environment; production stays
+   * `"Production"`-only so a free sandbox tester account can never mint real
+   * Pro entitlements.
+   */
+  APPSTORE_ALLOWED_ENVIRONMENTS?: string;
 }

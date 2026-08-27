@@ -43,6 +43,7 @@ The Cloudflare Worker behind the Shrunk iOS app: Hono 4 on Workers, D1 for owned
 | `KROGER_PERSIST` | `on` / `off` | `off` stops **every** Kroger write immediately (spec §9 kill switch). |
 | `PUSH_PROVIDER` | `apns` / `fcm` | Which `PushSender` implementation runs (`src/push/index.ts`). |
 | `APNS_ENV` | `sandbox` / `production` | `sandbox` for development and TestFlight builds; `production` for the App Store build — selects the APNs host. |
+| `APPSTORE_ALLOWED_ENVIRONMENTS` | comma-separated `Sandbox`/`Production` | Which App Store `environment` claims `/v1/devices` and `/v1/appstore/notifications` will act on; anything else is ignored (no Pro grant / no state change, still `200`). Defaults to `"Production"`; set to `"Sandbox,Production"` for TestFlight/dev so sandbox testers still get Pro. |
 
 Secrets — `npx wrangler secret put <NAME>`, mirrored into the git-ignored `backend/.dev.vars` for `wrangler dev`. **Never committed.**
 

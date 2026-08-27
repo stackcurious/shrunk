@@ -9,8 +9,16 @@ const TOKEN = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
 const OTHER_DEVICE_ID = "11111111-2222-3333-4444-555555555555";
 const EXPIRES_MS = Date.UTC(2026, 8, 26);
 
-function testEnv(chain: TestChain) {
-  return { ...env, APPSTORE_ROOT_CA_B64: bytesToBase64(chain.rootDer) };
+// I3: fixtures below are Sandbox transactions (TestFlight/dev, per the
+// README's guidance) — allow both so this file stays about JWS/rebind
+// behaviour; the environment-allowlist test overrides this explicitly.
+function testEnv(chain: TestChain, overrides: Record<string, unknown> = {}) {
+  return {
+    ...env,
+    APPSTORE_ROOT_CA_B64: bytesToBase64(chain.rootDer),
+    APPSTORE_ALLOWED_ENVIRONMENTS: "Sandbox,Production",
+    ...overrides,
+  };
 }
 
 function transaction(overrides: Record<string, unknown> = {}) {
@@ -134,5 +142,25 @@ describe("POST /v1/devices — subscription verification", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, pro: false });
     expect(await deviceRow()).toEqual({ pro_until: Math.floor(pastMs / 1000), app_account_token: TOKEN });
+  });
+
+  it("I3: grants nothing for a Sandbox transaction when only Production is allowed (the default)", async () => {
+    const res = await postDevice(
+      { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) },
+      testEnv(chain, { APPSTORE_ALLOWED_ENVIRONMENTS: "Production" }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: false });
+    expect(await deviceRow()).toEqual({ pro_until: null, app_account_token: null });
+  });
+
+  it("I3: grants Pro for a Production transaction when only Production is allowed", async () => {
+    const res = await postDevice(
+      { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction({ environment: "Production" })) },
+      testEnv(chain, { APPSTORE_ALLOWED_ENVIRONMENTS: "Production" }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: true });
+    expect(await deviceRow()).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
   });
 });

@@ -3,7 +3,7 @@ import { getDevice, replaceWatches, upsertDevice, type WatchInput } from "../db"
 import type { Env } from "../env";
 import { canonicalCategory } from "../categories";
 import { normalizeGTIN } from "../gtin";
-import { entitlementFromJWS, trustAnchor } from "../appstore/entitlement";
+import { allowedAppstoreEnvironments, entitlementFromJWS, trustAnchor } from "../appstore/entitlement";
 import { canonicalDeviceId, DEVICES_HOURLY_LIMIT, hitRateLimit, isValidDeviceId } from "../ratelimit";
 
 /** Spec §3 says "unlimited items"; 500 is the abuse ceiling, not a product limit. */
@@ -70,7 +70,12 @@ devicesRoute.post("/v1/devices", async (c) => {
   // own device, the same bar as stealing any other bearer credential.)
   // `isValidDeviceId` guards against a malformed/garbage token being treated
   // as a rebind target — it must actually look like a device id.
-  const entitlement = await entitlementFromJWS(transactionJws, new Date(), trustAnchor(c.env));
+  const entitlement = await entitlementFromJWS(
+    transactionJws,
+    new Date(),
+    trustAnchor(c.env),
+    allowedAppstoreEnvironments(c.env)
+  );
   const verified =
     entitlement && (entitlement.appAccountToken === id || isValidDeviceId(entitlement.appAccountToken))
       ? entitlement
