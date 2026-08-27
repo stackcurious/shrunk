@@ -10,7 +10,9 @@ const jsonResponse = (body: unknown, status = 200) =>
 describe("lookupFDC", () => {
   it("returns name/brand/category when the gtin matches", async () => {
     const fetchImpl = vi.fn(async (url: string) => {
-      expect(url).toContain("query=0028400642255");
+      // The gtin goes out as a field-scoped leading wildcard, not as our
+      // canonical 13-digit form — see gtinQuery in src/lookup/fdc.ts.
+      expect(decodeURIComponent(url)).toContain("query=gtinUpc:*28400642255");
       expect(url).toContain("api_key=k");
       return jsonResponse({ foods: [{ gtinUpc: "028400642255", description: "GATORADE THIRST QUENCHER", brandOwner: "Stokely-Van Camp", brandName: "Gatorade", foodCategory: "Sports Drinks" }] });
     });
@@ -19,6 +21,36 @@ describe("lookupFDC", () => {
     // Spec §1 rule 6: no packageWeight/publishedDate/fdcId in this fixture,
     // so those three carry through as null.
     expect(hit).toEqual({ name: "Gatorade Thirst Quencher", brand: "Gatorade", category: "Sports Drinks", packageWeight: null, observedAt: null, fdcId: null });
+  });
+
+  // FDC's `query` matches the gtinUpc string exactly as stored, and it stores
+  // all three spellings: of 50 sampled "Doritos" records, 26 were 14-digit,
+  // 19 were 12-digit and 5 were 13-digit. Sending only our canonical 13-digit
+  // zero-padded form therefore missed ~90% of the catalogue outright
+  // (`query=0016000362451` -> totalHits 0, `query=00016000362451` -> 1), which
+  // is why on-miss lookups almost never carried FDC data. A field-scoped
+  // leading wildcard on the zero-stripped digits matches every spelling.
+  it("queries the gtinUpc field with a leading wildcard so every zero-padding matches", async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL) => jsonResponse({ foods: [] }));
+    await lookupFDC("0016000362451", "k", fetchImpl as unknown as typeof fetch);
+    const url = String(fetchImpl.mock.calls[0][0]);
+    expect(decodeURIComponent(url)).toContain("query=gtinUpc:*16000362451");
+  });
+
+  it("picks the food whose gtin actually matches, not merely the first", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({
+        foods: [
+          // A leading wildcard can also match a longer gtin that ends in the
+          // same digits; only an exact normalized match is our product.
+          { gtinUpc: "09928400642255", description: "DECOY", packageWeight: "99 oz" },
+          { gtinUpc: "00028400642255", description: "GATORADE", brandName: "Gatorade", packageWeight: "28 fl oz" },
+        ],
+      }),
+    );
+    const hit = await lookupFDC("0028400642255", "k", fetchImpl as unknown as typeof fetch);
+    expect(hit?.name).toBe("Gatorade");
+    expect(hit?.packageWeight).toBe("28 fl oz");
   });
 
   it("returns null when the top hit is a different gtin or the request fails", async () => {
