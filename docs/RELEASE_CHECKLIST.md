@@ -136,17 +136,23 @@ npm run deploy
 
 - [ ] **Step 7: Verify Kroger live against a real Cincinnati store**
 
+Every `/v1/kroger/*` route requires an `X-Device-Id` header that parses as a UUID —
+its middleware (`backend/src/routes/kroger.ts:18-22`) 400s `invalid_device_id`
+before touching KV or Kroger otherwise:
+
 ```bash
 API=https://shrunk-api.<account>.workers.dev
-curl -s "$API/v1/kroger/locations?zip=45044" | head -c 400
+DEVICE_ID=$(uuidgen | tr A-Z a-z)
+curl -s -H "X-Device-Id: $DEVICE_ID" "$API/v1/kroger/locations?zip=45044" | head -c 400
 # pick a locationId from the output, then:
-curl -si "$API/v1/kroger/product/0028400642255?locationId=<locationId>" | head -20
-curl -s "$API/v1/kroger/search?term=Beverages&locationId=<locationId>" | head -c 400
+curl -si -H "X-Device-Id: $DEVICE_ID" "$API/v1/kroger/product/0028400642255?locationId=<locationId>" | head -20
+curl -s -H "X-Device-Id: $DEVICE_ID" "$API/v1/kroger/search?term=Beverages&locationId=<locationId>" | head -c 400
 ```
 Expected: `"attribution":"Prices from Kroger"` in every body, a `Cache-Control`
 header forwarded from Kroger on the product call, and a `regular` price present.
 `{"error":"kroger_upstream","status":401}` means the credentials are wrong — re-run
-Step 6.
+Step 6. `{"error":"invalid_device_id"}` (400) means the `X-Device-Id` header is
+missing or isn't a UUID — fix the header, not the credentials.
 
 Confirm persistence landed:
 
@@ -179,8 +185,12 @@ more ids separated by a literal `,`.
 
 `backend/spikes/apns-probe.ts` is a **throwaway** spike — it is not in the repo
 (deleted at the end of Phase 1 Task 14) and answers one question: can a Worker's
-outbound `fetch` reach `https://api.push.apple.com`, which requires HTTP/2? Skip
-this step only if spec §6.5 already has a result line. Otherwise, recreate and run it.
+outbound `fetch` reach Apple's APNs HTTP/2 endpoint? The inlined probe below posts to
+`api.sandbox.push.apple.com` (the sandbox host, matching `APNS_ENV="sandbox"` for the
+TestFlight period — see Step 9); the production Worker uses `api.push.apple.com` once
+`APNS_ENV` flips to `"production"` at App Store release ("Ship a build" below), same
+HTTP/2 question either way. Skip this step only if spec §6.5 already has a result
+line. Otherwise, recreate and run it.
 
 Needs, ahead of time: an APNs auth key (`.p8`) from developer.apple.com → Keys → "+" →
 Apple Push Notifications service (this can be the same key Step 9 below sets as a
