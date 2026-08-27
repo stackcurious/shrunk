@@ -72,7 +72,19 @@ enum NetContentParser {
     )
 
     /// "12 oz/340 g" and "NET WT 12 OZ (340g)" both split into comparable segments.
-    private static let segmentSplit = try! NSRegularExpression(pattern: #"\s*/\s*|\s*\(|\)\s*"#)
+    ///
+    /// R47 — "," joins equivalents ("14.5 oz, 450 g"), exactly like "/" and "()".
+    /// It is *not* additive: before this rule the whole string was one segment
+    /// and `parseSegment`'s compound-imperial branch summed both halves, so an
+    /// equivalent pair recorded roughly double the true size — a fabricated
+    /// shrink on the next observation. The two comma alternatives skip the
+    /// decimal and thousands comma of European spellings ("360 g/12,7 oz",
+    /// "1,000 mL"), which are the only commas FDC actually ships: a comma
+    /// splits when it is followed by whitespace, or when it is not preceded by
+    /// a digit.
+    private static let segmentSplit = try! NSRegularExpression(
+        pattern: #"\s*/\s*|\s*\(|\)\s*|\s*,\s+|(?<![0-9]),\s*"#
+    )
 
     /// Spec §6.3 — the lines a label uses to announce net content. Tightened per
     /// phase-2 review finding I3: applied case-insensitively, the raw `e\s*\d`
@@ -106,6 +118,15 @@ enum NetContentParser {
     )
     private static let fractionDenominators: Set<Int> = [2, 3, 4, 8]
 
+    /// R48 — a mixed number ("9 1/4 OZ/262.2 g", FDC's spelling for Doritos) is
+    /// one quantity, 9.25 oz. Split on "/" first it became the segments "9 1"
+    /// and "4 OZ", so the string either missed entirely (the "4 OZ" reading
+    /// disagreed with the metric half) or silently returned the fraction's
+    /// denominator as the size ("6 1/2 oz" -> 2 oz). Expanded before any
+    /// splitting, and only for a proper household fraction, so FDC's mangled
+    /// "16 454/454 g" and "11/4 946/946 mL)" stay untouched.
+    private static let mixedNumber = try! NSRegularExpression(pattern: #"(\d+)\s+(\d+)/(\d+)"#)
+
     /// R45 — a leading bare integer segment ("12/12 fl oz") or a leading
     /// count-unit segment ("12 ct / 12 fl oz", "12 ea / 12 fl oz") is a pack
     /// multiplier for the segment right after it, not a value in its own
@@ -117,7 +138,10 @@ enum NetContentParser {
     /// `each`, `h87`, `pc`, `pcs`, `piece`, `pieces`), not a hardcoded subset.
     /// Only ever consulted when there are ≥2 segments, so a standalone
     /// "12 ct" (one segment, no "/") is untouched and still parses as a
-    /// plain count of 12.
+    /// plain count of 12. A pack count is a whole number, so this is
+    /// integer-only — `normalize.ts`/`.py` allowed a decimal here until R48
+    /// and now match, which is what keeps "4 1/4/120 g" (R48-expanded to
+    /// "4.25/120 g") reading as 120 g rather than a 4.25-pack of it.
     private static let leadingBareInteger = try! NSRegularExpression(pattern: #"^(\d+)$"#)
 
     // MARK: - Public API
@@ -125,7 +149,7 @@ enum NetContentParser {
     static func parse(_ raw: String) -> ParsedQuantity? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let text = expandLeadingFraction(trimmed)
+        let text = expandLeadingFraction(expandMixedNumbers(trimmed))
         let rawSegments = segments(of: text)
 
         // R45 multipack rule: a leading pack-count segment multiplies the
@@ -139,10 +163,18 @@ enum NetContentParser {
            let multiplier = leadingMultiplierValue(rawSegments[0]),
            multiplier > 0 {
             // A leading pack count with no usable per-unit size after it is a
-            // reject, not a fallback to whatever else is in the string.
-            guard let size = parseSegment(rawSegments[1]), size.kind != .count else { return nil }
+            // reject, not a fallback to whatever else is in the string. Every
+            // remaining segment is considered — not just the next one — and any
+            // same-kind repeats must agree, exactly as normalize.ts/.py do.
+            let perUnit = rawSegments.dropFirst().compactMap(parseSegment).filter { $0.kind != .count }
+            guard let size = perUnit.first else { return nil }
+            for other in perUnit.dropFirst() where other.kind == size.kind {
+                if abs(other.value - size.value) / size.value > tolerance { return nil }
+            }
+            let total = multiplier * size.value
+            guard total > 0 else { return nil }
             return ParsedQuantity(
-                quantity: (multiplier * size.value * 1000).rounded() / 1000,
+                quantity: (total * 1000).rounded() / 1000,
                 unitKind: size.kind,
                 raw: raw
             )
@@ -203,6 +235,24 @@ enum NetContentParser {
 
     private static func fullRange(of text: String) -> NSRange {
         NSRange(location: 0, length: (text as NSString).length)
+    }
+
+    /// R48 — rewrite every "9 1/4" as "9.25", innermost-last so earlier match
+    /// ranges stay valid. A fraction that isn't a proper household one is left
+    /// exactly as written.
+    private static func expandMixedNumbers(_ text: String) -> String {
+        let ns = text as NSString
+        var result = text
+        for match in mixedNumber.matches(in: text, range: fullRange(of: text)).reversed() {
+            guard let whole = Int(ns.substring(with: match.range(at: 1))),
+                  let numerator = Int(ns.substring(with: match.range(at: 2))),
+                  let denominator = Int(ns.substring(with: match.range(at: 3))),
+                  fractionDenominators.contains(denominator),
+                  numerator != 0, numerator < denominator else { continue }
+            let value = Double(whole) + Double(numerator) / Double(denominator)
+            result = (result as NSString).replacingCharacters(in: match.range, with: "\(value)")
+        }
+        return result
     }
 
     private static func expandLeadingFraction(_ text: String) -> String {

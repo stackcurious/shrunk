@@ -22,7 +22,15 @@ const UNIT_ALT = Object.keys(UNITS).sort((a, b) => b.length - a.length).map(esc)
 const NUM = "(\\d+(?:[.,]\\d+)?)";
 const MULTIPACK = new RegExp(`${NUM}\\s*(?:[-–x×*]|pk\\s+of|pack\\s+of)\\s*${NUM}\\s*(fl\\s?oz|${UNIT_ALT})\\b`);
 const QTY_UNIT = new RegExp(`${NUM}\\s*(fl\\s?oz|${UNIT_ALT})\\b`, "g");
-const SEGMENT_SPLIT = /\s*\/\s*|\s*\(|\)\s*/;
+// R47 — "," joins equivalents ("14.5 oz, 450 g"), exactly like "/" and "()".
+// It is *not* additive: before this rule the whole string was one segment and
+// `parseSegment`'s compound-imperial branch summed both halves, so an
+// equivalent pair recorded roughly double the true size — a fabricated shrink
+// on the next observation. The two comma alternatives below skip the decimal
+// and thousands comma of European spellings ("360 g/12,7 oz", "1,000 mL"),
+// which are the *only* commas FDC actually ships: a comma splits when it is
+// followed by whitespace, or when it is not preceded by a digit.
+const SEGMENT_SPLIT = /\s*\/\s*|\s*\(|\)\s*|\s*,\s+|(?<![0-9]),\s*/;
 const TOLERANCE = 0.02;
 
 // "1/2 Gallon" is a fraction; "12/12 fl oz" is a 12-pack of 12 fl oz. Only a
@@ -30,6 +38,15 @@ const TOLERANCE = 0.02;
 // leads the string — everything else stays a "/"-separated segment list.
 const LEADING_FRACTION = /^\s*(\d+)\s*\/\s*(\d+)\s+([a-zA-Z].*)$/;
 const FRACTION_DENOMINATORS = new Set([2, 3, 4, 8]);
+
+// R48 — a mixed number ("9 1/4 OZ/262.2 g", FDC's spelling for Doritos) is one
+// quantity, 9.25 oz. Split on "/" first it became the segments "9 1" and
+// "4 OZ", so the string either missed entirely (the "4 OZ" reading disagreed
+// with the metric half) or silently returned the fraction's denominator as the
+// size ("6 1/2 oz" -> 2 oz). Expanded before any splitting, and only for a
+// proper household fraction, so FDC's mangled "16 454/454 g" and "11/4 946/946
+// mL)" stay untouched.
+const MIXED_NUMBER = /(\d+)\s+(\d+)\/(\d+)/g;
 
 // R45 — a bare integer segment ("12/12 fl oz") or a count-unit segment
 // ("12 ct / 12 fl oz") that *leads* a "/"-separated list is a multipack
@@ -39,7 +56,21 @@ const FRACTION_DENOMINATORS = new Set([2, 3, 4, 8]);
 // (a bare "12" fails to parse at all; "12 ct" was filtered out by the
 // count-vs-mass preference below) and returned the per-unit size as if it
 // were the whole package — a silent 12x-too-small reading.
-const BARE_COUNT = /^\d+(?:[.,]\d+)?$/;
+//
+// A pack count is a whole number: "4.25/120 g" (what R48 makes of FDC's
+// "4 1/4/120 g") is a size whose unit was dropped, not a 4.25-pack, so the
+// bare-count form is integer-only — matching NetContentParser.swift, which
+// always was.
+const BARE_COUNT = /^\d+$/;
+
+function expandMixedNumbers(text: string): string {
+  return text.replace(MIXED_NUMBER, (whole, w: string, n: string, d: string) => {
+    const numerator = parseInt(n, 10);
+    const denominator = parseInt(d, 10);
+    if (!FRACTION_DENOMINATORS.has(denominator) || numerator === 0 || numerator >= denominator) return whole;
+    return `${parseInt(w, 10) + numerator / denominator}`;
+  });
+}
 
 function expandLeadingFraction(text: string): string {
   const match = LEADING_FRACTION.exec(text);
@@ -90,7 +121,7 @@ export function parsePackageWeight(raw: string | null | undefined): ParsedQuanti
   if (!raw) return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  const text = expandLeadingFraction(trimmed);
+  const text = expandLeadingFraction(expandMixedNumbers(trimmed));
 
   const rawSegments = text.split(SEGMENT_SPLIT);
 

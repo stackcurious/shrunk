@@ -39,7 +39,15 @@ _NUM = r"(\d+(?:[.,]\d+)?)"
 # "12 - 12 fl oz", "6 x 330 ml", "12/12 oz" -> multiplier, then quantity+unit
 _MULTIPACK = re.compile(rf"{_NUM}\s*(?:[-–x×*]|pk\s+of|pack\s+of)\s*{_NUM}\s*(fl\s?oz|{_UNIT_ALTERNATION})\b")
 _QTY_UNIT = re.compile(rf"{_NUM}\s*(fl\s?oz|{_UNIT_ALTERNATION})\b")
-_SEGMENT_SPLIT = re.compile(r"\s*/\s*|\s*\(|\)\s*")
+# R47 — "," joins equivalents ("14.5 oz, 450 g"), exactly like "/" and "()".
+# It is *not* additive: before this rule the whole string was one segment and
+# `_parse_segment`'s compound-imperial branch summed both halves, so an
+# equivalent pair recorded roughly double the true size — a fabricated shrink
+# on the next observation. The two comma alternatives below skip the decimal
+# and thousands comma of European spellings ("360 g/12,7 oz", "1,000 mL"),
+# which are the *only* commas FDC actually ships: a comma splits when it is
+# followed by whitespace, or when it is not preceded by a digit.
+_SEGMENT_SPLIT = re.compile(r"\s*/\s*|\s*\(|\)\s*|\s*,\s+|(?<![0-9]),\s*")
 _TOLERANCE = 0.02
 
 # "1/2 Gallon" is a fraction; "12/12 fl oz" is a 12-pack of 12 fl oz. Only a
@@ -47,6 +55,15 @@ _TOLERANCE = 0.02
 # leads the string — everything else stays a "/"-separated segment list.
 _LEADING_FRACTION = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s+([a-zA-Z].*)$")
 _FRACTION_DENOMINATORS = {2, 3, 4, 8}
+
+# R48 — a mixed number ("9 1/4 OZ/262.2 g", FDC's spelling for Doritos) is one
+# quantity, 9.25 oz. Split on "/" first it became the segments "9 1" and
+# "4 OZ", so the string either missed entirely (the "4 OZ" reading disagreed
+# with the metric half) or silently returned the fraction's denominator as the
+# size ("6 1/2 oz" -> 2 oz). Expanded before any splitting, and only for a
+# proper household fraction, so FDC's mangled "16 454/454 g" and "11/4 946/946
+# mL)" stay untouched.
+_MIXED_NUMBER = re.compile(r"(\d+)\s+(\d+)/(\d+)")
 
 # R45 — a bare integer segment ("12/12 fl oz") or a count-unit segment
 # ("12 ct / 12 fl oz") that *leads* a "/"-separated list is a multipack
@@ -56,7 +73,22 @@ _FRACTION_DENOMINATORS = {2, 3, 4, 8}
 # (a bare "12" fails to parse at all; "12 ct" was filtered out by the
 # count-vs-mass preference below) and returned the per-unit size as if it
 # were the whole package — a silent 12x-too-small reading.
-_BARE_COUNT = re.compile(r"^\d+(?:[.,]\d+)?$")
+#
+# A pack count is a whole number: "4.25/120 g" (what R48 makes of FDC's
+# "4 1/4/120 g") is a size whose unit was dropped, not a 4.25-pack, so the
+# bare-count form is integer-only — matching NetContentParser.swift, which
+# always was.
+_BARE_COUNT = re.compile(r"^\d+$")
+
+
+def _expand_mixed_numbers(text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        whole, numerator, denominator = (int(match.group(i)) for i in (1, 2, 3))
+        if denominator not in _FRACTION_DENOMINATORS or numerator == 0 or numerator >= denominator:
+            return match.group(0)
+        return f"{whole + numerator / denominator}"
+
+    return _MIXED_NUMBER.sub(replace, text)
 
 
 def _expand_leading_fraction(text: str) -> str:
@@ -129,6 +161,7 @@ def parse_package_weight(raw: str) -> ParsedQuantity | None:
     text = raw.strip()
     if not text:
         return None
+    text = _expand_mixed_numbers(text)
     text = _expand_leading_fraction(text)
 
     raw_segments = _SEGMENT_SPLIT.split(text)
