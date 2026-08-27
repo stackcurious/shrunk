@@ -4,6 +4,8 @@ import app from "../src/index";
 import { hitRateLimit, KROGER_HOURLY_LIMIT } from "../src/ratelimit";
 import { declaredBodyTooLarge } from "../src/routes/observations";
 
+const BUCKET = () => Math.floor(Date.now() / 1000 / 3600);
+
 const GTIN = "0028400642255";
 // R42: device_id must now be UUID-shaped (isValidDeviceId), same as /v1/devices and /v1/kroger/*.
 const DEVICE = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
@@ -181,6 +183,23 @@ describe("POST /v1/observations", () => {
     const submission = await env.DB.prepare("SELECT gtin FROM submissions").first<any>();
     expect(submission.gtin).toBe(GTIN);
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM products").first<{ n: number }>())!.n).toBe(1);
+  });
+
+  it("R42: canonicalizes an uppercase device_id to lowercase in submissions and the rate-limit key", async () => {
+    // A device unique to this test — DEVICE's own rate-limit bucket already
+    // has counts from earlier tests in this file, since KV isn't reset in
+    // beforeEach (only D1 and R2 are).
+    const uppercaseDevice = crypto.randomUUID().toUpperCase();
+    const bucket = BUCKET();
+
+    const res = await post(body({ device_id: uppercaseDevice }));
+    expect(res.status).toBe(200);
+
+    const submission = await env.DB.prepare("SELECT device_id FROM submissions").first<{ device_id: string }>();
+    expect(submission!.device_id).toBe(uppercaseDevice.toLowerCase());
+
+    const count = await env.KV.get(`rl:observations:${uppercaseDevice.toLowerCase()}:${bucket}`);
+    expect(count).toBe("1");
   });
 
   it("rejects malformed submissions", async () => {

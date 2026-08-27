@@ -137,6 +137,22 @@ describe("POST /v1/devices", () => {
     expect(await (await post({ device_id: DEVICE })).json()).toEqual({ ok: true, pro: false });
   });
 
+  it("R42: a device that syncs once uppercase and once lowercase resolves to one row, one watch set, and keeps pro_until", async () => {
+    await post({ device_id: DEVICE.toUpperCase(), watches: [{ gtin: "0028400642255", brand: "Gatorade" }] });
+    await env.DB.prepare("UPDATE devices SET pro_until = ? WHERE id = ?")
+      .bind(Math.floor(Date.now() / 1000) + 86400, DEVICE)
+      .run();
+
+    // Same physical device, this time syncing with the canonical lowercase id.
+    const res = await post({ device_id: DEVICE, apns_token: "a1b2c3" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pro: true });
+
+    const rows = await env.DB.prepare("SELECT id FROM devices").all<{ id: string }>();
+    expect(rows.results).toEqual([{ id: DEVICE }]);
+    expect(await watchRows()).toEqual([{ gtin: "0028400642255", brand: "Gatorade", alert_enabled: 1 }]);
+  });
+
   it("rejects a device id that is not a UUID", async () => {
     const res = await post({ device_id: "not-a-uuid" });
     expect(res.status).toBe(400);

@@ -487,6 +487,15 @@ export interface EraseDeviceResult {
  * Idempotent: a device with nothing left to delete returns all zeros.
  */
 export async function eraseDevice(db: D1Database, r2: R2Bucket, deviceId: string): Promise<EraseDeviceResult> {
+  // R2 first, D1 batch second — deliberately, not incidentally. If the
+  // process dies between the two steps, the submissions row (and its
+  // photo_key) is still there, so a retry re-discovers the same photo and
+  // re-issues r2.delete() — a harmless no-op against an already-deleted key,
+  // per this function's documented idempotency. Doing it the other way
+  // round would be unsafe for an erasure endpoint: once the D1 batch deletes
+  // the submissions row, nothing on a retry would ever find that photo_key
+  // again, so a crash after the D1 delete but before the R2 delete would
+  // leak the photo forever while the caller believes it erased everything.
   const { results: pendingPhotos } = await db
     .prepare("SELECT photo_key FROM submissions WHERE device_id = ? AND status = 'pending' AND photo_key IS NOT NULL")
     .bind(deviceId)
