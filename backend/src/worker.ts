@@ -16,7 +16,11 @@ export default {
         ctx.waitUntil(runAlertDrain(env));
         break;
       case "0 */6 * * *":
-        ctx.waitUntil(runKrogerSweep(env));
+        // I2 — per-pair failures are already contained inside runKrogerSweep;
+        // this catches anything above that (e.g. the initial pair-selection
+        // query itself failing) so an unhandled rejection never surfaces from
+        // ctx.waitUntil.
+        ctx.waitUntil(runKrogerSweep(env).catch(() => {}));
         break;
       case "0 1 * * 1":
         ctx.waitUntil(runWeeklyDigest(env));

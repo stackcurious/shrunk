@@ -1,6 +1,6 @@
 import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { runKrogerSweep } from "../src/sweep";
+import { runKrogerSweep, selectSweepPairs, SWEEP_PAIR_CAP } from "../src/sweep";
 import worker from "../src/worker";
 
 const TOKEN_BODY = { access_token: "tok-123", expires_in: 1800, token_type: "bearer" };
@@ -66,7 +66,7 @@ async function jobKinds(): Promise<string[]> {
 describe("runKrogerSweep", () => {
   it("does nothing when persistence is off", async () => {
     await seedSnapshot("32 fl oz", 2.0);
-    expect(await runKrogerSweep(env)).toEqual({ pairs: 0, snapshots: 0, sizeDrops: 0, priceHikes: 0 });
+    expect(await runKrogerSweep(env)).toEqual({ pairs: 0, snapshots: 0, sizeDrops: 0, priceHikes: 0, failures: 0 });
     expect(await jobKinds()).toEqual([]);
   });
 
@@ -164,6 +164,123 @@ describe("runKrogerSweep", () => {
     const result = await runKrogerSweep(on());
     expect(result.pairs).toBe(60);
     expect(batchSizes).toEqual([50, 10]);
+  });
+});
+
+describe("I2 — error containment and per-invocation cap", () => {
+  it("continues past a per-pair D1 write failure and counts it in failures", async () => {
+    await seedSnapshot("32 fl oz", 2.0);
+    stubBatch("28 fl oz", 2.0);
+
+    // Poison persistKrogerProduct's write (INSERT OR IGNORE INTO products) so
+    // this one pair's persist step throws mid-run.
+    const poisoned = new Proxy(env.DB, {
+      get(target: D1Database, prop: string | symbol, receiver: unknown) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("INSERT OR IGNORE INTO products")) {
+              throw new Error("boom: simulated D1 write failure");
+            }
+            return target.prepare(sql);
+          };
+        }
+        return Reflect.get(target as object, prop, receiver as object);
+      },
+    }) as unknown as D1Database;
+
+    const result = await runKrogerSweep({ ...on(), DB: poisoned });
+    expect(result).toMatchObject({ pairs: 1, snapshots: 0, sizeDrops: 0, priceHikes: 0, failures: 1 });
+    // The failed pair must not have filed an alert from partial state.
+    expect(await jobKinds()).toEqual([]);
+  });
+
+  it("caps pairs at SWEEP_PAIR_CAP per run", async () => {
+    const total = SWEEP_PAIR_CAP + 40;
+    const statements = [];
+    for (let i = 0; i < total; i++) {
+      // Starts with '9' so krogerProductId() rejects it (spec: only '0'-prefixed
+      // GTINs map to Kroger) — the batch loop below skips every chunk without
+      // ever calling Kroger, keeping this test's only concern `result.pairs`.
+      const gtin = `9${String(i).padStart(12, "0")}`;
+      statements.push(
+        env.DB
+          .prepare(
+            "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', 1700000000)",
+          )
+          .bind(gtin, LOCATION),
+      );
+    }
+    for (let i = 0; i < statements.length; i += 100) {
+      await env.DB.batch(statements.slice(i, i + 100));
+    }
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        throw new Error(`unexpected fetch: ${String(input)}`);
+      }),
+    );
+
+    const result = await runKrogerSweep(on());
+    expect(result.pairs).toBe(SWEEP_PAIR_CAP);
+  });
+
+  it("does not reject when the sweep's initial query fails — the waitUntil promise is caught", async () => {
+    await seedSnapshot("32 fl oz", 2.0);
+
+    // Poison the pairs-selection query itself — a failure above per-pair
+    // containment, e.g. a D1 outage before any pair is even known.
+    const poisoned = new Proxy(env.DB, {
+      get(target: D1Database, prop: string | symbol, receiver: unknown) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("FROM watches w JOIN devices d")) {
+              throw new Error("boom: simulated D1 outage");
+            }
+            return target.prepare(sql);
+          };
+        }
+        return Reflect.get(target as object, prop, receiver as object);
+      },
+    }) as unknown as D1Database;
+
+    const ctx = createExecutionContext();
+    await worker.scheduled({ cron: "0 */6 * * *", scheduledTime: Date.now() } as ScheduledController, { ...on(), DB: poisoned }, ctx);
+    await expect(waitOnExecutionContext(ctx)).resolves.toBeUndefined();
+  });
+});
+
+describe("selectSweepPairs", () => {
+  const period = 6 * 60 * 60;
+
+  it("returns the input unchanged when it is at or under the cap", () => {
+    const pairs = Array.from({ length: SWEEP_PAIR_CAP }, (_, i) => i);
+    expect(selectSweepPairs(pairs, 0)).toEqual(pairs);
+    expect(selectSweepPairs([1, 2, 3], 12345)).toEqual([1, 2, 3]);
+  });
+
+  it("caps an oversized input to exactly SWEEP_PAIR_CAP items", () => {
+    const pairs = Array.from({ length: SWEEP_PAIR_CAP + 40 }, (_, i) => i);
+    expect(selectSweepPairs(pairs, 0)).toHaveLength(SWEEP_PAIR_CAP);
+  });
+
+  it("rotates the window forward by one cap's worth every six-hourly tick", () => {
+    const pairs = Array.from({ length: SWEEP_PAIR_CAP + 40 }, (_, i) => i);
+    expect(selectSweepPairs(pairs, 0)).toEqual(pairs.slice(0, SWEEP_PAIR_CAP));
+    // One tick later, the window has moved on: it now starts at index 400
+    // (wrapping mod 440), covering the remaining 40 plus the first 360 again.
+    const secondWindow = selectSweepPairs(pairs, period);
+    expect(secondWindow[0]).toBe(400);
+    expect(secondWindow).toHaveLength(SWEEP_PAIR_CAP);
+  });
+
+  it("wraps around so every pair is eventually covered", () => {
+    const total = SWEEP_PAIR_CAP + 40;
+    const pairs = Array.from({ length: total }, (_, i) => i);
+    const covered = new Set<number>();
+    for (let tick = 0; tick < 2; tick++) {
+      for (const p of selectSweepPairs(pairs, tick * period)) covered.add(p);
+    }
+    expect(covered.size).toBe(total);
   });
 });
 

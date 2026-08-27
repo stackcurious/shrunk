@@ -112,7 +112,7 @@ describe("runKrogerSweep pair selection", () => {
     await seedDevice("dev-1", LOCATION);
     await seedWatch("dev-1", GTIN_WATCHED);
     const { client, batches } = fakeClient();
-    expect(await runKrogerSweep(env, client)).toEqual({ pairs: 0, snapshots: 0, sizeDrops: 0, priceHikes: 0 });
+    expect(await runKrogerSweep(env, client)).toEqual({ pairs: 0, snapshots: 0, sizeDrops: 0, priceHikes: 0, failures: 0 });
     expect(batches).toHaveLength(0);
   });
 
