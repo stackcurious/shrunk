@@ -73,4 +73,22 @@ final class PushInboxTests: XCTestCase {
         PushInbox.shared.open(userInfo: payload(kind: "digest", gtin: nil, body: "3 new shrinks in Snacks"))
         XCTAssertNil(PushInbox.shared.pendingBarcode)
     }
+
+    func test_recordBeforeTheContainerIsSetIsNotLostOrDuplicated() throws {
+        PushInbox.shared.container = nil
+        let userInfo = payload(kind: "sizeDrop", gtin: "0052000133417", body: "Now 28 fl oz")
+        XCTAssertNil(PushInbox.shared.record(userInfo: userInfo))   // no container yet — not dropped for good
+
+        PushInbox.shared.container = container
+        PushInbox.shared.record(userInfo: userInfo)                // the tap's own call, after the buffer replayed
+        XCTAssertEqual(try storedAlerts().count, 1)
+    }
+
+    func test_bufferedRecordReplaysAsSoonAsTheContainerArrives() throws {
+        PushInbox.shared.container = nil
+        PushInbox.shared.record(userInfo: payload(kind: "sizeDrop", gtin: "0052000133417", body: "Now 28 fl oz"))
+
+        PushInbox.shared.container = container
+        XCTAssertEqual(try storedAlerts().count, 1)
+    }
 }
