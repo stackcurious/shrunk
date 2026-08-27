@@ -306,7 +306,8 @@ struct ProPaywallContent: View {
         VStack(spacing: 0) {
             valueRow(icon: "bell.badge.fill", color: .shrunkRed,
                      title: "Watchlist alerts",
-                     body: "Push the moment a watched product shrinks or its price per unit jumps 5%.")
+                     body: "Push the moment a watched product shrinks or its price per unit jumps 5%.",
+                     isLast: false)
             valueRow(icon: "calendar.badge.clock", color: .verdictWarn,
                      title: "Weekly digest",
                      body: "What shrank this week in the categories you buy.")
@@ -318,13 +319,14 @@ struct ProPaywallContent: View {
                      body: "Every observation we hold, not just the latest before and after.")
             valueRow(icon: "shield.checkered", color: .verdictGood,
                      title: "Real savings dashboard",
-                     body: "What each shrink actually costs you a year, from observed sizes and prices.")
+                     body: "What each shrink actually costs you a year, from observed sizes and prices.",
+                     isLast: true)
         }
         .background(Color(.secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
-    private func valueRow(icon: String, color: Color, title: String, body: String) -> some View {
+    private func valueRow(icon: String, color: Color, title: String, body: String, isLast: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.title3)
@@ -342,7 +344,9 @@ struct ProPaywallContent: View {
         }
         .padding(16)
         .overlay(alignment: .bottom) {
-            Divider().padding(.leading, 56)
+            if !isLast {
+                Divider().padding(.leading, 56)
+            }
         }
     }
 

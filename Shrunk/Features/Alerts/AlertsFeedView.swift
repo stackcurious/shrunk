@@ -55,8 +55,6 @@ struct AlertsFeedView: View {
         List {
             Section {
                 savingsRow
-            } footer: {
-                Text("What we caught while you weren't looking.")
             }
 
             Section {
@@ -70,6 +68,8 @@ struct AlertsFeedView: View {
                 }
             } header: {
                 filterPicker
+            } footer: {
+                Text("What we caught while you weren't looking.")
             }
         }
         .listStyle(.insetGrouped)
