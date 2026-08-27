@@ -94,6 +94,26 @@ final class ProPaywallViewModelTests: XCTestCase {
         XCTAssertEqual(vm.fineprint, "$2.99/month. Cancel anytime in Settings.")
     }
 
+    // MARK: - Auto-renewal disclosure (App Review 3.1.2)
+
+    func test_autoRenewalDisclosure_statesTheRequiredTerms() {
+        let disclosure = ProPaywallViewModel.autoRenewalDisclosure
+        XCTAssertTrue(disclosure.contains("charged to your Apple Account at confirmation of purchase"))
+        XCTAssertTrue(disclosure.contains("renews automatically unless auto-renew is turned off at least 24 hours"))
+        XCTAssertTrue(disclosure.contains("charged for renewal within 24 hours before the current period ends"))
+        XCTAssertTrue(disclosure.contains("unused portion of a free trial is forfeited"))
+    }
+
+    func test_autoRenewalDisclosure_matchesTheAppStoreListingDocVerbatim() {
+        // Must stay byte-identical to docs/APP_STORE_LISTING.md:97 (through
+        // the trial-forfeiture sentence) so the app and the listing can't
+        // drift — this is the text App Review 3.1.2 requires on the paywall.
+        XCTAssertEqual(
+            ProPaywallViewModel.autoRenewalDisclosure,
+            "Payment is charged to your Apple Account at confirmation of purchase. The subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours before the current period ends. Any unused portion of a free trial is forfeited when you purchase a subscription."
+        )
+    }
+
     // MARK: - Restore outcome
 
     func test_restoreOutcomeMessage_isNilWhenRestoreFoundAnActiveSubscription() {

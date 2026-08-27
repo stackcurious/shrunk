@@ -70,6 +70,12 @@ final class ProPaywallViewModel: ObservableObject {
             : "\(monthlyDisplayPrice)/month. Cancel anytime in Settings."
     }
 
+    /// App Review 3.1.2's required auto-renewal disclosure, verbatim from
+    /// `docs/APP_STORE_LISTING.md:97`, so the app and the listing can't
+    /// drift. Rendered in both presentations of `ProPaywallContent` — the
+    /// Settings sheet and the onboarding paywall step.
+    static let autoRenewalDisclosure = "Payment is charged to your Apple Account at confirmation of purchase. The subscription renews automatically unless auto-renew is turned off at least 24 hours before the end of the current period. Your account is charged for renewal within 24 hours before the current period ends. Any unused portion of a free trial is forfeited when you purchase a subscription."
+
     /// What to tell the user once `StoreKitService.restore()` finishes. `nil`
     /// when restore actually found an active subscription — the sheet
     /// dismisses on its own via `isProUser`, so no message is needed.
@@ -451,6 +457,12 @@ struct ProPaywallContent: View {
             .foregroundStyle(Color.smoke)
 
             Text(vm.fineprint)
+                .font(.system(size: 11))
+                .foregroundStyle(Color.smokeSoft)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(ProPaywallViewModel.autoRenewalDisclosure)
                 .font(.system(size: 11))
                 .foregroundStyle(Color.smokeSoft)
                 .multilineTextAlignment(.center)
