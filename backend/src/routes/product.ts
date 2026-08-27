@@ -1,9 +1,19 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
-import { getAcceptedObservations, getProduct, getRecentSnapshots, insertProduct, type ObservationRow, type ProductRow } from "../db";
+import {
+  getAcceptedObservations,
+  getProduct,
+  getRecentSnapshots,
+  insertObservation,
+  insertProduct,
+  setProductUnitKindIfMissing,
+  type ObservationRow,
+  type ProductRow,
+} from "../db";
 import { normalizeGTIN } from "../gtin";
 import { lookupFDC } from "../lookup/fdc";
 import { lookupOFF } from "../lookup/off";
+import { parsePackageWeight } from "../normalize";
 
 export const productRoute = new Hono<{ Bindings: Env }>();
 
@@ -49,18 +59,66 @@ productRoute.get("/v1/product/:gtin", async (c) => {
 async function createFromLookups(env: Env, gtin: string): Promise<ProductRow | null> {
   const fdc = await lookupFDC(gtin, env.FDC_API_KEY);
   let row: ProductRow | null = null;
+  // Spec §1 rule 6 — the raw size string + when FDC/OFF observed it, kept
+  // alongside the name/brand/category so a parseable size becomes the
+  // product's first observation instead of being discarded.
+  let sizeRaw: string | null = null;
+  let observedAt: number | null = null;
+  let source: "fdc" | "off" | null = null;
+  let sourceRef: string | null = null;
   if (fdc) {
     row = { gtin, name: fdc.name, brand: fdc.brand, category: fdc.category, image_url: null, unit_kind: null };
+    sizeRaw = fdc.packageWeight;
+    observedAt = fdc.observedAt;
+    source = "fdc";
+    sourceRef = fdc.fdcId;
   } else {
     const off = await lookupOFF(gtin);
     // I8: off.category is a real category (from categories_tags) or "" —
     // never a hardcoded empty string regardless of what OFF actually had.
-    if (off) row = { gtin, name: off.name, brand: off.brand, category: off.category, image_url: off.imageUrl, unit_kind: null };
+    if (off) {
+      row = { gtin, name: off.name, brand: off.brand, category: off.category, image_url: off.imageUrl, unit_kind: null };
+      sizeRaw = off.quantity;
+      observedAt = off.observedAt;
+      source = "off";
+    }
   }
   if (!row) return null;
   // C1: an on-miss FDC/OFF lookup, not the bulk FDC importer — tagged
   // "lookup" so it is distinguishable from the importer's "fdc" rows, though
   // only "kroger" rows are ever purged.
   await insertProduct(env.DB, row, "lookup");
+
+  // Best-effort: a size that fails to parse (e.g. "1 bottle") must never
+  // fail the product response — the product row already landed above.
+  if (sizeRaw && source) {
+    try {
+      const parsed = parsePackageWeight(sizeRaw);
+      if (parsed) {
+        const now = Math.floor(Date.now() / 1000);
+        await insertObservation(env.DB, {
+          gtin,
+          quantity: parsed.quantity,
+          unit_kind: parsed.unitKind,
+          raw_text: sizeRaw,
+          observed_at: observedAt ?? now,
+          source,
+          source_ref: sourceRef,
+          // "fdc" matches the bulk FDC importer's confidence
+          // (scripts/fdc/importer.py); OFF is community-maintained data, so
+          // it lands lower. Both are written `status: "accepted"` directly —
+          // this path never goes through the crowd gate (gate.ts), which
+          // only scores device-submitted OCR observations.
+          confidence: source === "fdc" ? 0.9 : 0.7,
+          status: "accepted",
+        });
+        row.unit_kind = parsed.unitKind;
+        await setProductUnitKindIfMissing(env.DB, gtin, parsed.unitKind, now);
+      }
+    } catch (err) {
+      console.warn(`product: on-miss size parse/insert failed for ${gtin}`, err);
+    }
+  }
+
   return row;
 }
