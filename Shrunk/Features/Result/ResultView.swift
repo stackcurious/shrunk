@@ -14,6 +14,7 @@ struct ResultView: View {
     @State private var watchedConfirmation: String?
     @State private var showLabelCapture = false
     @State private var contributionToast: String?
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     init(barcode: String) {
         self.barcode = barcode
@@ -33,6 +34,7 @@ struct ResultView: View {
                 .overlay(alignment: .bottom) { toastOverlay }
         }
         .task(id: barcode) {
+            vm.isPro = storeKit.isProUser
             if let prebake { vm.prebake(product: prebake.product, record: prebake.record) }
             await vm.load(barcode: barcode)
         }
@@ -99,6 +101,7 @@ struct ResultView: View {
                         .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 }
                 costPerOzSection(record: record)
+                LivePricePanel(state: vm.livePrice, storeName: storeName)
                 if product.sizeHistory.count >= 2 {
                     ShrinkHistoryChart(history: product.sizeHistory)
                         .padding(.horizontal, ShrunkTheme.Spacing.lg)

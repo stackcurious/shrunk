@@ -1,5 +1,13 @@
 import Foundation
 
+/// What the result screen shows for the user's store.
+enum LivePriceState: Equatable {
+    case hidden          // no store set — the panel is not shown at all
+    case loading
+    case loaded(LivePrice)
+    case unavailable     // Kroger down, key revoked, or not carried here
+}
+
 @MainActor
 final class ResultViewModel: ObservableObject {
     enum State: Equatable {
@@ -22,6 +30,7 @@ final class ResultViewModel: ObservableObject {
     @Published var state: State = .loading
     @Published var alternativesResult: AlternativesResult = .empty
     @Published var isLoadingAlternatives: Bool = false
+    @Published var livePrice: LivePriceState = .hidden
 
     private let api: ShrunkAPIClient
     private let engine: AlternativesEngine
@@ -56,25 +65,48 @@ final class ResultViewModel: ObservableObject {
     func prebake(product: ShrunkProduct, record: ShrinkRecord) {
         state = .loaded(product, record)
         alternativesResult = .empty
-        Task { await loadAlternatives(for: product, record: record) }
+        Task {
+            await loadLivePrice(barcode: product.id)
+            await loadAlternatives(for: product, record: record)
+        }
     }
 
     func load(barcode: String) async {
         if case .loaded = state { return }   // already prebaked — don't clobber
         state = .loading
         alternativesResult = .empty
+        livePrice = locationId == nil ? .hidden : .loading
 
         do {
-            let product = try await api.fetchProduct(barcode: barcode, locationId: nil)
+            let product = try await api.fetchProduct(barcode: barcode, locationId: locationId)
             let record = detector.analyze(product: product)
             state = .loaded(product, record)
+            await loadLivePrice(barcode: barcode)
             await loadAlternatives(for: product, record: record)
         } catch ShrunkError.productNotFound {
             state = .notFound(barcode: barcode)
+            livePrice = .hidden
         } catch let error as ShrunkError {
             state = .error(error.errorDescription ?? "Something went wrong.")
+            livePrice = .hidden
         } catch {
             state = .error(error.localizedDescription)
+            livePrice = .hidden
+        }
+    }
+
+    /// Live price is strictly additive — a Kroger failure never changes `state`
+    /// (spec §8).
+    private func loadLivePrice(barcode: String) async {
+        guard let locationId else {
+            livePrice = .hidden
+            return
+        }
+        livePrice = .loading
+        do {
+            livePrice = .loaded(try await api.liveProduct(barcode: barcode, locationId: locationId))
+        } catch {
+            livePrice = .unavailable
         }
     }
 
