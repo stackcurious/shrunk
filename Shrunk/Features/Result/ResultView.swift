@@ -11,9 +11,13 @@ struct ResultView: View {
     @State private var showWatchPaywall = false
     @State private var showAlternatives = false
     @State private var showShareCard = false
-    @State private var watchedConfirmation: String?
+    /// Seeded from the watchlist on appear, so re-opening a watched product
+    /// starts in the watched state instead of forgetting it (spec §2).
+    @State private var isWatched = false
     @State private var showLabelCapture = false
-    @State private var contributionToast: String?
+    @State private var toastMessage: String?
+    /// Rule 4 — a failed action reads as failure, not as a green tick.
+    @State private var toastIsError = false
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     init(barcode: String) {
@@ -35,6 +39,11 @@ struct ResultView: View {
         }
         .task(id: barcode) {
             vm.isPro = storeKit.isProUser
+            // Seeded before the first render of a `.loaded` state: `prebake`
+            // sets `.loaded` synchronously, so reading the watchlist after it
+            // would flash "Watch this product" for a frame on a product that
+            // is already watched.
+            isWatched = ((try? WatchlistService(context: modelContext).fetch(barcode: barcode)) ?? nil) != nil
             if let prebake { vm.prebake(product: prebake.product, record: prebake.record) }
             await vm.load(barcode: barcode)
             // A scan's ShrinkRecord is now final — spec §3.5 counts every
@@ -51,7 +60,8 @@ struct ResultView: View {
         }
         .fullScreenCover(isPresented: $showLabelCapture) {
             LabelCaptureView(gtin: barcode) { result in
-                contributionToast = ContributeViewModel.toastMessage(for: result)
+                toastIsError = false
+                toastMessage = ContributeViewModel.toastMessage(for: result)
                 Task { await vm.reload(barcode: barcode) }
             }
         }
@@ -64,13 +74,17 @@ struct ResultView: View {
 
     @ViewBuilder
     private var toastOverlay: some View {
-        if let contributionToast {
-            Toast(message: contributionToast)
+        if let toastMessage {
+            Toast(
+                message: toastMessage,
+                icon: toastIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                tint: toastIsError ? Color.shrunkRed : Color.verdictGood
+            )
                 .padding(.bottom, ShrunkTheme.Spacing.xl)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .task(id: contributionToast) {
+                .task(id: toastMessage) {
                     try? await Task.sleep(nanoseconds: 2_800_000_000)
-                    withAnimation { self.contributionToast = nil }
+                    withAnimation { self.toastMessage = nil }
                 }
         }
     }
@@ -118,6 +132,7 @@ struct ResultView: View {
                 }
                 costPerOzSection(record: record)
                 LivePricePanel(state: vm.livePrice, storeName: storeName)
+                cheapestAlternativeCallout(record: record)
                 if product.sizeHistory.count >= 2 {
                     ShrinkHistoryChart(
                         history: product.sizeHistory,
@@ -190,10 +205,27 @@ struct ResultView: View {
                         .clipShape(Capsule())
                         .padding(.top, 4)
                 }
+
+                // Rule 1 — every loaded result states at least one concrete
+                // fact. For the 98.5 % of products with a single snapshot that
+                // fact is the size itself and when we first saw it.
+                if let fact = sizeFactLine(for: record) {
+                    Text(fact)
+                        .font(.shrunkCallout)
+                        .foregroundStyle(Color.smoke)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 2)
+                }
             }
             .padding(.horizontal, ShrunkTheme.Spacing.lg)
 
-            shareInline(product: product, record: record)
+            // Nothing to share in the no-size state: there is no verdict, and
+            // ShareCardView's Then→Now block guards on `previousSize`, so the
+            // card would render with no sizes on it at all. §2's no-size row
+            // lists no Share secondary either.
+            if record.currentSize != nil {
+                shareInline(product: product, record: record)
+            }
         }
     }
 
@@ -376,34 +408,124 @@ struct ResultView: View {
 
     // MARK: - CTAs
 
+    /// Spec §2's action column. The single-snapshot and no-size states lead
+    /// with the action that moves *them* forward — watching, or the label photo
+    /// that makes watching possible — rather than the alternatives button the
+    /// shrink screen leads with.
     private func ctaSection(product: ShrunkProduct, record: ShrinkRecord) -> some View {
-        VStack(spacing: ShrunkTheme.Spacing.sm) {
-            ShrunkButton("See better-value alternatives", icon: "arrow.right") {
-                showAlternatives = true
-            }
-            ShrunkButton(
-                watchedConfirmation == product.id ? "On your watchlist" : "Watch this product",
-                icon: watchedConfirmation == product.id ? "bell.badge.fill" : "bell",
-                variant: .ghost
-            ) {
-                if storeKit.isProUser {
-                    addToWatchlist(product: product, record: record)
-                } else {
-                    showWatchPaywall = true
+        let outcome = ResultViewModel.watchOutcome(
+            record: record, isPro: storeKit.isProUser, isAlreadyWatched: isWatched
+        )
+        return VStack(spacing: ShrunkTheme.Spacing.sm) {
+            if outcome == .needsLabel {
+                // "We don't know this size yet": the label photo is the only
+                // thing that unblocks this product, so it is the primary CTA.
+                // Routed through `watchButton` like every other outcome, so
+                // there is exactly one path from outcome to action.
+                watchButton(outcome: outcome, product: product, record: record, variant: .primary)
+                ShrunkButton("See better-value alternatives", icon: "arrow.right", variant: .ghost) {
+                    showAlternatives = true
                 }
+            } else if record.verdict == .insufficientData {
+                watchButton(outcome: outcome, product: product, record: record,
+                            watchTitle: "Watch — we'll alert you if it shrinks", variant: .primary)
+                ShrunkButton("See better-value alternatives", icon: "arrow.right", variant: .ghost) {
+                    showAlternatives = true
+                }
+                ShrunkButton("Snap the label to confirm", icon: "camera", variant: .ghost) {
+                    showLabelCapture = true
+                }
+            } else if record.verdict == .unchanged || record.verdict == .grew {
+                // §2's "Unchanged / grew" row: there is no shrink to escape,
+                // so the useful action is establishing the baseline — Watch is
+                // primary here, alternatives and Share secondary.
+                watchButton(outcome: outcome, product: product, record: record, variant:.primary)
+                ShrunkButton("See better-value alternatives", icon: "arrow.right", variant: .ghost) {
+                    showAlternatives = true
+                }
+            } else {
+                ShrunkButton("See better-value alternatives", icon: "arrow.right") {
+                    showAlternatives = true
+                }
+                watchButton(outcome: outcome, product: product, record: record, variant:.ghost)
             }
-            .disabled(watchedConfirmation == product.id)
+        }
+    }
+
+    /// One button for every `WatchOutcome`: the outcome alone decides the
+    /// title, the icon and what the tap does. `watchTitle` only names the
+    /// actually-watchable cases, which is the one thing that differs between
+    /// the §2 rows.
+    private func watchButton(
+        outcome: ResultViewModel.WatchOutcome,
+        product: ShrunkProduct,
+        record: ShrinkRecord,
+        watchTitle: String = "Watch this product",
+        variant: ShrunkButtonVariant
+    ) -> some View {
+        ShrunkButton(
+            Self.watchButtonTitle(outcome, watchTitle: watchTitle),
+            icon: Self.watchButtonIcon(outcome),
+            variant: variant
+        ) {
+            handleWatch(outcome: outcome, product: product, record: record)
+        }
+        .disabled(outcome == .alreadyWatched)
+    }
+
+    private static func watchButtonTitle(
+        _ outcome: ResultViewModel.WatchOutcome,
+        watchTitle: String
+    ) -> String {
+        switch outcome {
+        case .alreadyWatched:  return "On your watchlist"
+        case .needsLabel:      return "Snap the label to start tracking"
+        case .paywall, .watch: return watchTitle
+        }
+    }
+
+    private static func watchButtonIcon(_ outcome: ResultViewModel.WatchOutcome) -> String {
+        switch outcome {
+        case .alreadyWatched:  return "bell.badge.fill"
+        case .needsLabel:      return "camera.fill"
+        case .paywall, .watch: return "bell"
+        }
+    }
+
+    /// Rule 4 — every branch does something the user can see. The old version
+    /// of this had two silent `return`s in it.
+    private func handleWatch(
+        outcome: ResultViewModel.WatchOutcome,
+        product: ShrunkProduct,
+        record: ShrinkRecord
+    ) {
+        switch outcome {
+        case .alreadyWatched:
+            break                                   // button is disabled
+        case .needsLabel:
+            showLabelCapture = true
+        case .paywall:
+            showWatchPaywall = true
+        case .watch:
+            addToWatchlist(product: product, record: record)
         }
     }
 
     private func addToWatchlist(product: ShrunkProduct, record: ShrinkRecord) {
-        guard record.currentSize != nil else { return }
-        let service = WatchlistService(context: modelContext)
         do {
-            try service.add(product: product, record: record)
-            watchedConfirmation = product.id
+            try WatchlistService(context: modelContext).add(product: product, record: record)
+            isWatched = true
+            toastIsError = false
+            withAnimation {
+                toastMessage = "Watching \(product.name) — we'll alert you if it shrinks or its price per oz jumps"
+            }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {
+            toastIsError = true
+            withAnimation {
+                toastMessage = (error as? LocalizedError)?.errorDescription
+                    ?? "Couldn't add this to your watchlist."
+            }
             UINotificationFeedbackGenerator().notificationOccurred(.error)
         }
     }
@@ -483,11 +605,81 @@ struct ResultView: View {
             let diff = abs(prev.quantity - curr.quantity)
             return "They took \(Self.compact(diff)) \(curr.unit)"
         case .unchanged:
-            return "Held its size"
+            // §2: "Same size since 2021" — the year of the *earliest*
+            // observation, which is how far back we can actually vouch for it,
+            // not the year of the latest one.
+            guard let since = record.product.sizeHistory.map(\.date).min() else { return "Held its size" }
+            return "Same size since \(since.formatted(.dateTime.year()))"
         case .grew:
-            return "Grew — rare"
+            return "Grew \(record.shrinkPercent.formattedPercent(decimals: 0))"
         case .insufficientData:
-            return "First snapshot — we'll catch any future change"
+            // Spec §2 — the single-snapshot screen is a first-class result,
+            // not a degraded shrink screen, and says what it actually knows.
+            return record.currentSize == nil ? "We don't know this size yet" : "No shrink on record"
+        }
+    }
+
+    /// "32 fl oz, first seen Feb 2018" — or "28 fl oz at Kroger today" when the
+    /// size was adopted from the live store row (spec §2, rule 5). Only the
+    /// single-snapshot state needs it; the shrink states already draw a
+    /// Then→Now row.
+    private func sizeFactLine(for record: ShrinkRecord) -> String? {
+        guard record.verdict == .insufficientData, let size = record.currentSize else { return nil }
+        let quantity = size.quantity.formattedQuantity(unit: size.unit)
+        if vm.adoptedLiveSize {
+            let store = storeName.isEmpty ? "Kroger" : storeName
+            return "\(quantity) at \(store) today"
+        }
+        return "\(quantity), first seen \(size.date.formatted(.dateTime.month(.abbreviated).year()))"
+    }
+
+    /// The cheapest store alternative that actually beats what the scanned
+    /// product costs per ounce. Curated rows carry no `costPerUnit`, so they
+    /// can never produce a false "cheaper" claim.
+    private func cheapestAlternative(for record: ShrinkRecord) -> Alternative? {
+        guard let scanned = record.costPerUnitNow, scanned > 0 else { return nil }
+        return vm.alternativesResult.alternatives
+            .filter { $0.source == .store }
+            .compactMap { alt -> (Alternative, Double)? in
+                guard let cost = alt.costPerUnit, cost < scanned else { return nil }
+                return (alt, cost)
+            }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    /// §2 lists this callout only on the single-snapshot row. On a shrink or
+    /// unchanged/grew screen it would sit directly above that row's own
+    /// alternatives CTA, so it stays scoped to the state the spec gives it to.
+    @ViewBuilder
+    private func cheapestAlternativeCallout(record: ShrinkRecord) -> some View {
+        if record.verdict == .insufficientData, let best = cheapestAlternative(for: record) {
+            Button {
+                showAlternatives = true
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Color.verdictGoodDeep)
+                        Text("CHEAPEST PER OZ AT YOUR STORE").shrunkSectionLabel()
+                        Spacer(minLength: 0)
+                    }
+                    Text(best.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.ink)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                    Text(best.verdict)
+                        .font(.shrunkCallout)
+                        .foregroundStyle(Color.smoke)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, ShrunkTheme.Spacing.lg)
         }
     }
 

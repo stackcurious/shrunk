@@ -71,6 +71,16 @@ final class ResultViewModelTests: XCTestCase {
         """
     }
 
+    /// A fresh on-miss lookup: the Worker found a name through FDC/OFF but
+    /// kept neither a size nor a price. This is the Gatorade `0052000338317`
+    /// shape from spec §0.
+    private func bareProductJSON(gtin: String = "0052000338317") -> String {
+        """
+        {"gtin":"\(gtin)","name":"Gatorade Thirst Quencher","brand":"Gatorade","category":"Beverages",
+         "image_url":null,"unit_kind":null,"observations":[],"price_snapshots":[]}
+        """
+    }
+
     private func makeVM(engine: AlternativesEngine = AlternativesEngine(store: StubStoreData(), feed: StubTrendingFeed())) -> ResultViewModel {
         ResultViewModel(api: apiClient, engine: engine, detector: ShrinkDetector(), defaults: defaults)
     }
@@ -204,6 +214,94 @@ final class ResultViewModelTests: XCTestCase {
         // *non-Kroger* observation (fdc, 946.353 ml), not whichever
         // observation happens to be chronologically last.
         XCTAssertTrue(vm.liveSizeMismatch)
+    }
+
+    // MARK: - Live size/price adoption (spec rule 5)
+    //
+    // End-to-end over `load`: the on-miss product carries neither a size nor a
+    // price, so the live Kroger row has to supply both or the single-snapshot
+    // row cannot keep its "here is what you're paying per ounce today" promise.
+
+    func test_load_freshLookupAdoptsTheLiveSizeAndPrice() async {
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSON(gtin: "0052000338317").utf8))
+            }
+            return (200, Data(self.bareProductJSON().utf8))
+        }
+
+        let vm = makeVM()
+        await vm.load(barcode: "0052000338317")
+
+        guard case .loaded(_, let record) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
+        XCTAssertEqual(record.currentSize?.quantity, 828.058, "size adopted from the live row")
+        XCTAssertEqual(record.currentSize?.source, "kroger", "attribution survives adoption")
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001, "price adopted from the live row")
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / (828.058 * 0.033814), accuracy: 0.0001)
+        XCTAssertTrue(record.priceIsFromStoreSnapshot, "a live Kroger price must carry Kroger attribution")
+        XCTAssertTrue(vm.adoptedLiveSize)
+    }
+
+    func test_load_adoptionMakesTheProductWatchable() async {
+        // The whole point of rule 5: with a size on the record,
+        // `watchOutcome` is `.watch` rather than `.needsLabel`.
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSON(gtin: "0052000338317").utf8))
+            }
+            return (200, Data(self.bareProductJSON().utf8))
+        }
+
+        let vm = makeVM()
+        await vm.load(barcode: "0052000338317")
+
+        guard case .loaded(_, let record) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
+        XCTAssertEqual(
+            ResultViewModel.watchOutcome(record: record, isPro: true, isAlreadyWatched: false),
+            .watch
+        )
+    }
+
+    func test_load_withNoStore_leavesTheBareProductUnadopted() async {
+        // No store means no live row to adopt from — the screen falls back to
+        // "We don't know this size yet" and label capture, which is correct.
+        StubURLProtocol.handler = { _ in (200, Data(self.bareProductJSON().utf8)) }
+
+        let vm = makeVM()
+        await vm.load(barcode: "0052000338317")
+
+        guard case .loaded(_, let record) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
+        XCTAssertNil(record.currentSize)
+        XCTAssertNil(record.priceNow)
+        XCTAssertFalse(vm.adoptedLiveSize)
+        XCTAssertEqual(
+            ResultViewModel.watchOutcome(record: record, isPro: true, isAlreadyWatched: false),
+            .needsLabel
+        )
+    }
+
+    func test_load_adoptionDoesNotOverwriteAStoredObservation() async {
+        // productJSON() has a real fdc observation at 946.353 ml; the live row
+        // says 828.058 ml. Our own observation is the record of truth.
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSON().utf8))
+            }
+            return (200, Data(self.productJSON().utf8))
+        }
+
+        let vm = makeVM()
+        await vm.load(barcode: "0028400642255")
+
+        guard case .loaded(_, let record) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
+        XCTAssertEqual(record.currentSize?.quantity, 946.353)
+        XCTAssertEqual(record.currentSize?.source, "fdc")
+        XCTAssertFalse(vm.adoptedLiveSize)
+        // The price half is still adopted — productJSON() has no snapshots.
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
     }
 
     // MARK: - prebake(product:record:)
