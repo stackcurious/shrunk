@@ -58,8 +58,10 @@ struct ShrinkDetector {
         let percentChange = ((current.quantity - previous.quantity) / previous.quantity) * 100
 
         // "Now" is today's price over today's size; "then" is the older snapshot
-        // over the older size — the cost this shopper used to pay.
-        let costPerUnitNow: Double? = priceNow.map { $0 / current.quantity }
+        // over the older size — the cost this shopper used to pay. `previous`
+        // is already guarded > 0 above; `current` needs its own guard so a
+        // zero-quantity size record can't divide a real price into `inf`.
+        let costPerUnitNow: Double? = current.quantity > 0 ? priceNow.map { $0 / current.quantity } : nil
         let costPerUnitThen: Double? = priceThen.map { $0 / previous.quantity }
 
         let verdict: ShrinkRecord.ShrinkVerdict = {

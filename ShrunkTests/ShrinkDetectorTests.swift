@@ -172,6 +172,19 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.verdict, .insufficientData)
     }
 
+    func test_zeroCurrentQuantity_costPerUnitNowIsNilNotInfinite() {
+        // Mirrors test_zeroPreviousQuantity_returnsInsufficientData, but on the
+        // *current* side of the main (non-early-return) branch — a size record
+        // that later collapses to 0 must not divide a real price into `inf`
+        // on the money screen (Phase 3 review T15).
+        let product = makeProduct(history: [
+            .init(quantity: 28, unit: "oz"),
+            .init(quantity: 0,  unit: "oz")
+        ], price: 1.89)
+        let record = detector.analyze(product: product)
+        XCTAssertNil(record.costPerUnitNow)
+    }
+
     func test_historyOutOfOrder_isSorted() {
         let now    = Date()
         let before = now.addingTimeInterval(-86400 * 365)
