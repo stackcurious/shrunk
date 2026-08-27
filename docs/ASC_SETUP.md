@@ -105,7 +105,7 @@ Answer **None** to every content question. Shrunk has no objectionable content, 
 | Data type (Apple's taxonomy) | What it is | Purpose | Linked to the user? | Used for tracking? |
 |---|---|---|---|---|
 | Identifiers → **Device ID** | A UUID the app generates at first launch, and the APNs push token | App Functionality | **No** | **No** |
-| User Content → **Photos or Videos** | A label photo, uploaded **only** when the on-device reading is not confident enough to auto-accept; deleted as soon as it is reviewed | App Functionality | **No** | **No** |
+| User Content → **Photos or Videos** | A label photo, uploaded to our server with every contribution; discarded immediately (never stored) if the reading is confident enough to auto-accept, or kept until a human reviews it, then deleted, if it is not | App Functionality | **No** | **No** |
 | User Content → **Other User Content** | The net-weight reading parsed from a label | App Functionality | **No** | **No** |
 | Purchases → **Purchase History** | After purchase, the app sends the App Store transaction JWS to `POST /v1/devices`; the Worker verifies Apple's signature and keeps only `pro_until` and `app_account_token` (the same random device UUID), used solely to unlock Pro — no product or price history is stored. The iOS StoreKit rewrite (phase-5 Tasks 6–8) wires this; the Task 0 gate re-verifies `StoreKitService.swift` before submission. | App Functionality | **No** | **No** |
 | Other Data → **Other Data Types** | The Kroger store id you pick, your category choices and notification preferences, and your watchlist | App Functionality (and Product Personalization for categories) | **No** | **No** |

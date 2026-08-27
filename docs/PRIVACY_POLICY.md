@@ -18,7 +18,8 @@ Shrunk has no accounts and no logins. We do not sell your data, we run no ads, w
 | The Kroger store you picked (a store id, not your location) | When you pick a store | On your device and in the `devices` row | Until you change or clear it |
 | Your category and notification preferences | Onboarding and Settings | On your device and in the `devices` row | Until you change them |
 | Your watchlist (product barcodes and brands) | When you add a product | On your device and in a `watches` row | Until you remove the item |
-| A label photo you choose to contribute | Only when the automatic reading is not confident enough to accept on its own | Cloudflare R2, alongside a submission record carrying your device id | **Deleted the moment it is reviewed**, accepted or rejected |
+| A label photo you choose to contribute | Uploaded to our server with every contribution | Held only in memory unless the reading needs a human check, in which case it is written to Cloudflare R2 | **Discarded immediately** (never stored) if accepted automatically; otherwise **deleted the moment it is reviewed**, accepted or rejected |
+| Your submission record (the barcode, the size you reported, the label text Shrunk read, your device id, and whether it was accepted) | When you contribute | In a `submissions` row in our database | Until you ask us to delete it |
 | The net weight read from a label | When you contribute | Stored as product data (`observations`) | Kept as part of the product's size history |
 | Your subscription status | After a purchase or restore | Apple's signed transaction is verified and reduced to an expiry date in the `devices` row | Until it expires or you ask us to delete it |
 | Your recent scans | Every scan | **On your device only** (`UserDefaults`), never uploaded | Until you tap "Clear scan history" or delete the app |
@@ -27,7 +28,7 @@ Shrunk has no accounts and no logins. We do not sell your data, we run no ads, w
 
 ## Label photos
 
-Contributing a photo is optional and free. On your phone, Shrunk reads the label with Apple's on-device Vision framework — the image is not uploaded to read it. If the reading is confident (a clear net-weight line that agrees with what we already know about the product), only the number is sent; **the photo never leaves your phone**. If it is not confident, the photo is uploaded so a human can check it, and it is deleted from our storage as soon as that check happens, whether the submission is accepted or rejected. The number that survives review becomes part of the product's public size history and is not attributed to you.
+Contributing a photo is optional and free. On your phone, Shrunk reads the label with Apple's on-device Vision framework to make an initial read. When you submit, the photo is uploaded to our server along with that reading, **every time** — not only when the reading is unclear. If the reading is confident (a clear net-weight line that agrees with what we already know about the product), the submission is accepted automatically and the photo is **discarded immediately and never stored**. If it is not confident, the photo is written to storage so a human can check it, and it is deleted as soon as that check happens, whether the submission is accepted or rejected. The number that survives review becomes part of the product's public size history and is not attributed to you.
 
 ## Notifications
 
@@ -41,7 +42,7 @@ Shrunk Pro is an auto-renewable subscription sold by Apple. Apple handles paymen
 
 - **Cloudflare** — hosts our API, database, photo storage and cache (United States).
 - **Apple** — delivers push notifications and processes subscriptions.
-- **Kroger** — when you have a store selected, we ask Kroger's Products API for that store's price and size for the barcode you scanned. We send the barcode and the store id. **We never send your device id, push token, or anything else about you.**
+- **Kroger** — when you have a store selected, we ask Kroger's Products API for that store's price and size for the barcode you scanned; we send the barcode and the store id. To find stores near you, we send the ZIP code you type to Kroger's Locations API. To find alternatives, we send the product's category as a search term to Kroger's Products API. Neither the ZIP code nor the category is stored by us, and **we never send your device id, push token, or anything else about you.**
 - **USDA FoodData Central** and **Open Food Facts** — queried by barcode when a product is new to us, to fill in a name and image.
 
 Nobody else. We do not sell, rent or share data with advertisers, data brokers or analytics companies.
@@ -57,7 +58,7 @@ Nobody else. We do not sell, rent or share data with advertisers, data brokers o
 ## Your choices
 
 - **Stop everything:** delete the app. Nothing further is sent.
-- **Delete what is on the server:** email us the first eight characters of the device id shown in Settings → About → Device ID and we will delete the matching `devices`, `watches` and `submissions` rows. Accepted size observations stay, because they are product facts and carry no identifier.
+- **Delete what is on the server:** email us the Device ID shown in Settings → About → Device ID and we will erase the device record, your watchlist, your notification settings, and any submissions tied to it. Accepted size observations stay, because they are product facts and carry no identifier.
 - **Turn off alerts:** Settings → Notification preferences, or iOS Settings → Notifications → Shrunk.
 - **Clear local scan history:** Settings → Clear scan history.
 - **Manage or cancel Pro:** iOS Settings → your name → Subscriptions. Apple handles cancellations and refunds.
