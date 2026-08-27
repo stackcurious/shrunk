@@ -13,6 +13,9 @@ final class ShrinkAlert {
     var currentQuantity: Double?
     var currentUnit: String?
     var shrinkPercent: Double
+    /// The observed price at the user's store when this alert was filed
+    /// (spec §3.5 — the savings dashboard's per-product input).
+    var currentPrice: Double?
     var costDeltaPerUnit: Double?
     var createdAt: Date
     var isRead: Bool
@@ -30,6 +33,7 @@ final class ShrinkAlert {
         currentQuantity: Double? = nil,
         currentUnit: String? = nil,
         shrinkPercent: Double = 0,
+        currentPrice: Double? = nil,
         costDeltaPerUnit: Double? = nil,
         createdAt: Date = Date(),
         isRead: Bool = false,
@@ -45,6 +49,7 @@ final class ShrinkAlert {
         self.currentQuantity = currentQuantity
         self.currentUnit = currentUnit
         self.shrinkPercent = shrinkPercent
+        self.currentPrice = currentPrice
         self.costDeltaPerUnit = costDeltaPerUnit
         self.createdAt = createdAt
         self.isRead = isRead
@@ -105,6 +110,7 @@ extension ShrinkAlert {
             currentQuantity: record.currentSize?.quantity,
             currentUnit: record.currentSize?.unit,
             shrinkPercent: record.shrinkPercent,
+            currentPrice: record.priceNow,
             costDeltaPerUnit: nil
         )
     }

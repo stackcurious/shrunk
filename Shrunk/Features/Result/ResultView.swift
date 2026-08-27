@@ -377,10 +377,10 @@ struct ResultView: View {
     }
 
     private func addToWatchlist(product: ShrunkProduct, record: ShrinkRecord) {
-        guard let currentSize = record.currentSize else { return }
+        guard record.currentSize != nil else { return }
         let service = WatchlistService(context: modelContext)
         do {
-            try service.add(product: product, currentSize: currentSize)
+            try service.add(product: product, record: record)
             watchedConfirmation = product.id
             UINotificationFeedbackGenerator().notificationOccurred(.success)
         } catch {

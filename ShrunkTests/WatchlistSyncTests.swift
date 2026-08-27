@@ -68,6 +68,21 @@ final class WatchlistSyncTests: XCTestCase {
         SizeRecord(date: Date(), quantity: quantity, unit: "ml", source: "fdc")
     }
 
+    private func record(_ barcode: String, quantity: Double, price: Double? = 1.89, shrinkPercent: Double = 0) -> ShrinkRecord {
+        ShrinkRecord(
+            product: product(barcode),
+            previousSize: nil,
+            currentSize: size(quantity),
+            shrinkPercent: shrinkPercent,
+            priceThen: nil,
+            priceNow: price,
+            costPerUnitThen: nil,
+            costPerUnitNow: nil,
+            priceIsFromStoreSnapshot: false,
+            verdict: .insufficientData
+        )
+    }
+
     private func livePrice(_ barcode: String, quantity: Double?, unitKind: String? = "volume") -> LivePrice {
         LivePrice(gtin: barcode, locationId: "01400943", brand: "Gatorade", description: "Gatorade Thirst Quencher",
                   size: "28 fl oz", quantity: quantity, unitKind: unitKind,
@@ -82,7 +97,7 @@ final class WatchlistSyncTests: XCTestCase {
         let synced = expectation(description: "synced")
         sync.onSync = { synced.fulfill() }
 
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         await fulfillment(of: [synced], timeout: 2)
 
         let watches = try XCTUnwrap(sync.calls.last ?? nil)
@@ -94,7 +109,7 @@ final class WatchlistSyncTests: XCTestCase {
         // expectation and make this test lie.
         let added = expectation(description: "added")
         sync.onSync = { added.fulfill() }
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         await fulfillment(of: [added], timeout: 2)
 
         let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))
@@ -113,7 +128,7 @@ final class WatchlistSyncTests: XCTestCase {
     }
 
     func test_liveSizeCheckFilesAnUnconfirmedAlert() async throws {
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         store.live["0052000133417"] = livePrice("0052000133417", quantity: 828.058)
 
         let mismatches = await service.liveSizeCheck()
@@ -130,7 +145,7 @@ final class WatchlistSyncTests: XCTestCase {
     }
 
     func test_liveSizeCheckIgnoresAMatchingOrIncomparableSize() async throws {
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
 
         store.live["0052000133417"] = livePrice("0052000133417", quantity: 946.353)
         let matching = await service.liveSizeCheck()
@@ -147,16 +162,34 @@ final class WatchlistSyncTests: XCTestCase {
         XCTAssertTrue(try alerts().isEmpty)
     }
 
+    func test_liveSizeCheckKeepsThePriceFresh() async throws {
+        // Starting price is the record() default, $1.89.
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
+
+        // A matching size — no unconfirmed alert — but a new store price.
+        store.live["0052000133417"] = LivePrice(
+            gtin: "0052000133417", locationId: "01400943", brand: "Gatorade",
+            description: "Gatorade Thirst Quencher", size: "32 fl oz",
+            quantity: 946.353, unitKind: "volume",
+            regular: 2.49, promo: nil, perUnitEstimate: 0.08, stockLevel: "HIGH"
+        )
+        let matching = await service.liveSizeCheck()
+        XCTAssertTrue(matching.isEmpty, "the sweep should keep price fresh even without a size mismatch")
+
+        let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))
+        XCTAssertEqual(watched.lastKnownPrice, 2.49)
+    }
+
     func test_liveSizeCheckNeedsAStore() async throws {
         UserDefaults.standard.removeObject(forKey: "storeLocationId")
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         store.live["0052000133417"] = livePrice("0052000133417", quantity: 828.058)
         let mismatches = await service.liveSizeCheck()
         XCTAssertTrue(mismatches.isEmpty)
     }
 
     func test_liveSizeCheckDoesNotRefileTheSameUnconfirmedAlert() async throws {
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         store.live["0052000133417"] = livePrice("0052000133417", quantity: 828.058)
 
         let first = await service.liveSizeCheck()
@@ -170,7 +203,7 @@ final class WatchlistSyncTests: XCTestCase {
     }
 
     func test_liveSizeCheckFilesANewAlertWhenTheLiveSizeChangesAgain() async throws {
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         store.live["0052000133417"] = livePrice("0052000133417", quantity: 828.058)
         let first = await service.liveSizeCheck()
         XCTAssertEqual(first.count, 1)
@@ -192,7 +225,7 @@ final class WatchlistSyncTests: XCTestCase {
     func test_removingTheLastWatchStillSyncsTheEmptyList() async throws {
         let added = expectation(description: "added")
         sync.onSync = { added.fulfill() }
-        try service.add(product: product("0052000133417"), currentSize: size(946.353))
+        try service.add(product: product("0052000133417"), record: record("0052000133417", quantity: 946.353))
         await fulfillment(of: [added], timeout: 2)
 
         let watched = try XCTUnwrap(try service.fetch(barcode: "0052000133417"))

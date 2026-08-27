@@ -23,16 +23,19 @@ final class WatchlistService {
 
     // MARK: - CRUD
 
-    func add(product: ShrunkProduct, currentSize: SizeRecord) throws {
+    func add(product: ShrunkProduct, record: ShrinkRecord) throws {
+        guard let currentSize = record.currentSize else { return }
         if let existing = try fetch(barcode: product.id) {
             existing.lastKnownSize = currentSize.quantity
             existing.lastKnownUnit = currentSize.unit
+            existing.lastKnownPrice = record.priceNow
+            existing.lastShrinkPercent = record.shrinkPercent
             existing.lastChecked = Date()
             try context.save()
             scheduleSync()
             return
         }
-        let watched = WatchedProduct.from(product: product, currentSize: currentSize)
+        let watched = WatchedProduct.from(product: product, record: record)
         context.insert(watched)
         try context.save()
         scheduleSync()
@@ -130,6 +133,10 @@ final class WatchlistService {
             else { continue }
 
             item.lastChecked = Date()
+            // The live size may be an unconfirmed hint, but the live price is a
+            // real observation either way — keep the savings dashboard's input
+            // fresh even when the size itself doesn't need a re-scan.
+            item.lastKnownPrice = live.effectivePrice ?? item.lastKnownPrice
             guard abs(quantity - item.lastKnownSize) / item.lastKnownSize > 0.01 else { continue }
 
             let alreadyFiled = (try? alreadyFiledUnconfirmedAlert(barcode: item.barcode, liveQuantity: quantity)) ?? false

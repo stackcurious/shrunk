@@ -8,6 +8,9 @@ struct AlertsFeedView: View {
     @Query(sort: \ShrinkAlert.createdAt, order: .reverse)
     private var alerts: [ShrinkAlert]
 
+    @Query(sort: \WatchedProduct.addedAt, order: .reverse)
+    private var watchlist: [WatchedProduct]
+
     @State private var vm: AlertsViewModel?
     @State private var showPaywall: Bool = false
     @State private var showDashboard: Bool = false
@@ -76,7 +79,8 @@ struct AlertsFeedView: View {
     private var savingsHero: some View {
         let ledger = SavingsLedger.build(
             alerts: alerts,
-            profile: OnboardingProfile.decoded(rawProfile)
+            watchlist: watchlist,
+            shopFrequency: OnboardingProfile.decoded(rawProfile).shopFrequency
         )
         return Button {
             showDashboard = true
@@ -95,7 +99,7 @@ struct AlertsFeedView: View {
                         .font(.system(size: 16, weight: .heavy))
                         .foregroundStyle(.white)
                         .lineLimit(2)
-                    Text(ledger.catches.isEmpty
+                    Text(ledger.entries.isEmpty
                         ? "Tap to see how the math works"
                         : "Tap for the full breakdown")
                         .font(.system(size: 12, weight: .medium))
@@ -116,8 +120,8 @@ struct AlertsFeedView: View {
     }
 
     private func savingsHeadline(ledger: SavingsLedger) -> String {
-        if ledger.totalProtected > 0 {
-            return "You've protected \(ledger.totalDisplay) so far"
+        if ledger.totalAnnual > 0 {
+            return "Shrinkflation is costing you \(ledger.totalDisplay)/yr"
         }
         return "Watching for sneaky shrinkflation"
     }
