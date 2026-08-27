@@ -38,7 +38,7 @@ So publishing an edit is: edit `data/trending.json` → re-sync both copies → 
   "license": "CC-BY-4.0 — ...",
   "trending": [
     {
-      "barcode": "0052000133417",          // real UPC if known; used as stable id
+      "barcode": "0052000135138",          // real UPC if known; used as stable id
       "name": "Gatorade Thirst Quencher",
       "brand": "Gatorade",
       "category": "Beverages",              // see Categories below
@@ -81,7 +81,7 @@ Use Open Food Facts CDN where possible:
 https://images.openfoodfacts.org/images/products/{barcode partitioned}/front_en.{rev}.400.jpg
 ```
 
-The partitioned format is: split the 13-digit UPC into 3-3-3-4 chunks. e.g. `0052000133417` → `005/200/013/3417`.
+The partitioned format is: split the 13-digit UPC into 3-3-3-4 chunks. e.g. `0052000135138` → `005/200/013/5138`.
 
 If OFF doesn't have an image for this product, set `image_url: null` — the UI falls back to a category glyph.
 

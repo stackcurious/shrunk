@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
 import { curatedItems } from "../src/feed";
 
-const GATORADE = "0052000133417";   // curated: 32 fl oz -> 28 fl oz
+const GATORADE = "0052000135138";   // curated: 32 fl oz -> 28 fl oz
 const SNACK = "0028400642262";
 
 const NOW = Math.floor(Date.now() / 1000);

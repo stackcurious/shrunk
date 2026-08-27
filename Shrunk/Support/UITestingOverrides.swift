@@ -100,7 +100,7 @@ enum UITestingOverrides {
         let now = Date()
         let fixtures: [ShrinkAlert] = [
             ShrinkAlert(
-                barcode: "0036000452228",
+                barcode: "0030772157039",
                 productName: "Bounty Select-A-Size Paper Towels",
                 brand: "Bounty",
                 kind: .sizeDrop,
@@ -114,7 +114,7 @@ enum UITestingOverrides {
                 message: "Bounty Select-A-Size just shrank — 117 → 105 sheets a roll."
             ),
             ShrinkAlert(
-                barcode: "0024100762330",
+                barcode: "0024100440702",
                 productName: "Cheez-It Original Family Size",
                 brand: "Cheez-It",
                 kind: .priceHike,
@@ -124,7 +124,7 @@ enum UITestingOverrides {
                 message: "Cheez-It Original costs more per ounce at your store this week."
             ),
             ShrinkAlert(
-                barcode: "7622210449283",
+                barcode: "7622210496645",
                 productName: "Toblerone Milk Chocolate Bar",
                 brand: "Toblerone",
                 kind: .verifiedCase,

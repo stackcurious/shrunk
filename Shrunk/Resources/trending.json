@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "updated": "2026-05-13T18:00:00Z",
+  "updated": "2026-08-27T00:00:00Z",
   "source_repo": "https://github.com/stackcurious/shrunk",
   "license": "CC-BY-4.0 — data fields are facts; the curation/commentary is licensed Creative Commons Attribution.",
-  "notes": "Every entry cites a primary source. Preferred: mouseprint.org (Edgar Dworsky has tracked shrinkflation cases since 2007), consumerreports.org/money/shrinkflation, and r/shrinkflation. Dates are 'first observed shipping at reduced size' per reporting — approximate to the month.",
+  "notes": "2026-08-27 audit: every `barcode` in this file is now a real GTIN, confirmed against the Kroger Products API (product-by-id at a Cincinnati store) and, where the product is a food, Open Food Facts and/or USDA FoodData Central. The previous barcodes were fabricated — checksum-valid but not issued to these products. WARNING: the `evidence_url` of every entry currently 404s and no `history` point has been re-verified against a primary source; the size figures are unsourced pending re-curation. See .curated-audit-report.md. Dates are 'first observed shipping at reduced size' per the original (unverified) reporting — approximate to the month.",
   "trending": [
     {
-      "barcode": "0052000133417",
+      "barcode": "0052000135138",
       "name": "Gatorade Thirst Quencher",
       "brand": "Gatorade",
       "category": "Beverages",
-      "image_url": "https://images.openfoodfacts.org/images/products/005/200/013/3417/front_en.6.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/005/200/013/5138/front_en.6.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 32, "unit": "fl oz" },
         { "date": "2021-09-01", "quantity": 28, "unit": "fl oz" }
@@ -21,11 +21,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0028400064057",
+      "barcode": "0028400516464",
       "name": "Doritos Nacho Cheese",
       "brand": "Doritos",
       "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/840/006/4057/front_en.4.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/840/051/6464/front_en.62.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 9.75, "unit": "oz" },
         { "date": "2022-01-01", "quantity": 9.25, "unit": "oz" }
@@ -36,11 +36,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0025500050009",
+      "barcode": "0025500304182",
       "name": "Folgers Classic Roast",
       "brand": "Folgers",
       "category": "Beverages",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/550/005/0009/front_en.5.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/550/030/4182/front_en.8.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 51, "unit": "oz" },
         { "date": "2022-06-01", "quantity": 43.5, "unit": "oz" }
@@ -51,11 +51,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0043000071800",
+      "barcode": "0043000094228",
       "name": "Maxwell House Original Roast",
       "brand": "Maxwell House",
       "category": "Beverages",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/300/009/4228/front_en.11.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 30.6, "unit": "oz" },
         { "date": "2022-09-01", "quantity": 24.5, "unit": "oz" }
@@ -66,7 +66,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0030400003215",
+      "barcode": "0030772132173",
       "name": "Charmin Ultra Strong Mega Roll",
       "brand": "Charmin",
       "category": "Paper products",
@@ -81,7 +81,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0036000114683",
+      "barcode": "0036000554892",
       "name": "Cottonelle Ultra Clean Care",
       "brand": "Cottonelle",
       "category": "Paper products",
@@ -96,7 +96,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0036000452228",
+      "barcode": "0030772157039",
       "name": "Bounty Select-A-Size Paper Towels",
       "brand": "Bounty",
       "category": "Paper products",
@@ -111,7 +111,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0036000280951",
+      "barcode": "0036000542813",
       "name": "Kleenex Ultra Soft Facial Tissues",
       "brand": "Kleenex",
       "category": "Paper products",
@@ -126,11 +126,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0030521010013",
+      "barcode": "0049200045503",
       "name": "Domino Pure Cane Sugar",
       "brand": "Domino",
       "category": "Sugar",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/920/004/5503/front_en.22.400.jpg",
       "history": [
         { "date": "2019-01-01", "quantity": 4,    "unit": "lb" },
         { "date": "2022-09-01", "quantity": 3.75, "unit": "lb" }
@@ -141,7 +141,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0037000513889",
+      "barcode": "0030772125472",
       "name": "Crest 3D White Toothpaste",
       "brand": "Crest",
       "category": "Personal care",
@@ -156,11 +156,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0044000026165",
+      "barcode": "0044000069216",
       "name": "Wheat Thins Original",
       "brand": "Nabisco",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/400/006/9216/front_en.37.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 14,   "unit": "oz" },
         { "date": "2022-01-01", "quantity": 13.5, "unit": "oz" }
@@ -171,11 +171,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0044000004781",
+      "barcode": "0044000060237",
       "name": "Oreos Family Size",
       "brand": "Nabisco",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/400/006/0237/front_en.51.400.jpg",
       "history": [
         { "date": "2019-01-01", "quantity": 19.1,  "unit": "oz" },
         { "date": "2021-06-01", "quantity": 18.71, "unit": "oz" }
@@ -186,11 +186,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0024100762330",
+      "barcode": "0024100440702",
       "name": "Cheez-It Original Family Size",
       "brand": "Cheez-It",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/002/410/044/0702/front_en.63.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 21, "unit": "oz" },
         { "date": "2022-08-01", "quantity": 19, "unit": "oz" }
@@ -201,11 +201,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0038000182532",
+      "barcode": "0038000199066",
       "name": "Frosted Flakes Family Size",
       "brand": "Kellogg's",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/003/800/019/9066/front_en.12.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 24,   "unit": "oz" },
         { "date": "2022-06-01", "quantity": 19.7, "unit": "oz" }
@@ -216,11 +216,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0030000311783",
+      "barcode": "0030000311820",
       "name": "Quaker Chewy Granola Bars (8 ct)",
       "brand": "Quaker",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/003/000/031/1820/front_en.6.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 9.84, "unit": "oz" },
         { "date": "2022-06-01", "quantity": 8.4,  "unit": "oz" }
@@ -231,11 +231,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0028400052108",
+      "barcode": "0028400199148",
       "name": "Lay's Classic Family Size",
       "brand": "Lay's",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/002/840/019/9148/front_en.82.400.jpg",
       "history": [
         { "date": "2019-01-01", "quantity": 10,  "unit": "oz" },
         { "date": "2022-03-01", "quantity": 9.5, "unit": "oz" }
@@ -246,11 +246,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0028400090094",
+      "barcode": "0028400064088",
       "name": "Tostitos Scoops Tortilla Chips",
       "brand": "Tostitos",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/002/840/006/4088/front_en.17.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 10,  "unit": "oz" },
         { "date": "2022-05-01", "quantity": 9.25, "unit": "oz" }
@@ -261,11 +261,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0014100078739",
+      "barcode": "0014100052951",
       "name": "Pepperidge Farm Goldfish Family Size",
       "brand": "Pepperidge Farm",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/001/410/005/2951/front_en.18.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 8,   "unit": "oz" },
         { "date": "2022-08-01", "quantity": 7.2, "unit": "oz" }
@@ -276,11 +276,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0016000487871",
+      "barcode": "0016000125063",
       "name": "Honey Nut Cheerios Family Size",
       "brand": "General Mills",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/001/600/012/5063/front_en.63.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 19.5, "unit": "oz" },
         { "date": "2022-04-01", "quantity": 18.8, "unit": "oz" }
@@ -291,11 +291,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0072830061100",
+      "barcode": "0072830081092",
       "name": "Tillamook Ice Cream Vanilla",
       "brand": "Tillamook",
       "category": "Dairy",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/007/283/008/1092/front_en.24.400.jpg",
       "history": [
         { "date": "2019-01-01", "quantity": 56, "unit": "fl oz" },
         { "date": "2021-06-01", "quantity": 48, "unit": "fl oz" }
@@ -306,11 +306,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0074570089604",
+      "barcode": "0074570004003",
       "name": "Häagen-Dazs Vanilla Ice Cream",
       "brand": "Häagen-Dazs",
       "category": "Dairy",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/007/457/000/4003/front_en.4.400.jpg",
       "history": [
         { "date": "2008-01-01", "quantity": 16, "unit": "fl oz" },
         { "date": "2009-03-01", "quantity": 14, "unit": "fl oz" }
@@ -321,11 +321,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0076840100200",
+      "barcode": "0077567254238",
       "name": "Breyers Natural Vanilla",
       "brand": "Breyers",
       "category": "Dairy",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/007/756/725/4238/front_en.8.400.jpg",
       "history": [
         { "date": "2014-01-01", "quantity": 48, "unit": "fl oz" },
         { "date": "2017-01-01", "quantity": 32, "unit": "fl oz" }
@@ -336,11 +336,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0076840680207",
+      "barcode": "0041548001869",
       "name": "Edy's/Dreyer's Slow Churned",
       "brand": "Edy's",
       "category": "Dairy",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/154/800/1869/front_en.11.400.jpg",
       "history": [
         { "date": "2018-01-01", "quantity": 48, "unit": "fl oz" },
         { "date": "2020-06-01", "quantity": 42, "unit": "fl oz" }
@@ -351,11 +351,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0048500200506",
+      "barcode": "0048500205716",
       "name": "Tropicana Pure Premium Orange Juice",
       "brand": "Tropicana",
       "category": "Beverages",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/850/020/5716/front_en.58.400.jpg",
       "history": [
         { "date": "2019-01-01", "quantity": 64, "unit": "fl oz" },
         { "date": "2021-01-01", "quantity": 52, "unit": "fl oz" }
@@ -366,11 +366,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0048001354067",
+      "barcode": "0048001213487",
       "name": "Hellmann's Real Mayonnaise",
       "brand": "Hellmann's",
       "category": "Condiments",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/004/800/121/3487/front_en.105.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 30, "unit": "oz" },
         { "date": "2023-03-01", "quantity": 27, "unit": "oz" }
@@ -381,11 +381,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0037000940043",
+      "barcode": "0030772164686",
       "name": "Dawn Ultra Dishwashing Liquid",
       "brand": "Dawn",
       "category": "Cleaning",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/003/077/216/4686/front_en.5.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 28, "unit": "fl oz" },
         { "date": "2022-08-01", "quantity": 24, "unit": "fl oz" }
@@ -396,7 +396,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0037000841548",
+      "barcode": "0030772091654",
       "name": "Tide Pods (Original Scent)",
       "brand": "Tide",
       "category": "Cleaning",
@@ -411,7 +411,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0019200013005",
+      "barcode": "0019200771825",
       "name": "Lysol Disinfecting Wipes",
       "brand": "Lysol",
       "category": "Cleaning",
@@ -441,7 +441,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0312547429000",
+      "barcode": "0312547427555",
       "name": "Listerine Cool Mint Antiseptic",
       "brand": "Listerine",
       "category": "Personal care",
@@ -456,7 +456,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0037000866701",
+      "barcode": "0037000862246",
       "name": "Pampers Baby Dry Diapers (Size 4)",
       "brand": "Pampers",
       "category": "Personal care",
@@ -471,7 +471,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0036000456370",
+      "barcode": "0036000504675",
       "name": "Huggies Natural Care Baby Wipes",
       "brand": "Huggies",
       "category": "Personal care",
@@ -486,7 +486,7 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0037000824794",
+      "barcode": "0037000073123",
       "name": "Bounce Dryer Sheets Outdoor Fresh",
       "brand": "Bounce",
       "category": "Cleaning",
@@ -501,11 +501,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0028000114015",
+      "barcode": "0028000215804",
       "name": "Nestlé Toll House Chocolate Chips",
       "brand": "Nestlé Toll House",
       "category": "Snacks",
-      "image_url": null,
+      "image_url": "https://images.openfoodfacts.org/images/products/002/800/021/5804/front_en.33.400.jpg",
       "history": [
         { "date": "2020-01-01", "quantity": 12, "unit": "oz" },
         { "date": "2022-04-01", "quantity": 11, "unit": "oz" }
@@ -516,11 +516,11 @@
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "7622210449283",
+      "barcode": "7622210496645",
       "name": "Toblerone Milk Chocolate Bar",
       "brand": "Toblerone",
       "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/762/221/044/9283/front_en.10.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/762/221/049/6645/front_en.27.400.jpg",
       "history": [
         { "date": "2014-01-01", "quantity": 360, "unit": "g" },
         { "date": "2016-11-01", "quantity": 150, "unit": "g" }

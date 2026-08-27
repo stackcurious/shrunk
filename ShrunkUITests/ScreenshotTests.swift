@@ -34,7 +34,7 @@ final class ScreenshotTests: XCTestCase {
     /// House Original Roast, 30.6 oz → 24.5 oz, sourced in `data/trending.json`
     /// and served with both dated observations by `/v1/product`.
     private var featuredBarcode: String {
-        ProcessInfo.processInfo.environment["SHRUNK_FEATURED_GTIN"] ?? "0043000071800"
+        ProcessInfo.processInfo.environment["SHRUNK_FEATURED_GTIN"] ?? "0043000094228"
     }
 
     /// A product Kroger actually prices at the store above, used for the
