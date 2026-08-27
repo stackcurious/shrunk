@@ -164,9 +164,17 @@ actor ShrunkAPIClient {
     }
 
     /// Upserts this device on the Worker (spec §6.1). Never throws — a failed
-    /// sync must not disturb the UI (spec §8). Every parameter after
-    /// `transactionJWS` is read from local storage when left nil; `watches: nil`
-    /// omits the key entirely so the server keeps the set it already has.
+    /// sync must not disturb the UI (spec §8). `apnsToken`/`watches` are read
+    /// from local storage (or omitted) when left `nil`.
+    ///
+    /// `locationId`/`categories` carry an explicit-clear contract matching the
+    /// Worker's (`backend/src/routes/devices.ts`, commit b90f65c): `nil` means
+    /// "not specified by this caller" and falls back to what's already in local
+    /// storage, omitting the key entirely when that's empty too (leave the
+    /// server value alone). A caller that passes a value explicitly — including
+    /// `locationId: ""` or `categories: []` — has that value sent as-is, so
+    /// `""`/`[]` reach the server and clear the stored location/categories
+    /// rather than being silently dropped.
     @discardableResult
     func syncDevice(
         deviceId: String,
@@ -178,12 +186,27 @@ actor ShrunkAPIClient {
     ) async -> Bool {
         let defaults = UserDefaults.standard
         let resolvedToken = apnsToken ?? defaults.string(forKey: Self.apnsTokenKey)
-        let resolvedLocation = locationId ?? defaults.string(forKey: "storeLocationId")
-        let resolvedCategories = categories ?? OnboardingProfile
-            .decoded(defaults.string(forKey: "shrunk.onboarding_profile") ?? "{}")
-            .categories
-            .map(\.feedCategory)
-            .sorted()
+
+        let bodyLocationId: String?
+        if let locationId {
+            bodyLocationId = locationId
+        } else {
+            let stored = defaults.string(forKey: "storeLocationId")
+            bodyLocationId = stored?.isEmpty == false ? stored : nil
+        }
+
+        let bodyCategories: [String]?
+        if let categories {
+            bodyCategories = categories
+        } else {
+            let derived = OnboardingProfile
+                .decoded(defaults.string(forKey: "shrunk.onboarding_profile") ?? "{}")
+                .categories
+                .map(\.feedCategory)
+                .sorted()
+            bodyCategories = derived.isEmpty ? nil : derived
+        }
+
         let prefs = NotificationPreferences
             .decoded(defaults.string(forKey: NotificationPreferences.appStorageKey) ?? "{}")
             .kindTogglePayload
@@ -191,8 +214,8 @@ actor ShrunkAPIClient {
         let body = DeviceSyncBody(
             deviceId: deviceId,
             apnsToken: resolvedToken?.isEmpty == false ? resolvedToken : nil,
-            locationId: resolvedLocation?.isEmpty == false ? resolvedLocation : nil,
-            categories: resolvedCategories.isEmpty ? nil : resolvedCategories,
+            locationId: bodyLocationId,
+            categories: bodyCategories,
             prefs: prefs,
             watches: watches,
             transactionJWS: transactionJWS.isEmpty ? nil : transactionJWS

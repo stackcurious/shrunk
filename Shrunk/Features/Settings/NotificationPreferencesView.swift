@@ -182,7 +182,7 @@ struct NotificationPreferencesView: View {
         VStack(spacing: 0) {
             preferenceToggle(
                 title: "Quiet hours",
-                subtitle: "Don't notify me during this window.",
+                subtitle: "Applies to on-device checks only — server alerts still arrive as they happen.",
                 icon: "moon.zzz.fill",
                 tint: .verdictWarn,
                 isOn: Binding(get: { prefs.quietHoursEnabled }, set: { prefs.quietHoursEnabled = $0 })

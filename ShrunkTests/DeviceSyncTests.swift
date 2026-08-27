@@ -62,6 +62,61 @@ final class SyncDeviceTests: XCTestCase {
                                  session: URLSession(configuration: config))
     }
 
+    /// Runs `syncDevice` with the given arguments against a stub that echoes
+    /// success, and hands back the decoded JSON body.
+    private func syncAndCaptureBody(
+        locationId: String? = nil,
+        categories: [String]? = nil
+    ) async -> [String: Any]? {
+        let captured = CapturedRequest()
+        StubURLProtocol.handler = { request in
+            captured.body = request.bodyData()
+            return (200, Data(#"{"ok":true}"#.utf8))
+        }
+        _ = await client.syncDevice(
+            deviceId: "ABC-123",
+            transactionJWS: "",
+            locationId: locationId,
+            categories: categories
+        )
+        // `as? [String: Any]`, not `as! [String: String]` — see the comment on
+        // `test_syncDevice_postsTheDeviceIdAndJWS` below for why.
+        return try! JSONSerialization.jsonObject(with: captured.body ?? Data()) as? [String: Any]
+    }
+
+    // MARK: - P4-F3 explicit clear vs. omitted-key contract
+    // Mirrors the Worker's contract (`backend/src/routes/devices.ts`, commit
+    // b90f65c): an explicit empty value clears the field server-side; a `nil`
+    // argument with nothing in local storage either omits the key (leaving
+    // the server value alone).
+
+    func test_syncDevice_explicitEmptyCategoriesSendsAnEmptyArray() async {
+        UserDefaults.standard.removeObject(forKey: "shrunk.onboarding_profile")
+        let json = await syncAndCaptureBody(categories: [])
+        XCTAssertEqual(json?["categories"] as? [String], [],
+                        "an explicit empty list must clear categories server-side, not be dropped")
+    }
+
+    func test_syncDevice_nilCategoriesOmitsTheKeyWhenNothingIsStoredEither() async {
+        UserDefaults.standard.removeObject(forKey: "shrunk.onboarding_profile")
+        let json = await syncAndCaptureBody(categories: nil)
+        XCTAssertNil(json?["categories"],
+                      "nil with nothing stored locally must omit the key, keeping the server value")
+    }
+
+    func test_syncDevice_explicitEmptyLocationIdClearsTheStore() async {
+        let json = await syncAndCaptureBody(locationId: "")
+        XCTAssertEqual(json?["location_id"] as? String, "",
+                        "an explicit empty string must clear the store server-side, not be dropped")
+    }
+
+    func test_syncDevice_nilLocationIdOmitsTheKeyWhenNothingIsStoredEither() async {
+        UserDefaults.standard.removeObject(forKey: "storeLocationId")
+        let json = await syncAndCaptureBody(locationId: nil)
+        XCTAssertNil(json?["location_id"],
+                      "nil with nothing stored locally must omit the key, keeping the server value")
+    }
+
     func test_syncDevice_postsTheDeviceIdAndJWS() async {
         let captured = CapturedRequest()
         StubURLProtocol.handler = { request in
