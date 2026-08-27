@@ -374,12 +374,13 @@ works — confirm at least one `SKTestSession`-backed test (e.g.
 3. Archive, export and upload — see `scripts/acceptance.md` and the commands in the
    phase-6 plan, Task 10 (`xcodebuild archive` → `-exportArchive` with
    `ExportOptions.plist` → `xcrun altool --upload-app`).
-4. **Only when the App Store build (not TestFlight) goes live:**
-   - Flip `APNS_ENV` to `"production"` in `backend/wrangler.toml`. TestFlight builds
-     carry the `development` `aps-environment` entitlement and talk to the APNs
-     sandbox; the App Store build is re-signed to `production` automatically at
-     distribution, so this Worker-side flip must land at the same time or push
-     silently breaks for whichever side is out of sync.
+4. **`APNS_ENV` is already `"production"`** — TestFlight and App Store builds are both
+   re-signed with the App Store distribution profile at export, which carries the
+   `production` `aps-environment` entitlement, so their device tokens only work against
+   `api.push.apple.com`. Only Xcode debug builds on a device use the sandbox; set
+   `APNS_ENV="sandbox"` (and redeploy) for that, then set it back. A mismatch shows up
+   as `400 BadDeviceToken` in the drain (tokens are no longer cleared on it).
+   **Only when the App Store build (not TestFlight) goes live:**
    - Flip `APPSTORE_ALLOWED_ENVIRONMENTS` to `"Production"` in `backend/wrangler.toml`
      (it is `"Sandbox,Production"` during the TestFlight period so sandbox testers
      can exercise the paywall). Once the App Store build is live, a real customer's
@@ -387,8 +388,8 @@ works — confirm at least one `SKTestSession`-backed test (e.g.
      to just that closes off a free sandbox tester account ever minting a real Pro
      entitlement in production — see the comment above `APPSTORE_ALLOWED_ENVIRONMENTS`
      in `backend/wrangler.toml` and its doc comment in `backend/src/env.ts`.
-   - `npx wrangler deploy` to apply both.
-5. **Immediately after that flip (and again after any future `APNS_ENV` change),
+   - `npx wrangler deploy` to apply it.
+5. **Immediately after the first TestFlight install (and again after any future `APNS_ENV` change),
    send one real push and confirm delivery — do not wait for a routine alert.**
    An `APNS_ENV` / `aps-environment` mismatch (Worker still pointed at the sandbox
    host while the build carries the `production` entitlement, or the reverse)
