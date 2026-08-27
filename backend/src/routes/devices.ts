@@ -4,7 +4,7 @@ import type { Env } from "../env";
 import { canonicalCategory } from "../categories";
 import { normalizeGTIN } from "../gtin";
 import { entitlementFromJWS, trustAnchor } from "../appstore/entitlement";
-import { DEVICES_HOURLY_LIMIT, hitRateLimit, isValidDeviceId } from "../ratelimit";
+import { canonicalDeviceId, DEVICES_HOURLY_LIMIT, hitRateLimit, isValidDeviceId } from "../ratelimit";
 
 /** Spec §3 says "unlimited items"; 500 is the abuse ceiling, not a product limit. */
 export const MAX_WATCHES = 500;
@@ -23,16 +23,20 @@ devicesRoute.post("/v1/devices", async (c) => {
     return c.json({ error: "invalid_json" }, 400);
   }
 
-  const id = typeof body.device_id === "string" ? body.device_id.trim() : "";
-  if (!UUID_RE.test(id)) return c.json({ error: "invalid_device_id" }, 400);
+  const rawId = typeof body.device_id === "string" ? body.device_id.trim() : "";
+  if (!UUID_RE.test(rawId)) return c.json({ error: "invalid_device_id" }, 400);
+  // R40 — canonical (lowercase) form is what gets stored and looked up
+  // everywhere, so two requests for the same physical device always land on
+  // the same devices.id row regardless of which case the client sent.
+  const id = canonicalDeviceId(rawId);
 
   // I1 — the route used to trust body.device_id alone, so anyone could mint
   // device rows (and steer the Kroger sweep's pair set via location_id) with
   // no proof they own the id. X-Device-Id must be the UUID the app actually
   // sends (DeviceIdentity.current) and must name *this* device, matching the
   // enforcement already on /v1/kroger/* (routes/kroger.ts).
-  const headerDeviceId = (c.req.header("x-device-id") ?? "").trim();
-  if (!isValidDeviceId(headerDeviceId) || headerDeviceId.toLowerCase() !== id.toLowerCase()) {
+  const headerDeviceId = canonicalDeviceId(c.req.header("x-device-id") ?? "");
+  if (!isValidDeviceId(headerDeviceId) || headerDeviceId !== id) {
     return c.json({ error: "invalid_device_id" }, 400);
   }
 

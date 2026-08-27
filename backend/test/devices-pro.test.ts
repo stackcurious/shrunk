@@ -40,9 +40,11 @@ async function postDevice(body: Record<string, unknown>, routeEnv: typeof env) {
   );
 }
 
+// R40: devices.id is now stored canonicalized (lowercase), regardless of
+// which case the request used — lowercase the lookup key too.
 async function deviceRow(id: string = DEVICE_ID) {
   return env.DB.prepare("SELECT pro_until, app_account_token FROM devices WHERE id = ?")
-    .bind(id)
+    .bind(id.toLowerCase())
     .first<{ pro_until: number | null; app_account_token: string | null }>();
 }
 
@@ -63,7 +65,7 @@ describe("POST /v1/devices — subscription verification", () => {
     expect(await deviceRow()).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
 
     const jwsColumn = await env.DB.prepare("SELECT transaction_jws FROM devices WHERE id = ?")
-      .bind(DEVICE_ID)
+      .bind(DEVICE_ID.toLowerCase())   // R42: devices.id is stored canonicalized (lowercase)
       .first<{ transaction_jws: string | null }>();
     expect(jwsColumn!.transaction_jws).toBeNull();
   });

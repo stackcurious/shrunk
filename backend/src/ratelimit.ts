@@ -62,3 +62,18 @@ const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 export function isValidDeviceId(value: string): boolean {
   return DEVICE_ID_PATTERN.test(value);
 }
+
+/**
+ * R40 — canonical on-disk/lookup form of a device id: trim + lowercase.
+ * Swift's `UUID().uuidString` is uppercase (see above), and nothing
+ * previously normalized case before writing `devices.id`, `watches.device_id`,
+ * or `submissions.device_id` — so two requests for the same physical device
+ * could land on different-cased rows depending on the client's whim. Every
+ * boundary that writes or looks up a device id applies this; it makes no
+ * format judgement of its own, so callers still validate with
+ * `isValidDeviceId` (before or after canonicalizing — the pattern above is
+ * case-insensitive either way).
+ */
+export function canonicalDeviceId(raw: string): string {
+  return raw.trim().toLowerCase();
+}

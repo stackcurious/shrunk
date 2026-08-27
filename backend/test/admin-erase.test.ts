@@ -144,3 +144,90 @@ describe("POST /v1/admin/devices/:id/erase", () => {
     });
   });
 });
+
+// R42 — eraseDevice matches with a plain `=` (no `lower()`), which is only
+// correct once every stored device id is canonical. migrations/0005 backfills
+// rows written before R40's canonicalization existed; this proves the two
+// work together: an uppercase-cased "legacy" row, once the backfill runs,
+// is found and erased by (either-cased) id like any other.
+describe("R42 — migration 0005 backfill + erase", () => {
+  const LEGACY_UPPER = "6F9619FF-8B86-D011-B42D-00CF4FC964FF";
+  const LEGACY_LOWER = LEGACY_UPPER.toLowerCase();
+
+  beforeEach(async () => {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM watches"),
+      env.DB.prepare("DELETE FROM submissions"),
+      env.DB.prepare("DELETE FROM devices"),
+    ]);
+  });
+
+  /** Runs migration 0005's own queries directly, independent of the D1
+   * migrations bookkeeping table — the test harness already applied it once
+   * (against an empty database, before this test seeded anything), so this
+   * re-runs the real backfill SQL against the "legacy" row seeded below,
+   * simulating what happens when 0005 ships against a database that
+   * predates R40. */
+  async function runBackfillMigration() {
+    const migration = env.TEST_MIGRATIONS.find((m) => m.name.includes("0005_lowercase_device_ids"));
+    expect(migration, "migrations/0005_lowercase_device_ids.sql must exist").toBeTruthy();
+    for (const query of migration!.queries) {
+      await env.DB.prepare(query).run();
+    }
+  }
+
+  it("normalizes an uppercase-cased legacy row to lowercase", async () => {
+    // Seeded exactly as a pre-R40 write would have left it: device id,
+    // watches.device_id, and submissions.device_id all uppercase.
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO devices (id, updated_at) VALUES (?, 1)").bind(LEGACY_UPPER),
+      env.DB
+        .prepare("INSERT INTO watches (device_id, gtin, brand, alert_enabled) VALUES (?, '0028400642255', 'Gatorade', 1)")
+        .bind(LEGACY_UPPER),
+      env.DB
+        .prepare(
+          "INSERT INTO submissions (id, device_id, gtin, photo_key, ocr_text, parsed_quantity, parsed_kind, status, created_at, reviewed_at) VALUES ('sub-legacy-1', ?, '0028400642255', NULL, 'NET WT 28 OZ', 793.786, 'mass', 'accepted', 1, 2)"
+        )
+        .bind(LEGACY_UPPER),
+    ]);
+
+    await runBackfillMigration();
+
+    expect(await env.DB.prepare("SELECT id FROM devices WHERE id = ?").bind(LEGACY_LOWER).first()).not.toBeNull();
+    expect(await env.DB.prepare("SELECT id FROM devices WHERE id = ?").bind(LEGACY_UPPER).first()).toBeNull();
+    expect(
+      (await env.DB.prepare("SELECT COUNT(*) AS n FROM watches WHERE device_id = ?").bind(LEGACY_LOWER).first<{ n: number }>())!
+        .n
+    ).toBe(1);
+    expect(
+      (
+        await env.DB
+          .prepare("SELECT COUNT(*) AS n FROM submissions WHERE device_id = ?")
+          .bind(LEGACY_LOWER)
+          .first<{ n: number }>()
+      )!.n
+    ).toBe(1);
+  });
+
+  it("re-running the backfill against an already-lowercase database is a no-op", async () => {
+    await env.DB.prepare("INSERT INTO devices (id, updated_at) VALUES (?, 1)").bind(LEGACY_LOWER).run();
+    await runBackfillMigration();
+    await runBackfillMigration();   // idempotent
+    expect(await env.DB.prepare("SELECT id FROM devices WHERE id = ?").bind(LEGACY_LOWER).first()).not.toBeNull();
+  });
+
+  it("erase finds and deletes a legacy uppercase row once the backfill has run, by either case", async () => {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO devices (id, updated_at) VALUES (?, 1)").bind(LEGACY_UPPER),
+      env.DB
+        .prepare("INSERT INTO watches (device_id, gtin, brand, alert_enabled) VALUES (?, '0028400642255', 'Gatorade', 1)")
+        .bind(LEGACY_UPPER),
+    ]);
+    await runBackfillMigration();
+
+    const res = await erase(LEGACY_UPPER);   // the admin still has the id in its original casing
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, deleted: { devices: 1, watches: 1, submissions: 0, photos: 0 } });
+    expect(await env.DB.prepare("SELECT id FROM devices WHERE id = ?").bind(LEGACY_LOWER).first()).toBeNull();
+  });
+});

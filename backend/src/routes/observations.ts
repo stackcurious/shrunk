@@ -12,14 +12,13 @@ import {
 } from "../db";
 import { scoreSubmission } from "../gate";
 import { finalizeAcceptance } from "../crowd";
-import { hitRateLimit, OBSERVATIONS_HOURLY_LIMIT } from "../ratelimit";
+import { canonicalDeviceId, hitRateLimit, isValidDeviceId, OBSERVATIONS_HOURLY_LIMIT } from "../ratelimit";
 
 export const observationsRoute = new Hono<{ Bindings: Env }>();
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const KINDS = new Set(["mass", "volume", "count"]);
 const MAX_RAW_TEXT = 500;
-const MAX_DEVICE_ID_LENGTH = 64;
 /** Room for multipart field overhead above the photo itself (I7). */
 const CONTENT_LENGTH_SLACK = 64 * 1024;
 
@@ -55,11 +54,16 @@ observationsRoute.post("/v1/observations", async (c) => {
   const gtin = normalizeGTIN(String(form.get("gtin") ?? ""));
   if (!gtin) return c.json({ error: "invalid_gtin" }, 400);
 
-  const deviceId = String(form.get("device_id") ?? "").trim();
-  if (!deviceId) return c.json({ error: "missing_device_id" }, 400);
-  // I4/T3b: the client always sends UUID().uuidString (36 chars); 64 leaves
-  // headroom without letting an attacker write unbounded text into the column.
-  if (deviceId.length > MAX_DEVICE_ID_LENGTH) return c.json({ error: "invalid_device_id" }, 400);
+  const rawDeviceId = String(form.get("device_id") ?? "").trim();
+  if (!rawDeviceId) return c.json({ error: "missing_device_id" }, 400);
+  // R42 — validate the UUID shape before canonicalising, same as /v1/devices
+  // and /v1/kroger/*: a malformed id is rejected outright rather than
+  // silently lower-cased into a submissions row the app would never produce.
+  if (!isValidDeviceId(rawDeviceId)) return c.json({ error: "invalid_device_id" }, 400);
+  // R40 — canonical (lowercase) form is what lands in submissions.device_id
+  // and the rate-limit key below, so the same physical device always draws
+  // on the same quota and erase-by-id can find it regardless of case.
+  const deviceId = canonicalDeviceId(rawDeviceId);
 
   // I4: this is the app's only unauthenticated write endpoint. Reuse the
   // per-device KV counter the Kroger proxy already uses (spec §6.6), in its

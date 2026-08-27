@@ -12,7 +12,7 @@ import {
   type PendingSubmissionRow,
 } from "../db";
 import { finalizeAcceptance } from "../crowd";
-import { isValidDeviceId } from "../ratelimit";
+import { canonicalDeviceId, isValidDeviceId } from "../ratelimit";
 
 export const adminRoute = new Hono<{ Bindings: Env }>();
 
@@ -112,7 +112,7 @@ adminRoute.post("/v1/admin/review/:id", async (c) => {
  * a second call against the same id returns all zeros.
  */
 adminRoute.post("/v1/admin/devices/:id/erase", async (c) => {
-  const id = c.req.param("id").toLowerCase();
+  const id = canonicalDeviceId(c.req.param("id"));
   if (!isValidDeviceId(id)) return c.json({ error: "invalid_device_id" }, 400);
 
   const deleted = await eraseDevice(c.env.DB, c.env.PHOTOS, id);

@@ -4,6 +4,8 @@ import app from "../src/index";
 
 const GTIN = "0028400642255";
 const AUTH = { Authorization: "Bearer test-secret" };
+// R42: /v1/observations now requires a UUID-shaped device_id.
+const DEVICE = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
 
 async function photoKeys(): Promise<string[]> {
   return (await env.PHOTOS.list()).objects.map((o) => o.key);
@@ -24,7 +26,7 @@ async function seedPending(): Promise<{ submissionId: string; observationId: num
 
   const form = new FormData();
   form.append("gtin", GTIN);
-  form.append("device_id", "device-1");
+  form.append("device_id", DEVICE);
   form.append("quantity", "793.786");
   form.append("unit_kind", "mass");
   form.append("raw_text", "NET WT 28 OZ (794g)");

@@ -446,6 +446,17 @@ export interface EraseDeviceResult {
  * are keyed by gtin/brand/location_id only (migrations 0002/0003) — nothing
  * on that table identifies a device, so there is nothing to delete there.
  *
+ * R40/R42 — every write path canonicalizes (`canonicalDeviceId`, trim +
+ * lowercase) before storing a device id, and `deviceId` here is expected to
+ * already be canonical (the route does the same before calling in).
+ * Matching is a plain `=`, not `lower(column) = ?`: a `lower()` call on the
+ * column is non-sargable and, more importantly, would be one more place that
+ * has to agree with every other device-id lookup/join in the codebase (e.g.
+ * the alert drain's `ORDER BY d.id` resume cursor) about what "matches"
+ * means. Migration 0005 backfills any row written before canonicalization
+ * existed, so plain equality is correct everywhere, including here — this
+ * function makes no special allowance for non-canonical storage.
+ *
  * Idempotent: a device with nothing left to delete returns all zeros.
  */
 export async function eraseDevice(db: D1Database, r2: R2Bucket, deviceId: string): Promise<EraseDeviceResult> {

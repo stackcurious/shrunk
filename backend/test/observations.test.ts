@@ -5,11 +5,13 @@ import { hitRateLimit, KROGER_HOURLY_LIMIT } from "../src/ratelimit";
 import { declaredBodyTooLarge } from "../src/routes/observations";
 
 const GTIN = "0028400642255";
+// R42: device_id must now be UUID-shaped (isValidDeviceId), same as /v1/devices and /v1/kroger/*.
+const DEVICE = "6f9619ff-8b86-d011-b42d-00cf4fc964ff";
 
 function body(overrides: Record<string, string> = {}, photo?: Blob): FormData {
   const fields: Record<string, string> = {
     gtin: GTIN,
-    device_id: "device-1",
+    device_id: DEVICE,
     quantity: "793.786",
     unit_kind: "mass",
     raw_text: "NET WT 28 OZ (794g)",
@@ -96,7 +98,7 @@ describe("POST /v1/observations", () => {
     });
 
     const submission = await env.DB.prepare("SELECT id, status, photo_key, device_id, parsed_quantity FROM submissions").first<any>();
-    expect(submission).toMatchObject({ status: "accepted", photo_key: null, device_id: "device-1", parsed_quantity: 793.786 });
+    expect(submission).toMatchObject({ status: "accepted", photo_key: null, device_id: DEVICE, parsed_quantity: 793.786 });
     expect(observation.source_ref).toBe(submission.id);
 
     // Accepted rows never need a human, so the photo is never written (spec §6.3).
@@ -186,6 +188,7 @@ describe("POST /v1/observations", () => {
       [{ gtin: "12345" }, "invalid_gtin"],
       [{ device_id: "" }, "missing_device_id"],
       [{ device_id: "d".repeat(65) }, "invalid_device_id"],
+      [{ device_id: "not-a-uuid" }, "invalid_device_id"],
       [{ quantity: "0" }, "invalid_quantity"],
       [{ quantity: "banana" }, "invalid_quantity"],
       [{ unit_kind: "grams" }, "invalid_unit_kind"],
@@ -274,7 +277,7 @@ describe("POST /v1/observations", () => {
 
   it("rate-limits submissions to 30 per device per hour, separately from the Kroger quota", async () => {
     await seedProduct("mass");
-    const deviceId = `device-rl-${crypto.randomUUID()}`;
+    const deviceId = crypto.randomUUID();   // unique to this test — an isolated rate-limit bucket
     for (let i = 1; i <= 30; i++) {
       const res = await post(body({ device_id: deviceId }));
       expect(res.status, `attempt ${i}`).toBe(200);

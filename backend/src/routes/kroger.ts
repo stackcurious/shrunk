@@ -5,7 +5,7 @@ import { KROGER_ATTRIBUTION, KrogerClient, KrogerError } from "../kroger/client"
 import { krogerProductId } from "../kroger/ids";
 import { toLiveProduct } from "../kroger/map";
 import { persistKrogerProduct } from "../kroger/persist";
-import { hitRateLimit, isValidDeviceId, KROGER_GLOBAL_HOURLY_LIMIT } from "../ratelimit";
+import { canonicalDeviceId, hitRateLimit, isValidDeviceId, KROGER_GLOBAL_HOURLY_LIMIT } from "../ratelimit";
 
 type Ctx = Context<{ Bindings: Env }>;
 
@@ -16,7 +16,9 @@ export const krogerRoute = new Hono<{ Bindings: Env }>();
 // rate-limit identity (spoofable, and unbounded length risked a KV key over
 // 512 bytes crashing the middleware with a 500).
 krogerRoute.use("/v1/kroger/*", async (c, next) => {
-  const deviceId = (c.req.header("x-device-id") ?? "").trim();
+  // R40 — canonical (lowercase) form, so the rate-limit bucket for a device
+  // is the same regardless of which case the client sends.
+  const deviceId = canonicalDeviceId(c.req.header("x-device-id") ?? "");
   if (!isValidDeviceId(deviceId)) return c.json({ error: "invalid_device_id" }, 400);
 
   // I4: a global budget, checked first, so a burst of distinct (but
