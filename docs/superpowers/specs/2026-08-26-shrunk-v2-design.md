@@ -209,7 +209,7 @@ Kroger's Acceptable Use and Terms prohibit "systematically gathering response da
 - Attribution shown wherever Kroger data appears.
 - Every other feature works without Kroger; loss of the key degrades, never breaks, the app.
 - Permission email draft: Appendix A. Send in week 1.
-- <TODO: fill after deploy — once the email is sent, replace the line above with: `Permission email draft: Appendix A. **Sent YYYY-MM-DD** from privacy@stackcurious.com to Kroger developer support (client id `<client id>`); no reply as of YYYY-MM-DD. Until it is answered, `KROGER_PERSIST` stays on and `POST /v1/admin/purge-kroger` is the one-command retraction.` See `docs/RELEASE_CHECKLIST.md` Step 5.>
+- Permission email: Appendix A. **Sent 2026-08-27** from stackcurious@gmail.com to APISupport@kroger.com (client id `shrunkshrinkflationscanner-bbchhd1m`); no reply as of 2026-08-27. Until it is answered, `KROGER_PERSIST` stays on and `POST /v1/admin/purge-kroger` is the one-command retraction. See `docs/RELEASE_CHECKLIST.md` Step 5.
 
 ## 10. Testing
 
