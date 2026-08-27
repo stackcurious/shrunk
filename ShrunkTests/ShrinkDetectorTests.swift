@@ -388,5 +388,108 @@ final class ShrinkDetectorTests: XCTestCase {
         let record = detector.analyze(product: product)
         XCTAssertEqual(record.verdict, .significantShrink)
     }
+
+    // MARK: - The single-snapshot record (spec §2, §4)
+    //
+    // 98.5 % of the catalogue has exactly one observation, and a fresh on-miss
+    // lookup has none. `.insufficientData` is the right *verdict* for both, but
+    // the record still has to carry everything the Result screen needs to say
+    // something concrete: the size we do know, and what it costs per ounce.
+
+    func test_singleObservation_setsCurrentSizeAndLeavesPreviousSizeNil() {
+        let product = makeProduct(history: [.init(quantity: 28, unit: "oz")])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertEqual(record.currentSize?.quantity, 28, "the one snapshot we have is the current size")
+        XCTAssertNil(record.previousSize,
+                     "there is no 'then' — reporting the same record as both ends rendered a Then→Now row comparing a size with itself")
+    }
+
+    func test_singleObservation_stillPricesCostPerOunce() {
+        // Without this the screen's whole cost-per-oz section renders empty on
+        // the commonest product in the catalogue.
+        let product = makeProduct(history: [.init(quantity: 28, unit: "oz")], price: 1.89)
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
+        XCTAssertNil(record.costPerUnitThen, "one snapshot has nothing to compare against")
+    }
+
+    func test_singleObservation_costPerOunceIsNilWithoutAPrice() {
+        let product = makeProduct(history: [.init(quantity: 28, unit: "oz")], price: nil)
+        XCTAssertNil(detector.analyze(product: product).costPerUnitNow)
+    }
+
+    func test_singleObservation_normalizesTheUnitBeforePricing() {
+        // 946.353 ml is 32 fl-oz-equivalent; $1.89 over it is $1.89/32, not
+        // $1.89/946.353.
+        let product = makeProduct(history: [.init(quantity: 946.353, unit: "ml")], price: 1.89)
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / (946.353 * 0.033814), accuracy: 0.0001)
+    }
+
+    func test_mixedKindsWithOnlyOneOfTheLatestKind_hasNoPreviousSize() {
+        // 1000 g then 28 fl oz: one record of the latest kind, so there is a
+        // current size but nothing legal to compare it with.
+        let product = makeProduct(history: [
+            .init(quantity: 1000, unit: "g"),
+            .init(quantity: 28,   unit: "fl oz")
+        ])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertEqual(record.currentSize?.quantity, 28)
+        XCTAssertNil(record.previousSize, "a mass record is never the 'then' for a volume one")
+    }
+
+    // MARK: - Adopting the live store size (spec rule 5)
+    //
+    // A product found through the on-miss lookup comes back with
+    // `observations: []`, but the live Kroger row for the same GTIN often
+    // parses a size. `analyze(product:liveSize:)` treats that size as the
+    // current one so the screen has a fact to show and the Watch button has a
+    // baseline. It is deliberately only consulted when the product has no
+    // observation of its own — a stored observation always wins.
+
+    func test_noObservations_hasNoCurrentSize() {
+        let record = detector.analyze(product: makeProduct(history: []))
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertNil(record.currentSize)
+    }
+
+    func test_noObservations_withALiveSize_adoptsItAsTheCurrentSize() {
+        let live = SizeRecord(date: Date(), quantity: 828.058, unit: "ml", source: "kroger")
+        let record = detector.analyze(product: makeProduct(history: []), liveSize: live)
+
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertEqual(record.currentSize?.quantity, 828.058)
+        XCTAssertEqual(record.currentSize?.unit, "ml")
+        XCTAssertEqual(record.currentSize?.source, "kroger", "attribution survives adoption")
+        XCTAssertNil(record.previousSize)
+    }
+
+    func test_adoptedLiveSize_pricesCostPerOunce() {
+        let live = SizeRecord(date: Date(), quantity: 828.058, unit: "ml", source: "kroger")
+        let record = detector.analyze(product: makeProduct(history: [], price: 1.89), liveSize: live)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / (828.058 * 0.033814), accuracy: 0.0001)
+    }
+
+    func test_liveSizeIsIgnoredWhenTheProductAlreadyHasAnObservation() {
+        // Our own observation is the record of truth; a live row is only a
+        // stand-in for having none at all.
+        let live = SizeRecord(date: Date(), quantity: 828.058, unit: "ml", source: "kroger")
+        let product = makeProduct(history: [.init(quantity: 946.353, unit: "ml")])
+        let record = detector.analyze(product: product, liveSize: live)
+
+        XCTAssertEqual(record.currentSize?.quantity, 946.353)
+        XCTAssertEqual(record.currentSize?.source, "test")
+    }
+
+    func test_liveSizeOfZeroIsNotAdopted() {
+        let live = SizeRecord(date: Date(), quantity: 0, unit: "ml", source: "kroger")
+        let record = detector.analyze(product: makeProduct(history: []), liveSize: live)
+        XCTAssertNil(record.currentSize, "a zero quantity is not a size")
+    }
 }
 
