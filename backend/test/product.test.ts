@@ -119,7 +119,10 @@ describe("GET /v1/product/:gtin", () => {
         }
         if (url.includes("world.openfoodfacts.org/api/v2/product/0028400642255.json")) {
           return new Response(
-            JSON.stringify({ status: 1, product: { product_name: "Doritos", brands: "Doritos", image_url: "https://img/x.jpg" } }),
+            JSON.stringify({
+              status: 1,
+              product: { product_name: "Doritos", brands: "Doritos", image_url: "https://img/x.jpg", categories_tags: ["en:snacks"] },
+            }),
             { status: 200, headers: { "content-type": "application/json" } }
           );
         }
@@ -132,7 +135,10 @@ describe("GET /v1/product/:gtin", () => {
 
     const hit = await app.request("/v1/product/0028400642255", {}, env);
     expect(hit.status).toBe(200);
-    expect(await hit.json<any>()).toMatchObject({ name: "Doritos", brand: "Doritos", image_url: "https://img/x.jpg", observations: [] });
+    // I8: the OFF fallback carries a real category ("Snacks", via
+    // categories_tags -> canonicalCategory) instead of the "" this route
+    // used to hardcode for every OFF-created product.
+    expect(await hit.json<any>()).toMatchObject({ name: "Doritos", brand: "Doritos", image_url: "https://img/x.jpg", category: "Snacks", observations: [] });
 
     const miss = await app.request("/v1/product/0099999999999", {}, env);
     expect(miss.status).toBe(404);

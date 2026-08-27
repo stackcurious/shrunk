@@ -53,7 +53,9 @@ async function createFromLookups(env: Env, gtin: string): Promise<ProductRow | n
     row = { gtin, name: fdc.name, brand: fdc.brand, category: fdc.category, image_url: null, unit_kind: null };
   } else {
     const off = await lookupOFF(gtin);
-    if (off) row = { gtin, name: off.name, brand: off.brand, category: "", image_url: off.imageUrl, unit_kind: null };
+    // I8: off.category is a real category (from categories_tags) or "" —
+    // never a hardcoded empty string regardless of what OFF actually had.
+    if (off) row = { gtin, name: off.name, brand: off.brand, category: off.category, image_url: off.imageUrl, unit_kind: null };
   }
   if (!row) return null;
   // C1: an on-miss FDC/OFF lookup, not the bulk FDC importer — tagged

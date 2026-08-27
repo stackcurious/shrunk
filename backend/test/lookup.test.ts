@@ -13,6 +13,7 @@ describe("lookupFDC", () => {
       return jsonResponse({ foods: [{ gtinUpc: "028400642255", description: "GATORADE THIRST QUENCHER", brandOwner: "Stokely-Van Camp", brandName: "Gatorade", foodCategory: "Sports Drinks" }] });
     });
     const hit = await lookupFDC("0028400642255", "k", fetchImpl as unknown as typeof fetch);
+    // "Sports Drinks" matches no alias, so canonicalCategory keeps it as-is.
     expect(hit).toEqual({ name: "Gatorade Thirst Quencher", brand: "Gatorade", category: "Sports Drinks" });
   });
 
@@ -22,15 +23,58 @@ describe("lookupFDC", () => {
     const failing = vi.fn(async () => jsonResponse({}, 500));
     expect(await lookupFDC("0028400642255", "k", failing as unknown as typeof fetch)).toBeNull();
   });
+
+  // I8: foodCategory is routed through canonicalCategory so it agrees with
+  // the same vocabulary products.category, the digest and the feed use.
+  it("I8: maps foodCategory through canonicalCategory when it matches an alias", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ foods: [{ gtinUpc: "028400642255", description: "X", brandName: "X", foodCategory: "beverage" }] }),
+    );
+    const hit = await lookupFDC("0028400642255", "k", fetchImpl as unknown as typeof fetch);
+    expect(hit?.category).toBe("Beverages");
+  });
 });
 
 describe("lookupOFF", () => {
-  it("returns name/brand/image on status 1", async () => {
-    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+  it("returns name/brand/image/category on status 1", async () => {
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       expect((init?.headers as Record<string, string>)["User-Agent"]).toContain("Shrunk/2.0");
-      return jsonResponse({ status: 1, product: { product_name: "Doritos Nacho Cheese", brands: "Doritos, Frito-Lay", image_url: "https://img/x.jpg" } });
+      // I8: categories_tags must be requested — it is the only source of a
+      // real category from OFF.
+      expect(url).toContain("categories_tags");
+      return jsonResponse({
+        status: 1,
+        product: {
+          product_name: "Doritos Nacho Cheese",
+          brands: "Doritos, Frito-Lay",
+          image_url: "https://img/x.jpg",
+          categories_tags: ["en:snacks", "en:salty-snacks", "en:tortilla-chips"],
+        },
+      });
     });
-    expect(await lookupOFF("0028400642255", fetchImpl as unknown as typeof fetch)).toEqual({ name: "Doritos Nacho Cheese", brand: "Doritos", imageUrl: "https://img/x.jpg" });
+    expect(await lookupOFF("0028400642255", fetchImpl as unknown as typeof fetch)).toEqual({
+      name: "Doritos Nacho Cheese",
+      brand: "Doritos",
+      imageUrl: "https://img/x.jpg",
+      // I8: last tag, "en:" stripped, routed through canonicalCategory —
+      // "tortilla-chips" has no alias, so it is kept as-is.
+      category: "tortilla-chips",
+    });
+  });
+
+  it("I8: maps the last categories_tags entry through canonicalCategory when it matches an alias", async () => {
+    const fetchImpl = vi.fn(async () =>
+      jsonResponse({ status: 1, product: { product_name: "X", categories_tags: ["en:groceries", "en:beverages"] } }),
+    );
+    const hit = await lookupOFF("0028400642255", fetchImpl as unknown as typeof fetch);
+    expect(hit?.category).toBe("Beverages");
+  });
+
+  it("I8: category is '' — never the literal 'Uncategorized' — when categories_tags is absent", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ status: 1, product: { product_name: "X" } }));
+    const hit = await lookupOFF("0028400642255", fetchImpl as unknown as typeof fetch);
+    expect(hit?.category).toBe("");
+    expect(hit?.category).not.toBe("Uncategorized");
   });
 
   it("returns null on status 0 or non-200", async () => {

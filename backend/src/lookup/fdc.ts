@@ -1,3 +1,4 @@
+import { canonicalCategory } from "../categories";
 import { normalizeGTIN } from "../gtin";
 
 export interface FDCHit { name: string; brand: string; category: string }
@@ -17,7 +18,10 @@ export async function lookupFDC(gtin: string, apiKey: string, fetchImpl: typeof 
     return {
       name: titleCase((food.description ?? "").trim()),
       brand: (food.brandName ?? food.brandOwner ?? "").trim(),
-      category: (food.foodCategory ?? "").trim(),
+      // I8: routed through canonicalCategory so it agrees with our
+      // vocabulary when it matches an alias; otherwise the raw FDC wording
+      // survives (canonicalCategory's own fallback behaviour).
+      category: canonicalCategory(food.foodCategory) ?? "",
     };
   } catch {
     return null;
