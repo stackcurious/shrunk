@@ -25,19 +25,27 @@ interface SnapshotRow {
 }
 
 /**
- * Six-hourly Kroger sweep (spec §6.2). Phase 3 has no `watches`/`devices`
- * tables — they arrive in Phase 4 — so the sweep re-checks every
- * (gtin, location_id) pair we already hold a snapshot for. Phase 4 swaps that
- * single query for `watches x devices` and leaves the rest of this file alone.
+ * Six-hourly Kroger sweep (spec §6.2). The (gtin, location_id) set is the
+ * distinct pairs from `watches x devices` — a device only counts once it has a
+ * store — unioned with the pairs we already hold snapshots for. Compares the
+ * new snapshot with the previous one for the same pair and files
+ * `alert_jobs(kind='size_drop' | 'price_hike')`.
  */
 export async function runKrogerSweep(env: Env, client: KrogerClient = new KrogerClient(env)): Promise<SweepResult> {
   const result: SweepResult = { pairs: 0, snapshots: 0, sizeDrops: 0, priceHikes: 0 };
   if (env.KROGER_PERSIST !== "on") return result;
 
-  const { results: pairs } = await env.DB.prepare("SELECT DISTINCT gtin, location_id FROM price_snapshots").all<{
-    gtin: string;
-    location_id: string;
-  }>();
+  // Spec §6.2 — the sweep follows the watchlists: every product a device
+  // watches, at that device's store, plus every pair we already snapshot.
+  const { results: pairs } = await env.DB
+    .prepare(
+      `SELECT DISTINCT w.gtin AS gtin, d.location_id AS location_id
+       FROM watches w JOIN devices d ON d.id = w.device_id
+       WHERE d.location_id IS NOT NULL AND d.location_id <> ''
+       UNION
+       SELECT DISTINCT gtin AS gtin, location_id AS location_id FROM price_snapshots`
+    )
+    .all<{ gtin: string; location_id: string }>();
   result.pairs = pairs.length;
   if (pairs.length === 0) return result;
 
