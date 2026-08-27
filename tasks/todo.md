@@ -25,5 +25,11 @@ Context: v2.0.0 (2) is on TestFlight for oakley801@gmail.com. User is testing. M
 - [ ] 01 result / 02 scan / 03 live price / 04 contribute / 05 alerts / 06 paywall → marketing/screenshots/v2/
 - [ ] v1 screenshots deleted
 
+## D. TestFlight build-2 feedback (spec docs/superpowers/specs/2026-08-27-scan-value-and-native-ui.md)
+- [ ] Backend: on-miss lookup keeps FDC/OFF size as an observation (test first) — subagent, then deploy
+- [ ] iOS wave 1: Watch outcome logic + single-snapshot / no-size Result states + live-size adoption (tests first) — subagent in worktree
+- [ ] iOS wave 2: native HIG restyle (§3) — after wave 1 + screenshot agent land
+- [ ] Retake screenshots on the restyled UI; build 2.0.0 (3) → TestFlight (oakley801)
+
 ## Review
 (filled at the end)

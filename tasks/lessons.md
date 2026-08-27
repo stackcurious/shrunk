@@ -14,3 +14,7 @@
 ## 2026-08-27 — identifier casing surfaced late (phase-5 review C3 / R40–R42)
 - The iOS app minted uppercase UUIDs, the Worker stored ids as sent, and a new admin route lowercased — three phases in, nothing had defined the canonical form.
 - Rule: the spec/plan must name the canonical representation of every cross-system identifier (case, padding, encoding) and one normaliser per side; reviewers check "who normalises, where" for any id that crosses a boundary.
+
+## 2026-08-27 — release-day corrections
+- "why are u assigning task to me? get it done": never hand a step back to the user when an API, CLI, or the browser can do it (ASC API with the team key, `wrangler`, Chrome automation, AppleScript into Xcode). Only genuinely user-only items (passwords, 2FA, sudo prompts, physical device) go back — and say why.
+- Build 2 shipped a Result screen designed for the 1.5 % of products with a recorded size change; the common path (one snapshot, or zero after an on-miss lookup) was a dead end and "Watch" was a silent no-op. Rule: before a TestFlight build, walk the *common* path with a random real barcode (not a curated one) and measure the data coverage with a D1 query; every user action must produce visible feedback (no bare `return` in a button handler).
