@@ -205,7 +205,7 @@ struct WatchlistView: View {
                     .font(.shrunkLargeTitle)
                     .foregroundStyle(Color.ink)
                     .multilineTextAlignment(.center)
-                Text("Watch any product. We check Open Food Facts in the background and alert you the moment it shrinks.")
+                Text("Watch any product. We check Kroger in the background and alert you the moment it shrinks.")
                     .font(.shrunkBody)
                     .foregroundStyle(Color.smoke)
                     .multilineTextAlignment(.center)

@@ -493,7 +493,7 @@ private struct SocialProofStep: View {
                         .font(.shrunkLargeTitle)
                         .foregroundStyle(Color.ink)
                         .multilineTextAlignment(.center)
-                    Text("Our data comes from Open Food Facts — a nonprofit, community-maintained database. No brand pays us. Ever.")
+                    Text("Our data comes from USDA FoodData Central, Kroger, and shoppers like you. No brand pays us. Ever.")
                         .font(.shrunkBody)
                         .foregroundStyle(Color.smoke)
                         .multilineTextAlignment(.center)
@@ -503,8 +503,8 @@ private struct SocialProofStep: View {
 
                 VStack(spacing: 10) {
                     proofRow(icon: "leaf.fill", color: .verdictGood,
-                             title: "Backed by Open Food Facts",
-                             subtitle: "Nonprofit · 3M+ products")
+                             title: "Backed by real sources",
+                             subtitle: "USDA FoodData Central · Kroger · shoppers like you")
                     proofRow(icon: "person.2.fill", color: .shrunkRed,
                              title: "Community-driven catalog",
                              subtitle: "Every shrink is logged, sourced, and timestamped")

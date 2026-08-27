@@ -243,7 +243,7 @@ struct SavingsDashboardView: View {
                 howItWorksRow(
                     icon: "2.circle.fill",
                     title: "We check daily",
-                    subtitle: "Background sweeps against Open Food Facts"
+                    subtitle: "Background sweeps against Kroger"
                 )
                 howItWorksRow(
                     icon: "3.circle.fill",

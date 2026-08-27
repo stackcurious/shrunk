@@ -27,7 +27,7 @@ struct SettingsView: View {
                             showNotificationPrefs = true
                         }
                     }
-                    sectionGroup(title: "Data", subtitle: "Shrunk has no relationship with any brand or manufacturer. Open Food Facts is a nonprofit, community-maintained database.") {
+                    sectionGroup(title: "Data", subtitle: "Shrunk has no relationship with any brand or manufacturer. Size and price data comes from USDA FoodData Central, Kroger, and shoppers like you. Open Food Facts is credited below for product names and images.") {
                         SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts", isLink: true) {
                             if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
                         }
