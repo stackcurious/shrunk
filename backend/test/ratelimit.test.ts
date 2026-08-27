@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deviceKey, hitRateLimit, KROGER_HOURLY_LIMIT } from "../src/ratelimit";
+import { hitRateLimit, isValidDeviceId, KROGER_GLOBAL_HOURLY_LIMIT, KROGER_HOURLY_LIMIT } from "../src/ratelimit";
 
 describe("hitRateLimit", () => {
   afterEach(() => {
@@ -43,6 +43,10 @@ describe("hitRateLimit", () => {
     expect(KROGER_HOURLY_LIMIT).toBe(60);
   });
 
+  it("I4: the global Kroger budget is 400 per hour", () => {
+    expect(KROGER_GLOBAL_HOURLY_LIMIT).toBe(400);
+  });
+
   it("keeps a separate bucket per purpose for the same device", async () => {
     // I4: /v1/observations reuses this limiter with its own purpose so a
     // device's Kroger proxy calls and its crowd submissions don't share one
@@ -61,10 +65,19 @@ describe("hitRateLimit", () => {
   });
 });
 
-describe("deviceKey", () => {
-  it("prefers X-Device-Id, then the connecting IP, then anonymous", () => {
-    expect(deviceKey(new Request("https://x/", { headers: { "x-device-id": "abc" } }))).toBe("abc");
-    expect(deviceKey(new Request("https://x/", { headers: { "cf-connecting-ip": "1.2.3.4" } }))).toBe("1.2.3.4");
-    expect(deviceKey(new Request("https://x/"))).toBe("anonymous");
+describe("isValidDeviceId", () => {
+  it("accepts a UUID in either case, matching Swift's UUID().uuidString and crypto.randomUUID()", () => {
+    expect(isValidDeviceId("e5a4f8b2-1234-4321-abcd-1234567890ab")).toBe(true);
+    expect(isValidDeviceId("E5A4F8B2-1234-4321-ABCD-1234567890AB")).toBe(true);
+    expect(isValidDeviceId(crypto.randomUUID())).toBe(true);
+  });
+
+  it("rejects anything not shaped exactly like a UUID (I4 / T5)", () => {
+    expect(isValidDeviceId("")).toBe(false);
+    expect(isValidDeviceId("dev-e5a4f8b2-1234-4321-abcd-1234567890ab")).toBe(false); // prefixed
+    expect(isValidDeviceId("e5a4f8b2123443214321abcd1234567890ab")).toBe(false); // no dashes
+    expect(isValidDeviceId("not-a-uuid")).toBe(false);
+    expect(isValidDeviceId("1.2.3.4")).toBe(false); // an IP must not be accepted as identity
+    expect(isValidDeviceId("x".repeat(600))).toBe(false); // T5: an oversized id must not reach KV at all
   });
 });

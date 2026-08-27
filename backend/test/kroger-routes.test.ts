@@ -21,9 +21,13 @@ const PRODUCT = {
   ],
 };
 
-/** A fresh device per test so the 60/hour counter never leaks across tests. */
+/**
+ * A fresh device per test so the 60/hour counter never leaks across tests.
+ * I4: must be UUID-shaped — this is what DeviceIdentity.current actually
+ * sends — or the middleware 400s before any of these tests' stubs matter.
+ */
 function headers() {
-  return { "X-Device-Id": `dev-${crypto.randomUUID()}` };
+  return { "X-Device-Id": crypto.randomUUID() };
 }
 
 function jsonResponse(body: unknown, status = 200, responseHeaders?: Record<string, string>): Response {
@@ -203,12 +207,71 @@ describe("GET /v1/kroger/search", () => {
 
 describe("per-device rate limit", () => {
   it("429s once the device is over the hourly limit, without calling Kroger", async () => {
-    const device = `dev-${crypto.randomUUID()}`;
+    const device = crypto.randomUUID();
     const bucket = Math.floor(Date.now() / 1000 / 3600);
     await env.KV.put(`rl:kroger:${device}:${bucket}`, "60", { expirationTtl: 3600 });
 
     const res = await app.request("/v1/kroger/locations?zip=45044", { headers: { "X-Device-Id": device } }, env);
     expect(res.status).toBe(429);
     expect(await res.json()).toEqual({ error: "rate_limited" });
+  });
+});
+
+describe("I4 — device identity and the global Kroger budget", () => {
+  beforeEach(async () => {
+    const bucket = Math.floor(Date.now() / 1000 / 3600);
+    await env.KV.delete(`rl:kroger:global:${bucket}`);
+  });
+
+  it("400s a missing X-Device-Id without touching KV or Kroger", async () => {
+    const res = await app.request("/v1/kroger/locations?zip=45044", {}, env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+  });
+
+  it("400s a non-UUID X-Device-Id", async () => {
+    const res = await app.request("/v1/kroger/locations?zip=45044", { headers: { "X-Device-Id": "not-a-uuid" } }, env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+  });
+
+  it("T5: 400s an oversized X-Device-Id instead of 500ing on a too-long KV key", async () => {
+    const res = await app.request(
+      "/v1/kroger/locations?zip=45044",
+      { headers: { "X-Device-Id": "x".repeat(600) } },
+      env,
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+  });
+
+  it("T5: 400s an empty X-Device-Id rather than collapsing into a shared bucket", async () => {
+    const res = await app.request("/v1/kroger/locations?zip=45044", { headers: { "X-Device-Id": "" } }, env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_device_id" });
+  });
+
+  it("429s every device once the global hourly budget is exhausted, before the per-device check", async () => {
+    const bucket = Math.floor(Date.now() / 1000 / 3600);
+    await env.KV.put(`rl:kroger:global:${bucket}`, "400", { expirationTtl: 3600 });
+
+    // A brand-new device, nowhere near its own 60/hour cap, still 429s.
+    const res = await app.request("/v1/kroger/locations?zip=45044", { headers: headers() }, env);
+    expect(res.status).toBe(429);
+    expect(await res.json()).toEqual({ error: "rate_limited" });
+  });
+
+  it("counts toward the global budget on every request, shared across devices", async () => {
+    stubKroger((url) => {
+      if (url.pathname !== "/v1/locations") return undefined;
+      return jsonResponse({ data: [] }, 200);
+    });
+
+    await app.request("/v1/kroger/locations?zip=45044", { headers: headers() }, env);
+    await app.request("/v1/kroger/locations?zip=45044", { headers: headers() }, env);
+
+    const bucket = Math.floor(Date.now() / 1000 / 3600);
+    const count = await env.KV.get(`rl:kroger:global:${bucket}`);
+    expect(count).toBe("2");
   });
 });

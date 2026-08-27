@@ -5,15 +5,28 @@ import { KROGER_ATTRIBUTION, KrogerClient, KrogerError } from "../kroger/client"
 import { krogerProductId } from "../kroger/ids";
 import { toLiveProduct } from "../kroger/map";
 import { persistKrogerProduct } from "../kroger/persist";
-import { deviceKey, hitRateLimit } from "../ratelimit";
+import { hitRateLimit, isValidDeviceId, KROGER_GLOBAL_HOURLY_LIMIT } from "../ratelimit";
 
 type Ctx = Context<{ Bindings: Env }>;
 
 export const krogerRoute = new Hono<{ Bindings: Env }>();
 
-// One shared quota protects the whole /v1/kroger/* surface (spec §6.6).
+// I4: X-Device-Id must be the UUID the app sends, or the request 400s before
+// touching KV or Kroger at all — an arbitrary header can no longer be used as
+// rate-limit identity (spoofable, and unbounded length risked a KV key over
+// 512 bytes crashing the middleware with a 500).
 krogerRoute.use("/v1/kroger/*", async (c, next) => {
-  const { allowed } = await hitRateLimit(c.env.KV, deviceKey(c.req.raw));
+  const deviceId = (c.req.header("x-device-id") ?? "").trim();
+  if (!isValidDeviceId(deviceId)) return c.json({ error: "invalid_device_id" }, 400);
+
+  // I4: a global budget, checked first, so a burst of distinct (but
+  // otherwise valid-looking) device ids cannot collectively exhaust the
+  // shared 10,000/day Kroger quota — the per-device cap alone cannot stop
+  // that.
+  const global = await hitRateLimit(c.env.KV, "global", KROGER_GLOBAL_HOURLY_LIMIT);
+  if (!global.allowed) return c.json({ error: "rate_limited" }, 429);
+
+  const { allowed } = await hitRateLimit(c.env.KV, deviceId);
   if (!allowed) return c.json({ error: "rate_limited" }, 429);
   await next();
 });

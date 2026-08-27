@@ -36,7 +36,8 @@ function stub(size: string, regular = 1.89) {
 const call = (persist: "on" | "off") =>
   app.request(
     `/v1/kroger/product/${GTIN}?locationId=01400943`,
-    { headers: { "X-Device-Id": `dev-${crypto.randomUUID()}` } },
+    // I4: must be UUID-shaped, matching what DeviceIdentity.current sends.
+    { headers: { "X-Device-Id": crypto.randomUUID() } },
     { ...env, KROGER_PERSIST: persist },
   );
 
