@@ -122,15 +122,22 @@ describe("KrogerClient calls", () => {
   it("batches at most 50 product ids into one call", async () => {
     const ids = Array.from({ length: 60 }, (_, i) => String(i).padStart(13, "0"));
     let requestedIds = "";
+    let rawSearch = "";
     stubKroger((url) => {
       if (url.pathname !== "/v1/products") return undefined;
       requestedIds = decodeURIComponent(url.searchParams.get("filter.productId")!);
+      rawSearch = url.search;
       return jsonResponse({ data: [PRODUCT] });
     });
 
     const result = await new KrogerClient(env).products(ids, "01400943");
     expect(requestedIds.split(",")).toHaveLength(50);
     expect(result.data).toHaveLength(1);
+    // T4: the separators must be literal commas on the wire, not %2C — it is
+    // unconfirmed whether Kroger's API decodes a percent-encoded comma inside
+    // filter.productId as a list separator.
+    expect(rawSearch).not.toContain("%2C");
+    expect(rawSearch).toContain(",");
   });
 
   it("searches by term at a location", async () => {

@@ -99,9 +99,16 @@ export class KrogerClient {
   }
 
   async products(productIds: string[], locationId: string): Promise<KrogerResult<KrogerProduct[]>> {
-    const ids = productIds.slice(0, KROGER_BATCH_LIMIT).join(",");
+    // T4: filter.productId expects a literal comma-separated list. Encoding
+    // the whole joined string turns every separator into %2C, which is
+    // unconfirmed to decode correctly server-side — encode each id on its
+    // own instead, and join with a literal comma.
+    const ids = productIds
+      .slice(0, KROGER_BATCH_LIMIT)
+      .map((id) => encodeURIComponent(id))
+      .join(",");
     const result = await this.getData<KrogerProduct[]>(
-      `/products?filter.productId=${encodeURIComponent(ids)}&filter.locationId=${encodeURIComponent(locationId)}`,
+      `/products?filter.productId=${ids}&filter.locationId=${encodeURIComponent(locationId)}`,
     );
     return { data: result.data ?? [], cacheControl: result.cacheControl };
   }
