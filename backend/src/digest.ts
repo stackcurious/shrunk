@@ -1,5 +1,5 @@
 import { canonicalCategory } from "./categories";
-import { previousAcceptedQuantity } from "./db";
+import { previousAcceptedQuantities } from "./db";
 import type { Env } from "./env";
 import { prefAllows } from "./alerts";
 import { pushSender } from "./push";
@@ -65,10 +65,18 @@ export async function weeklyCounts(env: Env, now: number): Promise<Map<string, n
     .bind(since, OBSERVATION_LIMIT)
     .all<WeekObservation>();
 
-  for (const row of observations) {
-    const category = canonicalCategory(row.category);
-    if (!category) continue;
-    const previous = await previousAcceptedQuantity(env.DB, row.gtin, row.unit_kind, row.observed_at, row.id);
+  // I2 — one grouped query for every candidate's "previous quantity" instead
+  // of one D1 round trip per observation row (up to OBSERVATION_LIMIT of them).
+  const categorized = observations
+    .map((row) => ({ row, category: canonicalCategory(row.category) }))
+    .filter((entry): entry is { row: WeekObservation; category: string } => entry.category !== null);
+  const previousByObservationId = await previousAcceptedQuantities(
+    env.DB,
+    categorized.map(({ row }) => ({ gtin: row.gtin, unitKind: row.unit_kind, observedAt: row.observed_at, id: row.id }))
+  );
+
+  for (const { row, category } of categorized) {
+    const previous = previousByObservationId.get(row.id) ?? null;
     if (previous === null || previous <= 0) continue;
     if ((previous - row.quantity) / previous <= SHRINK_TOLERANCE) continue;
     add(category, row.gtin);

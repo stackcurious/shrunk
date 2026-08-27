@@ -92,6 +92,29 @@ describe("weeklyCounts", () => {
     await seedVerifiedCase("0000000000013", "Snacks", NOW - 30 * DAY);
     expect(Object.fromEntries(await weeklyCounts(env, NOW))).toEqual({});
   });
+
+  it("I2: looks up every candidate's previous quantity in a single grouped query, not one per row", async () => {
+    await seedShrink("0000000000021", "Snacks", 340, 300, NOW - DAY);
+    await seedShrink("0000000000022", "Snacks", 340, 300, NOW - DAY);
+    await seedShrink("0000000000023", "Dairy", 946, 800, NOW - DAY);
+
+    let previousQuantityQueryCalls = 0;
+    const counting = new Proxy(env.DB, {
+      get(target: D1Database, prop: string | symbol, receiver: unknown) {
+        if (prop === "prepare") {
+          return (sql: string) => {
+            if (sql.includes("ORDER BY gtin, unit_kind, observed_at DESC, id DESC")) previousQuantityQueryCalls += 1;
+            return target.prepare(sql);
+          };
+        }
+        return Reflect.get(target as object, prop, receiver as object);
+      },
+    }) as unknown as D1Database;
+
+    const counts = await weeklyCounts({ ...env, DB: counting }, NOW);
+    expect(Object.fromEntries(counts)).toEqual({ Snacks: 2, Dairy: 1 });
+    expect(previousQuantityQueryCalls).toBe(1);
+  });
 });
 
 describe("runWeeklyDigest", () => {

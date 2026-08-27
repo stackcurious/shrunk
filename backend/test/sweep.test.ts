@@ -271,10 +271,11 @@ describe("selectSweepPairs", () => {
   it("rotates the window forward by one cap's worth every six-hourly tick", () => {
     const pairs = Array.from({ length: SWEEP_PAIR_CAP + 40 }, (_, i) => i);
     expect(selectSweepPairs(pairs, 0)).toEqual(pairs.slice(0, SWEEP_PAIR_CAP));
-    // One tick later, the window has moved on: it now starts at index 400
-    // (wrapping mod 440), covering the remaining 40 plus the first 360 again.
+    // One tick later, the window has moved on: it now starts at index
+    // SWEEP_PAIR_CAP (wrapping mod SWEEP_PAIR_CAP + 40), covering the
+    // remaining 40 plus the first (SWEEP_PAIR_CAP - 40) again.
     const secondWindow = selectSweepPairs(pairs, period);
-    expect(secondWindow[0]).toBe(400);
+    expect(secondWindow[0]).toBe(SWEEP_PAIR_CAP);
     expect(secondWindow).toHaveLength(SWEEP_PAIR_CAP);
   });
 

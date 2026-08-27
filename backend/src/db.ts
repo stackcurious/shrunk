@@ -371,3 +371,52 @@ export async function previousAcceptedQuantity(
     .first<{ quantity: number }>();
   return row ? row.quantity : null;
 }
+
+/**
+ * Batched form of `previousAcceptedQuantity` (Important #2 — the digest was
+ * issuing one D1 round trip per weekly observation row, up to
+ * `OBSERVATION_LIMIT` of them). Fetches every accepted observation for the
+ * candidates' gtins in a single query, then resolves each candidate's
+ * "newest strictly-earlier same-(gtin, unit_kind) observation" in memory —
+ * same ordering and tie-break (`observed_at DESC, id DESC`, strictly before
+ * by `(observedAt, id)`) as the single-row version, just not one query per
+ * candidate.
+ */
+export async function previousAcceptedQuantities(
+  db: D1Database,
+  candidates: Array<{ gtin: string; unitKind: string; observedAt: number; id: number }>
+): Promise<Map<number, number>> {
+  const result = new Map<number, number>();
+  if (candidates.length === 0) return result;
+
+  const gtins = [...new Set(candidates.map((c) => c.gtin))];
+  const placeholders = gtins.map(() => "?").join(",");
+  const { results } = await db
+    .prepare(
+      `SELECT id, gtin, unit_kind, quantity, observed_at FROM observations
+       WHERE status = 'accepted' AND gtin IN (${placeholders})
+       ORDER BY gtin, unit_kind, observed_at DESC, id DESC`
+    )
+    .bind(...gtins)
+    .all<{ id: number; gtin: string; unit_kind: string; quantity: number; observed_at: number }>();
+
+  // Grouped by (gtin, unit_kind) so each candidate's lookup below is a scan
+  // of only its own product's history, already sorted newest-first.
+  const byKey = new Map<string, Array<{ id: number; quantity: number; observed_at: number }>>();
+  for (const row of results) {
+    const key = `${row.gtin} ${row.unit_kind}`;
+    const list = byKey.get(key);
+    if (list) list.push(row);
+    else byKey.set(key, [row]);
+  }
+
+  for (const candidate of candidates) {
+    const list = byKey.get(`${candidate.gtin} ${candidate.unitKind}`);
+    const previous = list?.find(
+      (row) => row.observed_at < candidate.observedAt || (row.observed_at === candidate.observedAt && row.id < candidate.id)
+    );
+    if (previous) result.set(candidate.id, previous.quantity);
+  }
+
+  return result;
+}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   getDevice,
   listWatches,
+  previousAcceptedQuantities,
   previousAcceptedQuantity,
   replaceWatches,
   upsertDevice,
@@ -122,5 +123,36 @@ describe("device helpers", () => {
     expect(await previousAcceptedQuantity(env.DB, GTIN, "volume", 1625097600, latest!.id)).toBe(946.353);
     expect(await previousAcceptedQuantity(env.DB, GTIN, "volume", 1517443200, 1)).toBeNull();
     expect(await previousAcceptedQuantity(env.DB, GTIN, "count", 1700000000, 999)).toBeNull();
+  });
+
+  it("I2: previousAcceptedQuantities batches the same lookup as previousAcceptedQuantity, for many candidates in one query", async () => {
+    const otherGtin = "0028400642262";
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'G', 'Gatorade', 'Beverages', NULL, 'volume', 1, 1)"
+      ).bind(GTIN),
+      env.DB.prepare(
+        "INSERT INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'D', 'Doritos', 'Snacks', NULL, 'mass', 1, 1)"
+      ).bind(otherGtin),
+    ]);
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 946.353, 'volume', '32 fl oz', 1517443200, 'fdc', '1', 0.9, 'accepted', 1)").bind(GTIN),
+      env.DB.prepare("INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 828.058, 'volume', '28 fl oz', 1625097600, 'kroger', '01400943', 0.8, 'accepted', 2)").bind(GTIN),
+      env.DB.prepare("INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 340.194, 'mass', '12 oz', 1600000000, 'fdc', '2', 0.9, 'accepted', 3)").bind(otherGtin),
+      env.DB.prepare("INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 300, 'mass', '10.6 oz', 1650000000, 'crowd', 'sub-1', 0.9, 'accepted', 4)").bind(otherGtin),
+    ]);
+    const gatoradeLatest = await env.DB.prepare("SELECT id FROM observations WHERE observed_at = 1625097600").first<{ id: number }>();
+    const doritosLatest = await env.DB.prepare("SELECT id FROM observations WHERE observed_at = 1650000000").first<{ id: number }>();
+
+    const result = await previousAcceptedQuantities(env.DB, [
+      { gtin: GTIN, unitKind: "volume", observedAt: 1625097600, id: gatoradeLatest!.id },
+      { gtin: otherGtin, unitKind: "mass", observedAt: 1650000000, id: doritosLatest!.id },
+      { gtin: GTIN, unitKind: "volume", observedAt: 1517443200, id: 1 },   // no earlier row -> absent from the map
+    ]);
+
+    expect(result.get(gatoradeLatest!.id)).toBe(946.353);
+    expect(result.get(doritosLatest!.id)).toBe(340.194);
+    expect(result.has(1)).toBe(false);
+    expect(await previousAcceptedQuantities(env.DB, [])).toEqual(new Map());
   });
 });

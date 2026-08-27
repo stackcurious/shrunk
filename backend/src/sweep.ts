@@ -12,13 +12,29 @@ const SIZE_DROP_TOLERANCE = 0.01;
 
 /**
  * I2 — a per-invocation ceiling on (gtin, location) pairs, so an unbounded
- * pair set cannot make one sweep hit D1's invocation limits and truncate
- * silently. Pairs are ordered deterministically (location_id, gtin) and the
- * 400-pair window advances by a full cap's worth each six-hourly tick
- * (`selectSweepPairs`), so a pair set larger than the cap is still swept
- * completely over a handful of runs without a persisted resume cursor.
+ * pair set cannot make one sweep hit Cloudflare's 1,000-subrequest-per-
+ * invocation ceiling (Workers Paid; D1/KV/R2 binding calls count toward it
+ * alongside outbound `fetch`) and truncate silently. Pairs are ordered
+ * deterministically (location_id, gtin) and the window advances by a full
+ * cap's worth each six-hourly tick (`selectSweepPairs`), so a pair set
+ * larger than the cap is still swept completely over a handful of runs
+ * without a persisted resume cursor.
+ *
+ * Per-pair D1 call arithmetic (Important #2): 1 previous-snapshot SELECT +
+ * `persistKrogerProduct` (`kroger/persist.ts`: `insertProduct` INSERT OR
+ * IGNORE, a `price_snapshots` INSERT, a latest-observation SELECT, and —
+ * only when the size actually changed — an `observations` INSERT, so 3 or 4
+ * calls) + up to 2 `alert_jobs` INSERTs (`size_drop`, `price_hike`, each
+ * conditional on that pair actually moving) = 4-7 D1 binding calls per pair.
+ * At 150 pairs that is 600-1,050 calls, plus up to a handful of Kroger
+ * fetches (one per 50-gtin batch per location). The common case — most
+ * pairs unchanged, no alert filed — sits at ~600, comfortably inside the
+ * ceiling; only the pathological case of every pair alerting on both kinds
+ * in the same tick approaches it, which real shrinkflation/price-hike rates
+ * make vanishingly unlikely. 400 pairs (2,000-2,800 calls) was already past
+ * the ceiling even in the common case.
  */
-export const SWEEP_PAIR_CAP = 400;
+export const SWEEP_PAIR_CAP = 150;
 /** Matches the six-hourly cron cadence (spec §6.2). */
 const SWEEP_ROTATION_PERIOD_SECONDS = 6 * 60 * 60;
 
