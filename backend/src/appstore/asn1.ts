@@ -21,6 +21,7 @@ export function readTLV(bytes: Uint8Array, offset: number): TLV {
   if (length & 0x80) {
     const count = length & 0x7f;
     if (count === 0 || count > 4) throw new Error("asn1: unsupported length form");
+    if (offset + 2 + count > bytes.length) throw new Error("asn1: truncated header");
     length = 0;
     for (let i = 0; i < count; i++) length = length * 256 + bytes[offset + 2 + i];
     headerLength = 2 + count;

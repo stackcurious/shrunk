@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readTLV } from "../src/appstore/asn1";
 import { APPLE_ROOT_CA_G3_DER, bytesEqual } from "../src/appstore/root";
 import { ecdsaDerToRaw, importPublicKey, parseCertificate } from "../src/appstore/x509";
 
@@ -27,5 +28,19 @@ describe("Apple Root CA - G3 constant", () => {
       new Uint8Array(cert.tbs),
     );
     expect(ok).toBe(true);
+  });
+});
+
+describe("readTLV truncated/malformed long-form lengths", () => {
+  it("throws on a header truncated inside the long-form length octets", () => {
+    expect(() => readTLV(new Uint8Array([0x30, 0x82, 0x01]), 0)).toThrow();
+  });
+
+  it("throws when the declared length exceeds the buffer", () => {
+    expect(() => readTLV(new Uint8Array([0x30, 0x82, 0x00, 0x05, 0x01]), 0)).toThrow();
+  });
+
+  it("throws on indefinite length (0x80)", () => {
+    expect(() => readTLV(new Uint8Array([0x30, 0x80]), 0)).toThrow();
   });
 });
