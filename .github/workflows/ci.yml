@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Unit tests (Workers runtime)
+        run: npx vitest run
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: pip install pytest
+      - name: Importer, normalizer and tooling tests
+        run: python -m pytest tests -q
+        working-directory: scripts
+
+  fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fixture and curated-catalogue integrity
+        run: python3 scripts/check_repo_data.py
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Shrunk.xcodeproj
+        run: xcodegen generate
+      - name: Choose an available iPhone simulator
+        run: |
+          set -eu
+          xcodebuild -version
+          DEVICES="$(xcrun simctl list devices available)"
+          echo "$DEVICES"
+          NAME="$(printf '%s\n' "$DEVICES" \
+            | sed -n 's/^ *\(.*iPhone[^(]*[^ (]\) *(.*/\1/p' \
+            | head -n 1)"
+          if [ -z "$NAME" ]; then
+            echo "::error::no available iPhone simulator on this runner"
+            exit 1
+          fi
+          echo "SIMULATOR_NAME=$NAME" >> "$GITHUB_ENV"
+          echo "Using simulator: $NAME"
+      - name: Build
+        run: |
+          xcodebuild build \
+            -scheme Shrunk \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
+      - name: Unit tests
+        run: |
+          xcodebuild test \
+            -scheme Shrunk \
+            -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            CODE_SIGNING_ALLOWED=NO \
+            -quiet
