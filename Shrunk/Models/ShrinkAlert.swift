@@ -115,6 +115,28 @@ extension ShrinkAlert {
         )
     }
 
+    /// Files from a plain scan, independent of the watchlist (spec §3.5 —
+    /// "for each scanned or watched product" — a product doesn't need to be
+    /// watched to count). `isRead: true`: a scan is something the user is
+    /// already looking at on the result screen, so filing it must not
+    /// inflate the Alerts tab's unread badge the way an unseen push would.
+    static func newShrink(from product: ShrunkProduct, record: ShrinkRecord) -> ShrinkAlert {
+        ShrinkAlert(
+            barcode: product.id,
+            productName: product.name,
+            brand: product.brand,
+            kind: .newShrink,
+            previousQuantity: record.previousSize?.quantity,
+            previousUnit: record.previousSize?.unit,
+            currentQuantity: record.currentSize?.quantity,
+            currentUnit: record.currentSize?.unit,
+            shrinkPercent: record.shrinkPercent,
+            currentPrice: record.priceNow,
+            costDeltaPerUnit: nil,
+            isRead: true
+        )
+    }
+
     /// Builds a feed row from a remote-notification payload. `kind` is the
     /// Worker's camelCase alert kind; `gtin` is absent on the weekly digest.
     static func from(pushUserInfo userInfo: [AnyHashable: Any]) -> ShrinkAlert? {

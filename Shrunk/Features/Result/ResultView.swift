@@ -37,6 +37,12 @@ struct ResultView: View {
             vm.isPro = storeKit.isProUser
             if let prebake { vm.prebake(product: prebake.product, record: prebake.record) }
             await vm.load(barcode: barcode)
+            // A scan's ShrinkRecord is now final — spec §3.5 counts every
+            // scanned product, not just watched ones (WatchlistService
+            // dedupes so repeat views of the same size don't refile).
+            if case .loaded(let product, let record) = vm.state {
+                try? WatchlistService(context: modelContext).recordScannedShrink(product: product, record: record)
+            }
         }
         .fullScreenCover(isPresented: $showLabelCapture) {
             LabelCaptureView(gtin: barcode) { result in

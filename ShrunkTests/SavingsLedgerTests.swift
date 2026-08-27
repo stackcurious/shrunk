@@ -81,7 +81,7 @@ final class SavingsLedgerTests: XCTestCase {
 
     func test_productsWithoutAPriceAreExcluded() {
         let ledger = SavingsLedger.build(
-            alerts: [alert(price: nil)],
+            alerts: [alert(price: nil), alert(barcode: "0000000000102", price: 0)],
             watchlist: [watched(price: 0)],
             shopFrequency: .weekly
         )
@@ -125,6 +125,15 @@ final class SavingsLedgerTests: XCTestCase {
         XCTAssertEqual(ledger.entries.count, 1)
         XCTAssertEqual(ledger.entries[0].productName, "Doritos Nacho Cheese")
         XCTAssertEqual(ledger.entries[0].currentPrice, 4.99)
+    }
+
+    func test_theNewestAlertWinsOverAnOlderAlertForTheSameBarcode() {
+        // Passed newest-first, matching the @Query(sort: .reverse) callers use.
+        let newer = alert(percent: -20, price: 5.00, daysAgo: 1)
+        let older = alert(percent: -20, price: 3.00, daysAgo: 10)
+        let ledger = SavingsLedger.build(alerts: [newer, older], watchlist: [], shopFrequency: .weekly)
+        XCTAssertEqual(ledger.entries.count, 1)
+        XCTAssertEqual(ledger.entries[0].currentPrice, 5.00)
     }
 
     func test_entriesAreSortedByAnnualDescending() {

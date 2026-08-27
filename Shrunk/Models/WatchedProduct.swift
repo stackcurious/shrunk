@@ -12,8 +12,10 @@ final class WatchedProduct {
     /// (spec §3.5 — the savings dashboard's per-product input).
     var lastKnownPrice: Double?
     /// Percentage points from the last confirmed size observation (negative
-    /// = shrink), matching `ShrinkRecord.shrinkPercent`.
-    var lastShrinkPercent: Double
+    /// = shrink), matching `ShrinkRecord.shrinkPercent`. Defaulted on the
+    /// declaration, not just the init parameter — SwiftData's lightweight
+    /// migration reconstructs existing rows without calling `init`.
+    var lastShrinkPercent: Double = 0
     var addedAt: Date
     var lastChecked: Date
     var alertEnabled: Bool

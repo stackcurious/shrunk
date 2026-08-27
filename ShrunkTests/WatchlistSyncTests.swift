@@ -68,7 +68,13 @@ final class WatchlistSyncTests: XCTestCase {
         SizeRecord(date: Date(), quantity: quantity, unit: "ml", source: "fdc")
     }
 
-    private func record(_ barcode: String, quantity: Double, price: Double? = 1.89, shrinkPercent: Double = 0) -> ShrinkRecord {
+    private func record(
+        _ barcode: String,
+        quantity: Double,
+        price: Double? = 1.89,
+        shrinkPercent: Double = 0,
+        verdict: ShrinkRecord.ShrinkVerdict = .insufficientData
+    ) -> ShrinkRecord {
         ShrinkRecord(
             product: product(barcode),
             previousSize: nil,
@@ -79,7 +85,7 @@ final class WatchlistSyncTests: XCTestCase {
             costPerUnitThen: nil,
             costPerUnitNow: nil,
             priceIsFromStoreSnapshot: false,
-            verdict: .insufficientData
+            verdict: verdict
         )
     }
 
@@ -239,5 +245,35 @@ final class WatchlistSyncTests: XCTestCase {
         let callsAfterRemove = sync.calls.count
         XCTAssertEqual(callsAfterRemove - callsBeforeRemove, 1, "removing the last watch must still sync exactly once")
         XCTAssertEqual(sync.calls.last ?? nil, [])
+    }
+
+    // MARK: - Scanned shrinks (spec §3.5 — not just watched products)
+
+    func test_scanningAShrunkProductFilesANewShrinkAlert() throws {
+        let shrunk = record("0052000133417", quantity: 828.058, price: 1.99, shrinkPercent: -12.5, verdict: .significantShrink)
+        try service.recordScannedShrink(product: product("0052000133417"), record: shrunk)
+
+        let filed = try alerts()
+        XCTAssertEqual(filed.count, 1)
+        XCTAssertEqual(filed[0].kind, .newShrink)
+        XCTAssertEqual(filed[0].barcode, "0052000133417")
+        XCTAssertEqual(filed[0].currentPrice, 1.99)
+        XCTAssertEqual(filed[0].shrinkPercent, -12.5)
+    }
+
+    func test_rescanningTheSameSizeDoesNotRefile() throws {
+        let shrunk = record("0052000133417", quantity: 828.058, price: 1.99, shrinkPercent: -12.5, verdict: .significantShrink)
+        try service.recordScannedShrink(product: product("0052000133417"), record: shrunk)
+        try service.recordScannedShrink(product: product("0052000133417"), record: shrunk)
+
+        let filed = try alerts()
+        XCTAssertEqual(filed.count, 1, "re-scanning the same size shouldn't refile")
+    }
+
+    func test_aStableVerdictFilesNoAlert() throws {
+        let unchanged = record("0052000133417", quantity: 946.353, price: 1.89, shrinkPercent: 0, verdict: .unchanged)
+        try service.recordScannedShrink(product: product("0052000133417"), record: unchanged)
+
+        XCTAssertTrue(try alerts().isEmpty)
     }
 }

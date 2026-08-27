@@ -41,6 +41,20 @@ final class WatchlistService {
         scheduleSync()
     }
 
+    /// Files a `.newShrink` alert for a confirmed shrink found on a plain
+    /// scan (spec §3.5 — "for each scanned or watched product"), independent
+    /// of whether the product is on the watchlist. Silently does nothing for
+    /// a non-shrink verdict or a record with no current size. Dedupes on
+    /// (barcode, currentQuantity) so re-scanning the same size doesn't
+    /// refile — see `ShrinkAlert.newShrink(from product:record:)` for why the
+    /// alert itself is filed already read.
+    func recordScannedShrink(product: ShrunkProduct, record: ShrinkRecord) throws {
+        guard record.verdict.isShrink, let currentQuantity = record.currentSize?.quantity else { return }
+        guard !(try alreadyFiledNewShrinkAlert(barcode: product.id, currentQuantity: currentQuantity)) else { return }
+        context.insert(ShrinkAlert.newShrink(from: product, record: record))
+        try context.save()
+    }
+
     func remove(_ watched: WatchedProduct) throws {
         context.delete(watched)
         try context.save()
@@ -159,5 +173,16 @@ final class WatchlistService {
             predicate: #Predicate { $0.barcode == barcode && $0.kindRaw == unconfirmedRaw }
         )
         return try context.fetch(descriptor).contains { $0.currentQuantity == liveQuantity }
+    }
+
+    /// True when a `.newShrink` alert already sits in the feed for this
+    /// barcode at this exact size, so `recordScannedShrink` doesn't refile on
+    /// every re-scan of an unchanged product.
+    private func alreadyFiledNewShrinkAlert(barcode: String, currentQuantity: Double) throws -> Bool {
+        let newShrinkRaw = ShrinkAlert.Kind.newShrink.rawValue
+        let descriptor = FetchDescriptor<ShrinkAlert>(
+            predicate: #Predicate { $0.barcode == barcode && $0.kindRaw == newShrinkRaw }
+        )
+        return try context.fetch(descriptor).contains { $0.currentQuantity == currentQuantity }
     }
 }

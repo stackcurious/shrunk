@@ -63,8 +63,14 @@ struct SavingsLedger: Equatable {
 
         // Only kinds that mean "this really did shrink" (spec §3.5) — a push
         // digest or an unconfirmed re-scan hint isn't an observed shrink and
-        // must not cost the user a dollar figure it can't back up.
-        for alert in alerts where alert.kind.isConfirmedShrink {
+        // must not cost the user a dollar figure it can't back up. Sorted
+        // newest-first here (not just assumed from the caller's @Query
+        // order) so the first qualifying alert per barcode is always the
+        // newest observation — a barcode already claimed by a newer alert is
+        // never overwritten by an older one.
+        var claimedByAlert: Set<String> = []
+        for alert in alerts.sorted(by: { $0.createdAt > $1.createdAt }) where alert.kind.isConfirmedShrink {
+            guard !claimedByAlert.contains(alert.barcode) else { continue }
             guard let entry = makeEntry(
                 barcode: alert.barcode,
                 productName: alert.productName,
@@ -75,6 +81,7 @@ struct SavingsLedger: Equatable {
                 purchases: purchases
             ) else { continue }
             byBarcode[alert.barcode] = entry
+            claimedByAlert.insert(alert.barcode)
         }
 
         guard !byBarcode.isEmpty else { return .empty }
