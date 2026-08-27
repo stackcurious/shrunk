@@ -26,15 +26,24 @@ adminKrogerRoute.post("/v1/admin/purge-kroger", async (c) => {
     return c.json({ error: "unauthorized" }, 401);
   }
 
+  // C1: also remove `products` rows that are 100% Kroger-derived — created by
+  // `persistKrogerProduct` (origin='kroger') and, by the time this statement
+  // runs (D1 batch is sequential within one transaction), left with no
+  // remaining observation of any source. A row that still has one — e.g. an
+  // FDC observation later landed on a gtin Kroger created first — is kept.
   const results = await c.env.DB.batch([
     c.env.DB.prepare("DELETE FROM price_snapshots"),
     c.env.DB.prepare("DELETE FROM observations WHERE source = 'kroger'"),
+    c.env.DB.prepare(
+      "DELETE FROM products WHERE origin = 'kroger' AND NOT EXISTS (SELECT 1 FROM observations o WHERE o.gtin = products.gtin)",
+    ),
   ]);
 
   return c.json({
     deleted: {
       price_snapshots: results[0].meta.changes ?? 0,
       observations: results[1].meta.changes ?? 0,
+      products: results[2].meta.changes ?? 0,
     },
   });
 });

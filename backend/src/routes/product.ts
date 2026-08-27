@@ -51,6 +51,9 @@ async function createFromLookups(env: Env, gtin: string): Promise<ProductRow | n
     if (off) row = { gtin, name: off.name, brand: off.brand, category: "", image_url: off.imageUrl, unit_kind: null };
   }
   if (!row) return null;
-  await insertProduct(env.DB, row);
+  // C1: an on-miss FDC/OFF lookup, not the bulk FDC importer — tagged
+  // "lookup" so it is distinguishable from the importer's "fdc" rows, though
+  // only "kroger" rows are ever purged.
+  await insertProduct(env.DB, row, "lookup");
   return row;
 }

@@ -5,6 +5,11 @@ CREATE TABLE products (
   category    TEXT NOT NULL DEFAULT '',
   image_url   TEXT,
   unit_kind   TEXT,
+  -- Phase-3 review C1: which path first created this row, so purge-kroger can
+  -- remove rows that are 100% Kroger-derived response data (spec §9) without
+  -- touching FDC/curated/crowd rows. Set only on insert (INSERT OR IGNORE
+  -- never changes an existing row's origin).
+  origin      TEXT NOT NULL DEFAULT 'fdc' CHECK (origin IN ('fdc','lookup','kroger','curated')),
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );

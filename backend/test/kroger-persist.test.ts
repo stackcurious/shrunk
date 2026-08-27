@@ -70,8 +70,10 @@ describe("KROGER_PERSIST", () => {
     const obs = await env.DB.prepare("SELECT * FROM observations WHERE gtin = ?").bind(GTIN).first<any>();
     expect(obs).toMatchObject({ quantity: 828.058, unit_kind: "volume", raw_text: "28 fl oz", source: "kroger", source_ref: "01400943", confidence: 0.8, status: "accepted" });
 
-    const row = await env.DB.prepare("SELECT name FROM products WHERE gtin = ?").bind(GTIN).first<{ name: string }>();
+    const row = await env.DB.prepare("SELECT name, origin FROM products WHERE gtin = ?").bind(GTIN).first<{ name: string; origin: string }>();
     expect(row?.name).toBe("Gatorade Thirst Quencher");
+    // C1: only a "kroger"-origin product row is a purge-kroger candidate.
+    expect(row?.origin).toBe("kroger");
   });
 
   it("does not duplicate an observation when the size has not moved", async () => {

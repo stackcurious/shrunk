@@ -54,13 +54,19 @@ export async function getRecentSnapshots(db: D1Database, gtin: string, locationI
   return results;
 }
 
-export async function insertProduct(db: D1Database, row: ProductRow): Promise<void> {
+/**
+ * `origin` records which path first created the row (spec §9 / phase-3 review
+ * C1) — `fdc` (importer or FDC-import default), `lookup` (on-miss FDC/OFF
+ * fallback in `/v1/product`), `kroger`, or `curated`. `INSERT OR IGNORE` means
+ * only the very first insert for a gtin sets it.
+ */
+export async function insertProduct(db: D1Database, row: ProductRow, origin: string = "fdc"): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
   await db
     .prepare(
-      "INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-    .bind(row.gtin, row.name, row.brand, row.category, row.image_url, row.unit_kind, now, now)
+    .bind(row.gtin, row.name, row.brand, row.category, row.image_url, row.unit_kind, origin, now, now)
     .run();
 }
 

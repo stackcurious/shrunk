@@ -85,8 +85,12 @@ describe("GET /v1/product/:gtin", () => {
     const body = await res.json<any>();
     expect(body).toMatchObject({ gtin: "0028400642255", name: "Gatorade Thirst Quencher", brand: "Gatorade", category: "Sports Drinks", observations: [] });
 
-    const row = await env.DB.prepare("SELECT name FROM products WHERE gtin = ?").bind("0028400642255").first<{ name: string }>();
+    const row = await env.DB.prepare("SELECT name, origin FROM products WHERE gtin = ?").bind("0028400642255").first<{ name: string; origin: string }>();
     expect(row?.name).toBe("Gatorade Thirst Quencher");
+    // C1: an on-miss lookup is tagged "lookup", not "fdc" — it is never a
+    // purge-kroger candidate, but it is distinguishable from the bulk
+    // FDC importer's rows.
+    expect(row?.origin).toBe("lookup");
   });
 
   it("falls back to Open Food Facts, then 404s", async () => {

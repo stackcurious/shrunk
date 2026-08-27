@@ -20,14 +20,20 @@ export async function persistKrogerProduct(
 ): Promise<void> {
   // observations.gtin references products.gtin — make sure the row exists.
   // INSERT OR IGNORE, so an FDC/curated row keeps its own name and category.
-  await insertProduct(env.DB, {
-    gtin,
-    name: live.description,
-    brand: live.brand,
-    category: live.category,
-    image_url: live.image_url,
-    unit_kind: live.unit_kind,
-  });
+  // origin="kroger" (C1) marks the row as purgeable Kroger-derived data when
+  // this is the insert that creates it.
+  await insertProduct(
+    env.DB,
+    {
+      gtin,
+      name: live.description,
+      brand: live.brand,
+      category: live.category,
+      image_url: live.image_url,
+      unit_kind: live.unit_kind,
+    },
+    "kroger",
+  );
 
   await env.DB.prepare(
     "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
