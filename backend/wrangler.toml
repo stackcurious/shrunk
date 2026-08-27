@@ -11,7 +11,8 @@ ENV = "dev"
 KROGER_PERSIST = "on"
 PUSH_PROVIDER = "apns"
 APNS_ENV = "sandbox"
-APPSTORE_ALLOWED_ENVIRONMENTS = "Production"
+# TestFlight period — flip to "Production" at App Store release (see RELEASE_CHECKLIST)
+APPSTORE_ALLOWED_ENVIRONMENTS = "Sandbox,Production"
 
 [[d1_databases]]
 binding = "DB"
