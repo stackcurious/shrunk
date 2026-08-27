@@ -92,7 +92,7 @@ Answer **None** to every content question. Shrunk has no objectionable content, 
 
 - **Expected result: 4+.**
 - No "Unrestricted Web Access" — the only web links are fixed, first-party URLs (privacy/terms/Open Food Facts).
-- **Still 4+ in v2, and the two questions that changed both stay "No".** Label photos are user-generated, but they are sent to a private review queue and are never shown to other users, so there is no in-app user-generated content to moderate; and the only outbound links are fixed, first-party-chosen URLs (privacy, terms, USDA, Kroger, Open Food Facts), so "Unrestricted Web Access" remains No.
+- **Still 4+ in v2, and the two questions that changed both stay "No".** Label photos are user-generated, but they are sent to a private review queue and are never shown to other users, so there is no in-app user-generated content to moderate; and the app's only tappable outbound links are Open Food Facts (`world.openfoodfacts.org` and `/contribute`), the privacy policy, and the terms page — all fixed, first-party-chosen URLs. USDA and Kroger appear only as attribution text, not links. "Unrestricted Web Access" remains No.
 
 ---
 
@@ -107,8 +107,8 @@ Answer **None** to every content question. Shrunk has no objectionable content, 
 | Identifiers → **Device ID** | A UUID the app generates at first launch, and the APNs push token | App Functionality | **No** | **No** |
 | User Content → **Photos or Videos** | A label photo, uploaded **only** when the on-device reading is not confident enough to auto-accept; deleted as soon as it is reviewed | App Functionality | **No** | **No** |
 | User Content → **Other User Content** | The net-weight reading parsed from a label | App Functionality | **No** | **No** |
-| Purchases → **Purchase History** | Subscription expiry derived from Apple's signed transaction, plus the app-generated purchase token | App Functionality | **No** | **No** |
-| Other Data → **Other Data Types** | The Kroger store id you pick, your category choices and notification preferences, and your watchlist | App Functionality (and Product Personalisation for categories) | **No** | **No** |
+| Purchases → **Purchase History** | After purchase, the app sends the App Store transaction JWS to `POST /v1/devices`; the Worker verifies Apple's signature and keeps only `pro_until` and `app_account_token` (the same random device UUID), used solely to unlock Pro — no product or price history is stored. The iOS StoreKit rewrite (phase-5 Tasks 6–8) wires this; the Task 0 gate re-verifies `StoreKitService.swift` before submission. | App Functionality | **No** | **No** |
+| Other Data → **Other Data Types** | The Kroger store id you pick, your category choices and notification preferences, and your watchlist | App Functionality (and Product Personalization for categories) | **No** | **No** |
 
 Answer **No** to tracking on every data type, and **No** to "Do you use data for tracking purposes?" — there is no advertising SDK, no analytics SDK, no ad identifier, and nothing is shared with data brokers. App Tracking Transparency is therefore not required and the app never shows the ATT prompt.
 
@@ -140,7 +140,7 @@ No HealthKit, no location, no contacts, no photo library, no microphone. The lab
 ## 6. Build & Signing
 
 - Team **X4VJ56X38V** (`project.yml` → `DEVELOPMENT_TEAM`, automatic signing).
-- Marketing version **2.0.0**, build **2** — both from `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
+- Marketing version **2.0.0**, build **2** — set by Task 10 in `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
 - The Xcode project is generated: `xcodegen generate` before any archive. `Shrunk.xcodeproj` is not in git.
 - Archive and upload with the commands in `docs/RELEASE_CHECKLIST.md` (`xcodebuild archive` → `-exportArchive` with `ExportOptions.plist` → `xcrun altool --upload-app`), or Xcode → Product → Archive → Distribute App.
 
