@@ -1,23 +1,7 @@
 {
   "identifier" : "D6839475-8E1B-41E8-8E82-C2737ACEFB5A",
   "nonRenewingSubscriptions" : [],
-  "products" : [
-    {
-      "displayPrice" : "9.99",
-      "familyShareable" : false,
-      "internalID" : "E7873C27-21EC-4942-A1C5-96B0557AFDD8",
-      "localizations" : [
-        {
-          "description" : "Unlock unlimited watchlist, alerts, ranked alternatives, and the savings dashboard. One payment, yours forever.",
-          "displayName" : "Shrunk Pro",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "com.shrunk.pro.lifetime",
-      "referenceName" : "Shrunk Pro Lifetime",
-      "type" : "NonConsumable"
-    }
-  ],
+  "products" : [],
   "settings" : {
     "_applicationInternalID" : "0",
     "_developerTeamID" : "",
@@ -27,7 +11,62 @@
     "_storefront" : "USA",
     "_storeKitErrors" : []
   },
-  "subscriptionGroups" : [],
+  "subscriptionGroups" : [
+    {
+      "id" : "21598301",
+      "localizations" : [],
+      "name" : "Shrunk Pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "14.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "5A1C0F42",
+          "introductoryOffer" : {
+            "displayPrice" : "0.00",
+            "internalID" : "7B3E9D18",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Watchlist alerts, the weekly digest, unlimited ranked alternatives, full size and price history, and your savings dashboard.",
+              "displayName" : "Shrunk Pro Yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.shrunk.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Shrunk Pro Yearly",
+          "subscriptionGroupID" : "21598301",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "9C4D2A77",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Watchlist alerts, the weekly digest, unlimited ranked alternatives, full size and price history, and your savings dashboard.",
+              "displayName" : "Shrunk Pro Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.shrunk.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Shrunk Pro Monthly",
+          "subscriptionGroupID" : "21598301",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
   "version" : {
     "major" : 4,
     "minor" : 0

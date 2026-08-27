@@ -50,8 +50,11 @@ targets:
       - path: fixtures/package_weights.json
         type: file
         buildPhase: resources
+      - path: Shrunk/Resources/Shrunk.storekit
+        buildPhase: resources
     dependencies:
       - target: Shrunk
+      - sdk: StoreKitTest.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shrunk.app.tests
