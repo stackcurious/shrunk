@@ -191,14 +191,22 @@ final class ResultViewModel: ObservableObject {
             livePrice = .loaded(live)
             if case .loaded(let product, let record) = state {
                 liveSizeMismatch = Self.detectSizeMismatch(live: live, sizeHistory: product.sizeHistory)
-                // Spec rule 5 — a product we know nothing about the size of
-                // adopts the live store size, so the screen has a fact to show
-                // and the Watch button has a baseline. Re-runs the detector
-                // rather than patching the record so every derived number
-                // (cost per ounce especially) comes from one place.
-                if record.currentSize == nil, let adopted = Self.sizeRecord(from: live) {
-                    state = .loaded(product, detector.analyze(product: product, liveSize: adopted))
-                    adoptedLiveSize = true
+                // Spec rule 5 — a product we know no size or no price for
+                // adopts the live store row's, so the screen has a fact to
+                // show, the Watch button has a baseline, and the
+                // single-snapshot row can keep its "what you're paying per
+                // ounce today" promise. Re-runs the detector rather than
+                // patching the record so every derived number (cost per ounce
+                // especially) comes from one place; the detector lets stored
+                // data win, so only an actual gap is filled.
+                if record.currentSize == nil || record.priceNow == nil {
+                    let adopted = detector.analyze(
+                        product: product,
+                        liveSize: Self.sizeRecord(from: live),
+                        livePrice: live.effectivePrice
+                    )
+                    adoptedLiveSize = record.currentSize == nil && adopted.currentSize != nil
+                    state = .loaded(product, adopted)
                 }
             }
         } catch {
@@ -207,15 +215,16 @@ final class ResultViewModel: ObservableObject {
     }
 
     /// The live store row as a `SizeRecord`, or nil when it carries no usable
-    /// size. `source` stays `"kroger"` so the attribution survives into
-    /// anything derived from it.
+    /// size. The provider's own `source` is carried through, so the adopted
+    /// observation is attributed to whoever actually reported it rather than
+    /// to a hard-coded "kroger".
     static func sizeRecord(from live: LivePrice) -> SizeRecord? {
         guard let quantity = live.quantity, quantity > 0, let kind = live.unitKind else { return nil }
         return SizeRecord(
             date: Date(),
             quantity: quantity,
             unit: ProductDTO.unit(forKind: kind),
-            source: "kroger"
+            source: live.source
         )
     }
 

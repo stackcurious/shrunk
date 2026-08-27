@@ -48,6 +48,13 @@ struct LivePrice: Hashable, StorePriced {
     let promo: Double?
     let perUnitEstimate: Double?
     let stockLevel: String?
+    /// Which store API produced this row, carried through into any
+    /// `SizeRecord` adopted from it (spec rule 5) so the observation is
+    /// attributed to whoever actually reported it. `/v1/kroger/product` is the
+    /// only live provider today; a second one sets this rather than silently
+    /// inheriting Kroger's name — the same failure `priceIsFromStoreSnapshot`
+    /// guards against on the price side.
+    var source: String = "kroger"
 }
 
 /// One candidate in the store-backed alternatives list.

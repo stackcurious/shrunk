@@ -14,7 +14,21 @@ struct ShrinkDetector {
     ///   no size to show and the Watch button no baseline to watch. A stored
     ///   observation always wins — this is a stand-in for having none, never
     ///   an override.
-    func analyze(product: ShrunkProduct, liveSize: SizeRecord? = nil) -> ShrinkRecord {
+    /// - Parameter livePrice: the effective shelf price at the user's live
+    ///   store, used on the same terms: only when the product has no price of
+    ///   its own. `ProductDTO.toProduct` sets `currentPrice` from the newest
+    ///   `price_snapshots` row, so a fresh on-miss product has neither, and
+    ///   without this the single-snapshot row keeps its size promise but
+    ///   breaks its per-ounce one — the cost/oz card hides, the
+    ///   cheapest-per-oz callout cannot render, and `AlternativesEngine` has
+    ///   no `scannedCostPerOz` to say "N % cheaper" against. An adopted live
+    ///   price is real store data, so it sets `priceIsFromStoreSnapshot` and
+    ///   carries `LivePrice.attribution` with it.
+    func analyze(
+        product: ShrunkProduct,
+        liveSize: SizeRecord? = nil,
+        livePrice: Double? = nil
+    ) -> ShrinkRecord {
         let stored = product.sizeHistory.sorted { $0.date < $1.date }
         let sorted: [SizeRecord] = {
             guard stored.isEmpty, let liveSize, liveSize.quantity > 0 else { return stored }
@@ -30,13 +44,19 @@ struct ShrinkDetector {
 
         // The two most recent store snapshots, oldest first.
         let prices = product.priceHistory.sorted { $0.date < $1.date }
-        let priceNow = prices.last?.price ?? product.currentPrice
+        let storedPriceNow = prices.last?.price ?? product.currentPrice
+        // Spec rule 5, price half — adopted only into a gap, exactly like the
+        // size above. A stored price always wins.
+        let adoptedPrice: Double? = storedPriceNow == nil ? livePrice.flatMap { $0 > 0 ? $0 : nil } : nil
+        let priceNow = storedPriceNow ?? adoptedPrice
         let priceThen = prices.count >= 2 ? prices[prices.count - 2].price : nil
-        // True only when priceNow actually came from a price_snapshots-backed
-        // PricePoint — not the product.currentPrice fallback used when there's
-        // no snapshot history at all (e.g. curated Browse cards). Only the
-        // former is Kroger-derived and may carry Kroger attribution.
-        let priceIsFromStoreSnapshot = prices.last != nil
+        // True when priceNow came from a price_snapshots-backed PricePoint or
+        // from the live store row — both are real store observations that may
+        // (and must) carry Kroger attribution. False for the
+        // product.currentPrice fallback used when there's no snapshot history
+        // at all (e.g. curated Browse cards from trending.json), which is
+        // editorial and must never be labelled Kroger.
+        let priceIsFromStoreSnapshot = prices.last != nil || adoptedPrice != nil
 
         // Fewer than two comparable observations — no verdict is possible, but
         // the record still has to carry what we *do* know (spec §2): the one
