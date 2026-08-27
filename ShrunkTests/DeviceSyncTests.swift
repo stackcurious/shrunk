@@ -4,11 +4,28 @@ import XCTest
 final class DeviceIdentityTests: XCTestCase {
     override func setUp() {
         super.setUp()
-        UserDefaults.standard.removeObject(forKey: DeviceIdentity.key)
+        // Isolate from the real Keychain: the simulator Keychain does work
+        // under XCTest, but a fresh in-memory double keeps this class
+        // hermetic and guarantees no value leaks in from (or out to) another
+        // test class sharing this process's `DeviceIdentity` static state.
+        DeviceIdentity._useInMemoryStoreForTesting()
+        // Clear through the wrapper's own setter, not a raw
+        // `UserDefaults.standard.removeObject` — the static `@AppStorage`
+        // cache doesn't reliably observe an external removal mid-process
+        // (see the precedent note on
+        // `ShrunkAPIClientTests.test_deviceIdentity_mintsOnceAndSticks`), so
+        // a value a previous test wrote through the setter could otherwise
+        // survive into this one despite the key being gone from disk.
+        DeviceIdentity._resetForTesting(to: "")
     }
 
     override func tearDown() {
-        UserDefaults.standard.removeObject(forKey: DeviceIdentity.key)
+        // Same reasoning as `setUp`: reset through the setter so nothing
+        // written via `_resetForTesting`/`current`/`currentUUID` in this test
+        // can leak into the next test — in this class or another, since
+        // `DeviceIdentity`'s backing statics are shared process-wide.
+        DeviceIdentity._resetForTesting(to: "")
+        DeviceIdentity._useInMemoryStoreForTesting()
         super.tearDown()
     }
 
@@ -23,8 +40,54 @@ final class DeviceIdentityTests: XCTestCase {
     }
 
     func test_currentUUID_matchesCurrentAsAUUID() {
-        // Phase 2's `current` always mints UUID().uuidString, so the two never diverge.
-        XCTAssertEqual(DeviceIdentity.currentUUID.uuidString, DeviceIdentity.current)
+        // Phase 2's `current` always mints UUID().uuidString, so the two never
+        // diverge *as UUID values* — but R42 lowercases `current` while
+        // `UUID.uuidString` always renders uppercase (it formats from the
+        // stored bytes, not from how the string was parsed), so the string
+        // comparison must fold case.
+        XCTAssertEqual(DeviceIdentity.currentUUID.uuidString.lowercased(), DeviceIdentity.current)
+    }
+
+    func test_current_mintsLowercase() {
+        let minted = DeviceIdentity.current
+        XCTAssertEqual(minted, minted.lowercased(), "R42: the minted id must be lowercase")
+        XCTAssertNotNil(UUID(uuidString: minted))
+    }
+
+    func test_current_mintsOnlyOnceWhenBothStoresAreEmpty() {
+        let first = DeviceIdentity.current
+        let second = DeviceIdentity.current
+        XCTAssertEqual(first, second, "mint-once: a second read must not mint a new id")
+    }
+
+    func test_current_migratesLegacyUserDefaultsValueIntoTheStore() {
+        let double = DeviceIdentity._useInMemoryStoreForTesting()
+        DeviceIdentity._seedUserDefaultsOnlyForTesting("LEGACY-UPPER-VALUE")
+        XCTAssertNil(double.value, "precondition: the backing store has nothing yet")
+
+        let value = DeviceIdentity.current
+
+        XCTAssertEqual(value, "legacy-upper-value", "R42: a migrated value is lowercased too")
+        XCTAssertEqual(double.value, "legacy-upper-value",
+                        "first read must migrate the UserDefaults value into the store")
+    }
+
+    func test_current_prefersTheStoreOverUserDefaultsSoAReinstallSurvives() {
+        let double = DeviceIdentity._useInMemoryStoreForTesting()
+        // Simulate a reinstall: UserDefaults is wiped by the OS (setUp already
+        // cleared it), but the Keychain-backed store — the whole point of
+        // C1 — survives and still holds the original id.
+        double.value = "surviving-value"
+
+        XCTAssertEqual(DeviceIdentity.current, "surviving-value")
+    }
+
+    func test_resetForTesting_setsBothStores() {
+        let double = DeviceIdentity._useInMemoryStoreForTesting()
+        DeviceIdentity._resetForTesting(to: "reset-value")
+
+        XCTAssertEqual(double.value, "reset-value", "must reset the backing store")
+        XCTAssertEqual(DeviceIdentity.current, "reset-value", "must reset the UserDefaults mirror too")
     }
 
     func test_currentUUID_reusesAPersistedUUID() {
@@ -43,10 +106,12 @@ final class DeviceIdentityTests: XCTestCase {
 
         let minted = DeviceIdentity.currentUUID
         // The fallback must write its fresh UUID through the shared `stored`
-        // setter, so `current` now agrees with what `currentUUID` just minted.
-        XCTAssertEqual(DeviceIdentity.current, minted.uuidString)
+        // setter, so `current` now agrees with what `currentUUID` just minted
+        // — modulo case: `current` stays lowercase (R42), `UUID.uuidString`
+        // always renders uppercase.
+        XCTAssertEqual(DeviceIdentity.current, minted.uuidString.lowercased())
         // Mint-once: a second call reuses the now-valid stored UUID rather than
-        // minting again.
+        // minting again. `UUID` equality is byte-wise, so case is irrelevant here.
         XCTAssertEqual(DeviceIdentity.currentUUID, minted)
     }
 }

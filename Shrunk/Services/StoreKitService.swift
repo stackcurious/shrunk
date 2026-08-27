@@ -151,7 +151,11 @@ final class StoreKitService: ObservableObject {
             break
         }
         guard let jws else { return }
-        await syncer.syncDevice(deviceId: DeviceIdentity.currentUUID.uuidString, transactionJWS: jws)
+        // `current`, not `currentUUID.uuidString`: `UUID.uuidString` always
+        // renders uppercase regardless of how it was parsed, but every
+        // string sender of `device_id` must agree on lowercase (R42) so it
+        // compares byte-for-byte with the Worker's lowercased comparison.
+        await syncer.syncDevice(deviceId: DeviceIdentity.current, transactionJWS: jws)
     }
 
     // MARK: - Internals

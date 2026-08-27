@@ -160,7 +160,10 @@ final class StoreKitConfigurationTests: XCTestCase {
         try await service.purchase(yearly)
 
         XCTAssertTrue(service.isProUser)
-        XCTAssertEqual(spy.deviceIds.last, DeviceIdentity.currentUUID.uuidString)
+        // `syncEntitlement()` sends `DeviceIdentity.current` (R42: lowercase),
+        // not `currentUUID.uuidString` (Foundation always renders that
+        // uppercase regardless of casing on write).
+        XCTAssertEqual(spy.deviceIds.last, DeviceIdentity.current)
         let jws = try XCTUnwrap(spy.jwsValues.last)
         XCTAssertEqual(jws.split(separator: ".").count, 3, "expected a three-segment JWS")
     }
