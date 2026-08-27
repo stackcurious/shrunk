@@ -31,6 +31,12 @@ final class ResultViewModel: ObservableObject {
     @Published var alternativesResult: AlternativesResult = .empty
     @Published var isLoadingAlternatives: Bool = false
     @Published var livePrice: LivePriceState = .hidden
+    /// Client-side counterpart to `product.needsConfirmation` (spec §4 step 4,
+    /// Phase 3 review I5). The server only sets `needsConfirmation` from a
+    /// *stored* `kroger` observation, so it's one scan late and dead when
+    /// `KROGER_PERSIST=off` never writes one. This is computed the moment the
+    /// live fetch returns and is OR'd with the server flag at the read site.
+    @Published var liveSizeMismatch: Bool = false
 
     private let api: ShrunkAPIClient
     private let engine: AlternativesEngine
@@ -76,6 +82,7 @@ final class ResultViewModel: ObservableObject {
         state = .loading
         alternativesResult = .empty
         livePrice = locationId == nil ? .hidden : .loading
+        liveSizeMismatch = false
 
         do {
             let product = try await api.fetchProduct(barcode: barcode, locationId: locationId)
@@ -104,10 +111,44 @@ final class ResultViewModel: ObservableObject {
         }
         livePrice = .loading
         do {
-            livePrice = .loaded(try await api.liveProduct(barcode: barcode, locationId: locationId))
+            let live = try await api.liveProduct(barcode: barcode, locationId: locationId)
+            livePrice = .loaded(live)
+            if case .loaded(let product, _) = state {
+                liveSizeMismatch = Self.detectSizeMismatch(live: live, sizeHistory: product.sizeHistory)
+            }
         } catch {
             livePrice = .unavailable
         }
+    }
+
+    /// Compares the live Kroger size against the newest **non-Kroger**
+    /// observation (spec §4 step 4). Ignoring `source == "kroger"` records is
+    /// what keeps this correct across repeated scans — a stale live fetch
+    /// should never be judged against a size Kroger itself supplied earlier.
+    private static func detectSizeMismatch(live: LivePrice, sizeHistory: [SizeRecord]) -> Bool {
+        guard let quantity = live.quantity, let kind = live.unitKind, quantity > 0 else { return false }
+        let unit: String
+        switch kind {
+        case "mass":   unit = "g"
+        case "volume": unit = "ml"
+        default:       unit = "count"
+        }
+        let liveNormalized = ShrinkDetector.normalize(
+            SizeRecord(date: Date(), quantity: quantity, unit: unit, source: "kroger")
+        ).quantity
+        guard liveNormalized > 0 else { return false }
+
+        guard let latest = sizeHistory
+            .filter({ $0.source != "kroger" })
+            .sorted(by: { $0.date < $1.date })
+            .last,
+            latest.unitKind == kind
+        else { return false }
+
+        let latestNormalized = ShrinkDetector.normalize(latest).quantity
+        guard latestNormalized > 0 else { return false }
+
+        return abs(liveNormalized - latestNormalized) / latestNormalized > 0.01
     }
 
     /// Force a fresh fetch. `load` deliberately no-ops on an already-loaded

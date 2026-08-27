@@ -96,7 +96,7 @@ struct ResultView: View {
             VStack(spacing: ShrunkTheme.Spacing.xl) {
                 heroSection(product: product, record: record)
                 comparisonRow(record: record)
-                if product.needsConfirmation {
+                if product.needsConfirmation || vm.liveSizeMismatch {
                     confirmationCard
                         .padding(.horizontal, ShrunkTheme.Spacing.lg)
                 }
