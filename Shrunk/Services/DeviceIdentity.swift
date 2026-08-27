@@ -19,3 +19,20 @@ enum DeviceIdentity {
         return fresh
     }
 }
+
+extension DeviceIdentity {
+    /// Alias for Phase 5's naming; both refer to the one persisted install id.
+    static var storageKey: String { key }
+
+    /// `current` as a `UUID` — what StoreKit's `appAccountToken` requires.
+    /// `current` is always minted as `UUID().uuidString` (Phase 2), so the
+    /// fallback below never fires in practice; if it ever did, it re-mints
+    /// and persists a fresh UUID under the same key so `current` and
+    /// `currentUUID` can never diverge.
+    static var currentUUID: UUID {
+        if let uuid = UUID(uuidString: current) { return uuid }
+        let fresh = UUID()
+        UserDefaults.standard.set(fresh.uuidString, forKey: key)
+        return fresh
+    }
+}

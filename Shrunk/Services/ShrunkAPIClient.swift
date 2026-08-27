@@ -212,6 +212,16 @@ actor ShrunkAPIClient {
             return false
         }
     }
+
+    /// Phase 5's two-argument entry point for `DeviceSyncing`. Swift protocol
+    /// conformance ignores default parameter values, so the six-parameter
+    /// method above — even with every extra parameter defaulted — cannot by
+    /// itself witness a two-parameter protocol requirement; this explicit
+    /// overload forwards to it instead of duplicating any request-building.
+    @discardableResult
+    func syncDevice(deviceId: String, transactionJWS: String) async -> Bool {
+        await syncDevice(deviceId: deviceId, transactionJWS: transactionJWS, apnsToken: nil)
+    }
 }
 
 // MARK: - Wire format
@@ -294,6 +304,16 @@ struct ProductDTO: Decodable {
 }
 
 // MARK: - Device sync wire format
+
+/// Lets `StoreKitService` be tested without a network stack. `DataProviders.swift`'s
+/// `WatchlistSyncing` already covers the full six-parameter call; this is the
+/// narrower two-argument seam Phase 5's subscription flow needs.
+protocol DeviceSyncing: Sendable {
+    @discardableResult
+    func syncDevice(deviceId: String, transactionJWS: String) async -> Bool
+}
+
+extension ShrunkAPIClient: DeviceSyncing {}
 
 /// One watched product as `POST /v1/devices` expects it.
 struct DeviceWatch: Encodable, Equatable, Sendable {
