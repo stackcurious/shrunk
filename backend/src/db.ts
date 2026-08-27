@@ -420,3 +420,54 @@ export async function previousAcceptedQuantities(
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// R39 — device erasure (privacy policy: "email us your Device ID and we
+// erase everything tied to it")
+// ---------------------------------------------------------------------------
+
+export interface EraseDeviceResult {
+  devices: number;
+  watches: number;
+  submissions: number;
+  photos: number;
+}
+
+/**
+ * Deletes every row that identifies this device: its `watches`, its own
+ * `devices` row, and its `submissions` (plus, first, the R2 object behind
+ * any of its still-*pending* submissions — an accepted/rejected submission
+ * already had `photo_key` cleared and its object deleted by admin review,
+ * `markSubmissionReviewed`/`routes/admin.ts`, so this only ever finds a
+ * pending one's photo).
+ *
+ * `observations`/`products`/`price_snapshots` are aggregated product data,
+ * not personal to a device, and are never touched here. `alert_jobs` rows
+ * are keyed by gtin/brand/location_id only (migrations 0002/0003) — nothing
+ * on that table identifies a device, so there is nothing to delete there.
+ *
+ * Idempotent: a device with nothing left to delete returns all zeros.
+ */
+export async function eraseDevice(db: D1Database, r2: R2Bucket, deviceId: string): Promise<EraseDeviceResult> {
+  const { results: pendingPhotos } = await db
+    .prepare("SELECT photo_key FROM submissions WHERE device_id = ? AND status = 'pending' AND photo_key IS NOT NULL")
+    .bind(deviceId)
+    .all<{ photo_key: string }>();
+
+  for (const row of pendingPhotos) {
+    await r2.delete(row.photo_key);
+  }
+
+  const [watchesResult, devicesResult, submissionsResult] = await db.batch([
+    db.prepare("DELETE FROM watches WHERE device_id = ?").bind(deviceId),
+    db.prepare("DELETE FROM devices WHERE id = ?").bind(deviceId),
+    db.prepare("DELETE FROM submissions WHERE device_id = ?").bind(deviceId),
+  ]);
+
+  return {
+    devices: devicesResult.meta.changes ?? 0,
+    watches: watchesResult.meta.changes ?? 0,
+    submissions: submissionsResult.meta.changes ?? 0,
+    photos: pendingPhotos.length,
+  };
+}

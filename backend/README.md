@@ -19,6 +19,7 @@ The Cloudflare Worker behind the Shrunk iOS app: Hono 4 on Workers, D1 for owned
 | GET | `/v1/admin/photo/:id` | `Bearer ADMIN_SECRET` | Serves a pending submission's photo out of R2. |
 | POST | `/v1/admin/verified-case` | `Bearer ADMIN_SECRET` | Files a `verified_case` alert job for a gtin/brand, which the five-minute drain turns into pushes for watching Pro devices. |
 | POST | `/v1/admin/purge-kroger` | `Bearer ADMIN_SECRET` | Deletes every `price_snapshots` row, every `observations` row with `source='kroger'`, and every `products` row with `origin='kroger'` that has no observation left after those deletes. |
+| POST | `/v1/admin/devices/:id/erase` | `Bearer ADMIN_SECRET` | Privacy-policy erasure: deletes the device's `watches`, its `devices` row, its `submissions`, and the R2 photo behind any still-pending one. Never touches `observations`/`products`/`price_snapshots` (aggregated product data, not personal). Idempotent — a second call returns all zeros. |
 
 `/v1/kroger/*` requires `X-Device-Id` to be a UUID (else `400 {"error":"invalid_device_id"}`), and is rate-limited to 400/hour globally and 60/hour per device (`429 {"error":"rate_limited"}`) — the global cap is checked first so a burst of spoofed device ids can't collectively exhaust it. Every response carrying Kroger data includes `"attribution": "Prices from Kroger"` (spec §6.6).
 
@@ -86,6 +87,13 @@ npm run deploy
 ```
 
 First-time provisioning (account, D1, KV, R2, every secret) is in [`../docs/RELEASE_CHECKLIST.md`](../docs/RELEASE_CHECKLIST.md).
+
+### Erasure runbook
+
+A user emails their Device ID (shown in-app, Settings) asking to be erased — run:
+```
+curl -X POST -H "Authorization: Bearer $ADMIN_SECRET" https://<worker>/v1/admin/devices/<device-id>/erase
+```
 
 ## Loading data
 

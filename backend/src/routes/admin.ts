@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import {
+  eraseDevice,
   getLatestAcceptedObservation,
   getObservationBySubmission,
   getProduct,
@@ -11,6 +12,7 @@ import {
   type PendingSubmissionRow,
 } from "../db";
 import { finalizeAcceptance } from "../crowd";
+import { isValidDeviceId } from "../ratelimit";
 
 export const adminRoute = new Hono<{ Bindings: Env }>();
 
@@ -101,6 +103,23 @@ adminRoute.post("/v1/admin/review/:id", async (c) => {
   }
 
   return c.json({ ok: true, id, status, alerted });
+});
+
+/**
+ * R39 — the privacy policy promises "email us your Device ID and we erase
+ * everything tied to it." Deletes the device's watches, its device row, its
+ * submissions, and the R2 photo behind any still-pending one. Idempotent —
+ * a second call against the same id returns all zeros.
+ */
+adminRoute.post("/v1/admin/devices/:id/erase", async (c) => {
+  const id = c.req.param("id").toLowerCase();
+  if (!isValidDeviceId(id)) return c.json({ error: "invalid_device_id" }, 400);
+
+  const deleted = await eraseDevice(c.env.DB, c.env.PHOTOS, id);
+  console.log(
+    `admin erase: devices=${deleted.devices} watches=${deleted.watches} submissions=${deleted.submissions} photos=${deleted.photos}`
+  );
+  return c.json({ ok: true, deleted });
 });
 
 // MARK: - HTML
