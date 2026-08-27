@@ -2,21 +2,31 @@
 
 This directory hosts the canonical `trending.json` consumed by the iOS app.
 
-## Deployment
+## Where this file goes
 
-The app fetches the live feed from jsDelivr (a free CDN that fronts GitHub):
+`data/trending.json` is canonical. Two copies are derived from it, and CI (`scripts/check_repo_data.py`, job `fixtures`) fails the build when either drifts:
+
+| Copy | Purpose | Re-sync with |
+|---|---|---|
+| `backend/src/data/trending.json` | Bundled into the Worker and merged into `GET /v1/feed`, which is what the app's Browse tab reads. | `cd backend && npm run sync:trending` |
+| `Shrunk/Resources/trending.json` | The app's offline fallback, and the source of images, prices and evidence links that `/v1/feed` does not carry. | `cp data/trending.json Shrunk/Resources/trending.json` |
+
+The catalogue is also seeded into D1 as `source='curated'` observations (confidence 1.0, `source_ref` = the evidence URL), which is what makes a curated product produce a verdict when it is scanned:
 
 ```
-https://cdn.jsdelivr.net/gh/stackcurious/shrunk@main/data/trending.json
+python3 scripts/seed_curated.py --curated data/trending.json --out scripts/out/curated.sql
+cd backend && npx wrangler d1 execute shrunk --remote --file ../scripts/out/curated.sql
 ```
 
-To publish updates: edit `trending.json`, commit, push to `main`. jsDelivr serves the new version within ~minutes (or force-purge at https://www.jsdelivr.com/tools/purge).
+So publishing an edit is: edit `data/trending.json` → re-sync both copies → re-seed D1 → commit → `cd backend && npx wrangler deploy`.
 
-The app also bundles a copy at `Shrunk/Resources/trending.json` as an offline fallback. **Keep these two files in sync** — easiest is to copy after edits:
-
-```
-cp data/trending.json Shrunk/Resources/trending.json
-```
+> **Historical note.** Up to v1 the app fetched this file straight from jsDelivr
+> (`https://cdn.jsdelivr.net/gh/stackcurious/shrunk@main/data/trending.json`).
+> Phase 4 moved the live feed to `GET /v1/feed` so crowd and Kroger observations
+> could be merged in. The Worker side of that move has shipped; the iOS Browse
+> tab's switch away from jsDelivr (`Shrunk/Services/TrendingFeedService.swift`)
+> lands in this same release. The CDN URL still resolves and remains a fine
+> way for anyone else to consume the CC-BY data.
 
 ## JSON schema
 
@@ -96,16 +106,14 @@ Do **not** accept:
 2. Find the real UPC barcode (Google Image search "product name UPC", or scan IRL).
 3. Confirm OFF has the product: `https://world.openfoodfacts.org/api/v2/product/{barcode}.json`
 4. Copy the OFF image URL if available; else `null`.
-5. Add the entry to `trending.json`, push to main.
-6. Copy the updated file into `Shrunk/Resources/trending.json` so the bundled fallback stays current.
-7. Bump `version` only if you're changing the schema, not the data.
+5. Add the entry to `trending.json`.
+6. Re-sync both copies: `cp data/trending.json Shrunk/Resources/trending.json` and `cd backend && npm run sync:trending`.
+7. Re-seed D1: `python3 scripts/seed_curated.py --curated data/trending.json --out scripts/out/curated.sql` then `cd backend && npx wrangler d1 execute shrunk --remote --file ../scripts/out/curated.sql`.
+8. Run `python3 scripts/check_repo_data.py` — it must print `repo data OK`.
+9. Bump `version` only if you are changing the schema, not the data.
 
-## Future automation
+## Related automation
 
-Phase 2 of the data pipeline (not yet built) will:
-- Process OFF's daily JSONL dump (~5GB compressed) on a Cloudflare Worker cron
-- Diff product quantities week-over-week
-- Auto-flag candidates with >5% size reduction
-- Surface to an admin queue for human verification before joining `trending.json`
-
-For now this is fully manual / curated.
+- `scripts/fdc_import.py` streams a USDA FoodData Central Branded Foods release into `products` + `observations` (`source='fdc'`) and cross-checks this catalogue, reporting which curated GTINs FDC knows about. Re-run on each FDC release (April/October).
+- `POST /v1/observations` adds crowd label observations continuously, so `/v1/feed` surfaces shrinks this file has not caught yet.
+- Curation stays human: an entry only lands here with a primary-source `evidence_url`.
