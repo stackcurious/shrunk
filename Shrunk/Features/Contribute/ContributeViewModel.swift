@@ -40,6 +40,18 @@ final class ContributeViewModel: ObservableObject {
         self.deviceId = deviceId
         self.ocr = ocr
         self.api = api
+
+        // Screenshot mode: the confirm sheet is only reachable through a
+        // camera capture, which a simulator can't do. Land directly on it with
+        // whatever the real parser makes of a real label line — the quantity
+        // shown is `NetContentParser`'s own output, not a typed-in number.
+        if UITestingOverrides.isActive,
+           let match = NetContentParser.firstNetContent(in: [UITestingOverrides.contributionLabelLine]) {
+            sourceLine = match.line
+            quantityText = Self.format(match.parsed.quantity)
+            unitKind = match.parsed.unitKind
+            step = .confirm
+        }
     }
 
     var canSubmit: Bool {

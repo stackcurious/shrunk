@@ -1,15 +1,31 @@
 import { canonicalCategory } from "../categories";
 
-export interface OFFHit { name: string; brand: string; imageUrl: string | null; category: string }
+export interface OFFHit {
+  name: string;
+  brand: string;
+  imageUrl: string | null;
+  category: string;
+  /** Raw OFF `quantity` (e.g. "500 g"), for spec §1 rule 6 — null when OFF didn't report one. */
+  quantity: string | null;
+  /** OFF `last_modified_t`, already epoch seconds — null when absent. */
+  observedAt: number | null;
+}
 
 export async function lookupOFF(gtin: string, fetchImpl: typeof fetch = fetch): Promise<OFFHit | null> {
-  const url = `https://world.openfoodfacts.org/api/v2/product/${gtin}.json?fields=product_name,brands,image_url,categories_tags`;
+  const url = `https://world.openfoodfacts.org/api/v2/product/${gtin}.json?fields=product_name,brands,image_url,categories_tags,quantity,last_modified_t`;
   try {
     const res = await fetchImpl(url, { headers: { "User-Agent": "Shrunk/2.0 (stackcurious.com/shrunk)" } });
     if (!res.ok) return null;
     const body = (await res.json()) as {
       status?: number;
-      product?: { product_name?: string; brands?: string; image_url?: string; categories_tags?: string[] };
+      product?: {
+        product_name?: string;
+        brands?: string;
+        image_url?: string;
+        categories_tags?: string[];
+        quantity?: string;
+        last_modified_t?: number;
+      };
     };
     if (body.status !== 1 || !body.product) return null;
     const name = (body.product.product_name ?? "").trim();
@@ -19,6 +35,8 @@ export async function lookupOFF(gtin: string, fetchImpl: typeof fetch = fetch): 
       brand: (body.product.brands ?? "").split(",")[0].trim(),
       imageUrl: body.product.image_url ?? null,
       category: offCategory(body.product.categories_tags),
+      quantity: body.product.quantity?.trim() || null,
+      observedAt: typeof body.product.last_modified_t === "number" ? body.product.last_modified_t : null,
     };
   } catch {
     return null;

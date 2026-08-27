@@ -69,6 +69,14 @@ final class BarcodeProcessor: NSObject, ObservableObject {
     }
 
     func bootstrap() {
+        // Screenshot mode: a simulator has no camera. Report the running,
+        // authorized state so the real scanner chrome renders over
+        // `CameraPreviewLayer`'s stand-in backdrop.
+        if UITestingOverrides.isActive {
+            isAuthorized = true
+            isRunning = true
+            return
+        }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             isAuthorized = true
