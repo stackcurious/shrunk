@@ -92,7 +92,7 @@ Answer **None** to every content question. Shrunk has no objectionable content, 
 
 - **Expected result: 4+.**
 - No "Unrestricted Web Access" — the only web links are fixed, first-party URLs (privacy/terms/Open Food Facts).
-- **Still 4+ in v2, and the two questions that changed both stay "No".** Label photos are user-generated, but they are sent to a private review queue and are never shown to other users, so there is no in-app user-generated content to moderate; and the app's only tappable outbound links are Open Food Facts (`world.openfoodfacts.org` and `/contribute`), the privacy policy, and the terms page — all fixed, first-party-chosen URLs. USDA and Kroger appear only as attribution text, not links. "Unrestricted Web Access" remains No.
+- **Still 4+ in v2, and the two questions that changed both stay "No".** Label photos are user-generated, but they are sent to a private review queue and are never shown to other users, so there is no in-app user-generated content to moderate; and the app's only tappable outbound links, all in Settings, are USDA FoodData Central (`fdc.nal.usda.gov`), "Prices from Kroger" (`www.kroger.com`), Open Food Facts (`world.openfoodfacts.org`), the privacy policy (`stackcurious.com/shrunk/privacy`), and the terms page (`stackcurious.com/shrunk/terms`) — all fixed, first-party-chosen URLs — plus a "Share Shrunk" row that opens the OS share sheet on a fixed `stackcurious.com/shrunk` link rather than loading a page. "Unrestricted Web Access" remains No.
 
 ---
 
