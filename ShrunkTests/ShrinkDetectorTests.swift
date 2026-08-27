@@ -491,5 +491,89 @@ final class ShrinkDetectorTests: XCTestCase {
         let record = detector.analyze(product: makeProduct(history: []), liveSize: live)
         XCTAssertNil(record.currentSize, "a zero quantity is not a size")
     }
+
+    // MARK: - Adopting the live store price (spec rule 5, price half)
+    //
+    // `ProductDTO.toProduct` sets `currentPrice: prices.last?.price`, so a
+    // product with no `price_snapshots` has no price at all — which is every
+    // fresh on-miss lookup. Without adopting the live price too, the
+    // single-snapshot row keeps its size promise but breaks its per-ounce one:
+    // the cost/oz card hides, the cheapest-per-oz callout never renders, and
+    // `AlternativesEngine` gets `scannedCostPerOz == nil` so no candidate can
+    // say "N % cheaper".
+
+    func test_noPriceOfItsOwn_adoptsTheLivePrice() {
+        let record = detector.analyze(
+            product: makeProduct(history: [.init(quantity: 28, unit: "oz")], price: nil),
+            livePrice: 1.89
+        )
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
+    }
+
+    func test_anAdoptedLivePriceCarriesStoreAttribution() {
+        // A live Kroger price *is* Kroger data, so the cost/oz card must show
+        // `LivePrice.attribution` over it — unlike a curated trending.json
+        // price, which is what this flag exists to keep unattributed.
+        let record = detector.analyze(
+            product: makeProduct(history: [.init(quantity: 28, unit: "oz")], price: nil),
+            livePrice: 1.89
+        )
+        XCTAssertTrue(record.priceIsFromStoreSnapshot)
+    }
+
+    func test_aStoredPriceWinsOverTheLivePrice() {
+        let record = detector.analyze(
+            product: makeProduct(history: [.init(quantity: 28, unit: "oz")], price: 2.49),
+            livePrice: 1.89
+        )
+        XCTAssertEqual(record.priceNow ?? 0, 2.49, accuracy: 0.0001)
+        XCTAssertFalse(record.priceIsFromStoreSnapshot,
+                       "a currentPrice fallback with no snapshot history is still not store-observed")
+    }
+
+    func test_aPriceSnapshotWinsOverTheLivePrice() {
+        let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(0, 1.79), (86_400, 1.89)])
+        let record = detector.analyze(product: product, livePrice: 9.99)
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
+    }
+
+    /// The exact case the spec was written for: Gatorade `0052000338317`
+    /// comes back with `observations: []` and no price snapshots, and the live
+    /// Kroger row supplies both halves.
+    func test_freshLookup_adoptsBothTheLiveSizeAndTheLivePrice() {
+        let live = SizeRecord(date: Date(), quantity: 828.058, unit: "ml", source: "kroger")
+        let record = detector.analyze(
+            product: makeProduct(history: [], price: nil), liveSize: live, livePrice: 1.89
+        )
+
+        XCTAssertEqual(record.currentSize?.quantity, 828.058)
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / (828.058 * 0.033814), accuracy: 0.0001)
+        XCTAssertTrue(record.priceIsFromStoreSnapshot)
+        XCTAssertEqual(record.verdict, .insufficientData)
+    }
+
+    func test_aLivePriceWithNoSizeAtAllGivesNoCostPerOunce() {
+        let record = detector.analyze(product: makeProduct(history: [], price: nil), livePrice: 1.89)
+        XCTAssertNil(record.currentSize)
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertNil(record.costPerUnitNow, "a price over an unknown size is not a per-ounce number")
+    }
+
+    func test_theLivePriceIsAdoptedOnTheShrinkPathToo() {
+        // Two observations, no stored price — the verdict path still needs a
+        // per-ounce number for the alternatives ranking to compare against.
+        let product = makeProduct(history: [
+            .init(quantity: 32, unit: "oz"),
+            .init(quantity: 28, unit: "oz")
+        ], price: nil)
+        let record = detector.analyze(product: product, livePrice: 1.89)
+
+        XCTAssertEqual(record.verdict, .significantShrink)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
+        XCTAssertNil(record.costPerUnitThen, "one live price is not a history")
+    }
 }
 
