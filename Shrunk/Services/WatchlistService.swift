@@ -1,21 +1,24 @@
 import Foundation
 import SwiftData
 
-/// Wraps the SwiftData ModelContext for watched-product CRUD plus the
-/// background-refresh entry point. View layer uses `@Query` directly for live
-/// fetches; this service handles writes and the off-thread refresh sweep.
+/// Wraps the SwiftData ModelContext for watched-product CRUD, keeps the
+/// Worker's copy of the watch list current (spec §7), and runs the device-side
+/// live-size check that `BGAppRefresh` wakes us for. The view layer uses
+/// `@Query` directly for live fetches; this service handles writes.
 @MainActor
 final class WatchlistService {
     private let context: ModelContext
-    private let api: ShrunkAPIClient
-    private let detector: ShrinkDetector
+    private let store: StoreDataProviding
+    private let sync: WatchlistSyncing
 
-    init(context: ModelContext,
-         api: ShrunkAPIClient = .shared,
-         detector: ShrinkDetector = ShrinkDetector()) {
+    init(
+        context: ModelContext,
+        store: StoreDataProviding = ShrunkAPIClient.shared,
+        sync: WatchlistSyncing = ShrunkAPIClient.shared
+    ) {
         self.context = context
-        self.api = api
-        self.detector = detector
+        self.store = store
+        self.sync = sync
     }
 
     // MARK: - CRUD
@@ -25,21 +28,26 @@ final class WatchlistService {
             existing.lastKnownSize = currentSize.quantity
             existing.lastKnownUnit = currentSize.unit
             existing.lastChecked = Date()
+            try context.save()
+            scheduleSync()
             return
         }
         let watched = WatchedProduct.from(product: product, currentSize: currentSize)
         context.insert(watched)
         try context.save()
+        scheduleSync()
     }
 
     func remove(_ watched: WatchedProduct) throws {
         context.delete(watched)
         try context.save()
+        scheduleSync()
     }
 
     func setAlertEnabled(_ enabled: Bool, for watched: WatchedProduct) throws {
         watched.alertEnabled = enabled
         try context.save()
+        scheduleSync()
     }
 
     func fetch(barcode: String) throws -> WatchedProduct? {
@@ -57,12 +65,45 @@ final class WatchlistService {
         return try context.fetch(descriptor)
     }
 
-    // MARK: - Background sweep
+    // MARK: - Backend sync
 
-    /// Iterates watched products, hits the Shrunk API, detects shrink.
-    /// Returns the records that newly shrunk so `NotificationScheduler` can
-    /// fire alerts.
-    func refreshAll() async -> [(WatchedProduct, ShrinkRecord)] {
+    /// Fire and forget — the UI never waits on the network (spec §8).
+    private func scheduleSync() {
+        Task { await syncToBackend() }
+    }
+
+    /// Posts the whole watch list to `/v1/devices`; the Worker replaces its
+    /// copy wholesale (spec §6.1). Never throws.
+    func syncToBackend() async {
+        let payload: [DeviceWatch]
+        do {
+            payload = try all().map {
+                DeviceWatch(gtin: $0.barcode, brand: $0.brand, alertEnabled: $0.alertEnabled)
+            }
+        } catch {
+            return
+        }
+        await sync.syncDevice(
+            deviceId: DeviceIdentity.current,
+            transactionJWS: "",
+            apnsToken: nil,
+            locationId: nil,
+            categories: nil,
+            watches: payload
+        )
+    }
+
+    // MARK: - Device-side live-size check
+
+    /// Spec §7 — `BGAppRefresh` compares the live size at the user's store with
+    /// the last size we recorded. A mismatch is a hint, not an observation, so
+    /// it files an `.unconfirmed` alert asking for a re-scan and leaves
+    /// `lastKnownSize` alone. Returns the mismatches it filed.
+    @discardableResult
+    func liveSizeCheck() async -> [(WatchedProduct, Double)] {
+        let locationId = UserDefaults.standard.string(forKey: "storeLocationId") ?? ""
+        guard !locationId.isEmpty else { return [] }
+
         let watched: [WatchedProduct]
         do {
             watched = try all()
@@ -70,25 +111,22 @@ final class WatchlistService {
             return []
         }
 
-        var results: [(WatchedProduct, ShrinkRecord)] = []
+        var mismatches: [(WatchedProduct, Double)] = []
         for item in watched where item.alertEnabled {
-            do {
-                let product = try await api.fetchProduct(barcode: item.barcode, locationId: nil)
-                let record = detector.analyze(product: product)
-                let prevSize = item.lastKnownSize
-                if let curr = record.currentSize,
-                   abs(curr.quantity - prevSize) > 0.01 {
-                    results.append((item, record))
-                    item.lastKnownSize = curr.quantity
-                    item.lastKnownUnit = curr.unit
-                }
-                item.lastChecked = Date()
-            } catch {
-                // Skip this product on transient failure — try again next sweep.
-                continue
+            guard let live = try? await store.liveProduct(barcode: item.barcode, locationId: locationId),
+                  let quantity = live.quantity, quantity > 0,
+                  let unitKind = live.unitKind,
+                  ProductDTO.unit(forKind: unitKind) == item.lastKnownUnit,
+                  item.lastKnownSize > 0
+            else { continue }
+
+            item.lastChecked = Date()
+            if abs(quantity - item.lastKnownSize) / item.lastKnownSize > 0.01 {
+                context.insert(ShrinkAlert.unconfirmed(from: item, liveQuantity: quantity))
+                mismatches.append((item, quantity))
             }
-            try? context.save()
         }
-        return results
+        try? context.save()
+        return mismatches
     }
 }

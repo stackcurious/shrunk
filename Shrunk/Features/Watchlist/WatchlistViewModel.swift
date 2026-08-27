@@ -31,10 +31,13 @@ final class WatchlistViewModel {
         }
     }
 
-    func refresh() async -> [(WatchedProduct, ShrinkRecord)] {
+    /// Syncs the list to the Worker, then runs the live-size check. Returns the
+    /// number of products whose store size disagrees with what we last recorded.
+    func refresh() async -> Int {
         isRefreshing = true
-        let results = await service.refreshAll()
+        await service.syncToBackend()
+        let mismatches = await service.liveSizeCheck()
         isRefreshing = false
-        return results
+        return mismatches.count
     }
 }

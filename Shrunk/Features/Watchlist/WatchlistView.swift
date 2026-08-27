@@ -113,15 +113,11 @@ struct WatchlistView: View {
         .scrollIndicators(.hidden)
         .refreshable {
             guard let vm else { return }
-            let results = await vm.refresh()
-            let detected = results.count
+            let detected = await vm.refresh()
             let total = watched.count
-            let message: String
-            if detected == 0 {
-                message = "Checked \(total) product\(total == 1 ? "" : "s") · all stable"
-            } else {
-                message = "\(detected) new shrink\(detected == 1 ? "" : "s") detected!"
-            }
+            let message = detected == 0
+                ? "Checked \(total) product\(total == 1 ? "" : "s") · all stable"
+                : "\(detected) size change\(detected == 1 ? "" : "s") to confirm"
             showToast(message)
         }
     }

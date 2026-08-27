@@ -35,31 +35,7 @@ final class NotificationScheduler {
         return granted
     }
 
-    // MARK: - Per-shrink alerts
-
-    func scheduleShrinkAlert(productName: String, brand: String, record: ShrinkRecord, barcode: String) async {
-        let content = UNMutableNotificationContent()
-        content.title = "\(productName) just shrank"
-        content.body = body(for: record)
-        content.sound = .default
-        content.userInfo = ["barcode": barcode]
-        content.threadIdentifier = "shrunk-watchlist"
-
-        let request = UNNotificationRequest(
-            identifier: "shrink_\(barcode)_\(Int(Date().timeIntervalSince1970))",
-            content: content,
-            trigger: nil  // immediate
-        )
-        try? await UNUserNotificationCenter.current().add(request)
-    }
-
-    private func body(for record: ShrinkRecord) -> String {
-        if let prev = record.previousSize, let curr = record.currentSize {
-            let pct = abs(record.shrinkPercent).formattedPercent()
-            return "\(prev.quantity.formattedQuantity(unit: prev.unit)) → \(curr.quantity.formattedQuantity(unit: curr.unit)) (\(pct) less product)"
-        }
-        return "Tap to see exactly what changed."
-    }
+    // MARK: - Local alerts
 
     /// A local notification for something the device worked out by itself —
     /// today that is only the `BGAppRefresh` live-size mismatch (spec §7).
