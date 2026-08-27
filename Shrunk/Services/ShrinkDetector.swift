@@ -7,8 +7,19 @@ import Foundation
 /// Pure logic, no I/O — fed `ShrunkProduct` data assembled by services.
 struct ShrinkDetector {
 
-    func analyze(product: ShrunkProduct) -> ShrinkRecord {
-        let sorted = product.sizeHistory.sorted { $0.date < $1.date }
+    /// - Parameter liveSize: the size parsed from the user's live store row,
+    ///   used **only** when the product carries no observation of its own
+    ///   (spec rule 5). A product found through the on-miss lookup comes back
+    ///   with `observations: []`, so without this the Result screen would have
+    ///   no size to show and the Watch button no baseline to watch. A stored
+    ///   observation always wins — this is a stand-in for having none, never
+    ///   an override.
+    func analyze(product: ShrunkProduct, liveSize: SizeRecord? = nil) -> ShrinkRecord {
+        let stored = product.sizeHistory.sorted { $0.date < $1.date }
+        let sorted: [SizeRecord] = {
+            guard stored.isEmpty, let liveSize, liveSize.quantity > 0 else { return stored }
+            return [liveSize]
+        }()
 
         // Only compare records of the same kind as the most recent one —
         // grams vs fluid ounces must never produce a verdict.
@@ -27,16 +38,23 @@ struct ShrinkDetector {
         // former is Kroger-derived and may carry Kroger attribution.
         let priceIsFromStoreSnapshot = prices.last != nil
 
+        // Fewer than two comparable observations — no verdict is possible, but
+        // the record still has to carry what we *do* know (spec §2): the one
+        // size on file and what it costs per ounce. `previousSize` is
+        // deliberately nil rather than a copy of the current record: there is
+        // no "then", and reporting one made the Result screen draw a Then→Now
+        // row comparing a size with itself.
         guard sameKind.count >= 2 else {
+            let current = sorted.last
             return ShrinkRecord(
                 product: product,
-                previousSize: sorted.last,
-                currentSize: sorted.last,
+                previousSize: nil,
+                currentSize: current,
                 shrinkPercent: 0,
                 priceThen: nil,
                 priceNow: priceNow,
                 costPerUnitThen: nil,
-                costPerUnitNow: nil,
+                costPerUnitNow: Self.costPerUnit(price: priceNow, size: current),
                 priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
                 verdict: .insufficientData
             )
@@ -119,6 +137,17 @@ struct ShrinkDetector {
             priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
             verdict: verdict
         )
+    }
+
+    /// `price ÷ normalized quantity` for one size record — the per-ounce number
+    /// the single-snapshot screen leads with. `nil` when either half is missing
+    /// or the size normalizes to zero (which would divide a real price into
+    /// `inf`).
+    private static func costPerUnit(price: Double?, size: SizeRecord?) -> Double? {
+        guard let price, let size else { return nil }
+        let normalized = normalize(size).quantity
+        guard normalized > 0 else { return nil }
+        return price / normalized
     }
 
     /// Convert any unit to fluid-ounce-equivalent so percentage comparison is unit-stable.

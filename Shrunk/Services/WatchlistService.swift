@@ -1,6 +1,27 @@
 import Foundation
 import SwiftData
 
+/// Why a watchlist write could not happen.
+///
+/// `add` used to `return` silently when the record had no current size, which
+/// is exactly what made "Watch this product" a dead button on TestFlight
+/// build 2 (spec §0): no row written, no error, no feedback. Spec rule 4 —
+/// "no silent `return`s on user actions" — so the caller now gets something it
+/// can put in a toast.
+enum WatchlistError: LocalizedError, Equatable {
+    /// The product has no observation and no adopted live size, so there is no
+    /// baseline for a `size_drop` alert to compare against. The screen's answer
+    /// is to send the user to label capture, not to fail quietly.
+    case noSizeToWatch
+
+    var errorDescription: String? {
+        switch self {
+        case .noSizeToWatch:
+            return "We need this product's size first — snap the label to start tracking it."
+        }
+    }
+}
+
 /// Wraps the SwiftData ModelContext for watched-product CRUD, keeps the
 /// Worker's copy of the watch list current (spec §7), and runs the device-side
 /// live-size check that `BGAppRefresh` wakes us for. The view layer uses
@@ -23,8 +44,12 @@ final class WatchlistService {
 
     // MARK: - CRUD
 
+    /// Files a watch. **One observation is enough** (spec rule 3) — it becomes
+    /// the baseline a future `size_drop` alert compares against, which is the
+    /// whole promise of the single-snapshot screen. Only a record with no size
+    /// at all is refused, and it now says so.
     func add(product: ShrunkProduct, record: ShrinkRecord) throws {
-        guard let currentSize = record.currentSize else { return }
+        guard let currentSize = record.currentSize else { throw WatchlistError.noSizeToWatch }
         if let existing = try fetch(barcode: product.id) {
             existing.lastKnownSize = currentSize.quantity
             existing.lastKnownUnit = currentSize.unit

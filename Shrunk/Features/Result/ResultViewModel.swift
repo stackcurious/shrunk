@@ -41,6 +41,41 @@ final class ResultViewModel: ObservableObject {
         }
     }
 
+    /// What the Result screen's Watch button must do when tapped (spec §2).
+    /// Pure and exhaustive so no tap can fall through to nothing — the bug
+    /// this replaces was two `guard … else { return }`s that silently swallowed
+    /// the tap on any product with no size (spec §0).
+    enum WatchOutcome: Equatable {
+        /// Already on the watchlist — the button starts in its watched state
+        /// rather than forgetting across re-opens.
+        case alreadyWatched
+        /// No size on record, so there is nothing to watch yet: the button
+        /// becomes the label-capture CTA.
+        case needsLabel
+        /// Watching is a Pro feature.
+        case paywall
+        /// Add it, with a toast and a success haptic.
+        case watch
+    }
+
+    /// Precedence, deliberately:
+    ///
+    /// 1. `alreadyWatched` — a truthful "On your watchlist" beats both
+    ///    re-selling Pro and re-adding a row that already exists.
+    /// 2. `needsLabel` — checked **before** the paywall. Watching a product
+    ///    with zero observations is impossible at any price (rule 3), so
+    ///    paywalling it would leave a free user on the fresh-lookup screen
+    ///    with no action at all, violating rule 1 ("a scan never dead-ends").
+    ///    Label capture is not a Pro feature and is the step that unblocks
+    ///    watching, so it wins.
+    /// 3. `paywall` — a watchable product, but not a paying user.
+    static func watchOutcome(record: ShrinkRecord, isPro: Bool, isAlreadyWatched: Bool) -> WatchOutcome {
+        if isAlreadyWatched { return .alreadyWatched }
+        if record.currentSize == nil { return .needsLabel }
+        if !isPro { return .paywall }
+        return .watch
+    }
+
     @Published var state: State = .loading
     @Published var alternativesResult: AlternativesResult = .empty
     @Published var isLoadingAlternatives: Bool = false
@@ -51,6 +86,10 @@ final class ResultViewModel: ObservableObject {
     /// `KROGER_PERSIST=off` never writes one. This is computed the moment the
     /// live fetch returns and is OR'd with the server flag at the read site.
     @Published var liveSizeMismatch: Bool = false
+    /// True when `currentSize` came from the live store row rather than one of
+    /// our own observations (spec rule 5). Only the screen's wording depends on
+    /// it — "‹size› at Kroger today" instead of "first seen ‹Mon YYYY›".
+    @Published var adoptedLiveSize: Bool = false
 
     private let api: ShrunkAPIClient
     private let engine: AlternativesEngine
@@ -86,10 +125,17 @@ final class ResultViewModel: ObservableObject {
         state = .loaded(product, record)
         ProductResultCache.products[product.id] = product
         alternativesResult = .empty
+        adoptedLiveSize = false
         Task {
             await loadLivePrice(barcode: product.id)
-            await loadAlternatives(for: product, record: record)
+            await loadAlternatives(for: product, record: currentRecord ?? record)
         }
+    }
+
+    /// The record currently in `state`, if any.
+    private var currentRecord: ShrinkRecord? {
+        if case .loaded(_, let record) = state { return record }
+        return nil
     }
 
     func load(barcode: String) async {
@@ -98,6 +144,7 @@ final class ResultViewModel: ObservableObject {
         alternativesResult = .empty
         livePrice = locationId == nil ? .hidden : .loading
         liveSizeMismatch = false
+        adoptedLiveSize = false
 
         do {
             let product = try await api.fetchProduct(barcode: barcode, locationId: locationId)
@@ -105,7 +152,10 @@ final class ResultViewModel: ObservableObject {
             let record = detector.analyze(product: product)
             state = .loaded(product, record)
             await loadLivePrice(barcode: barcode)
-            await loadAlternatives(for: product, record: record)
+            // Re-read: `loadLivePrice` may have adopted the live size, and the
+            // alternatives search needs that record's `unitKind` to rank
+            // like with like — without it a fresh lookup gets no store rows.
+            await loadAlternatives(for: product, record: currentRecord ?? record)
         } catch ShrunkError.productNotFound {
             state = .notFound(barcode: barcode)
             livePrice = .hidden
@@ -139,12 +189,34 @@ final class ResultViewModel: ObservableObject {
         do {
             let live = try await api.liveProduct(barcode: barcode, locationId: locationId)
             livePrice = .loaded(live)
-            if case .loaded(let product, _) = state {
+            if case .loaded(let product, let record) = state {
                 liveSizeMismatch = Self.detectSizeMismatch(live: live, sizeHistory: product.sizeHistory)
+                // Spec rule 5 — a product we know nothing about the size of
+                // adopts the live store size, so the screen has a fact to show
+                // and the Watch button has a baseline. Re-runs the detector
+                // rather than patching the record so every derived number
+                // (cost per ounce especially) comes from one place.
+                if record.currentSize == nil, let adopted = Self.sizeRecord(from: live) {
+                    state = .loaded(product, detector.analyze(product: product, liveSize: adopted))
+                    adoptedLiveSize = true
+                }
             }
         } catch {
             livePrice = .unavailable
         }
+    }
+
+    /// The live store row as a `SizeRecord`, or nil when it carries no usable
+    /// size. `source` stays `"kroger"` so the attribution survives into
+    /// anything derived from it.
+    static func sizeRecord(from live: LivePrice) -> SizeRecord? {
+        guard let quantity = live.quantity, quantity > 0, let kind = live.unitKind else { return nil }
+        return SizeRecord(
+            date: Date(),
+            quantity: quantity,
+            unit: ProductDTO.unit(forKind: kind),
+            source: "kroger"
+        )
     }
 
     /// Compares the live Kroger size against the newest **non-Kroger**
