@@ -17,6 +17,7 @@ struct NotificationPreferencesView: View {
                 VStack(spacing: ShrunkTheme.Spacing.lg) {
                     iosAuthorizationCard
                     masterControlsCard
+                    alertKindsCard
                     quietHoursCard
                     thresholdCard
                     footer
@@ -49,6 +50,14 @@ struct NotificationPreferencesView: View {
         }
         .onChange(of: prefs) { _, newValue in
             rawPrefs = newValue.encoded()
+            // The crons read `devices.prefs`, so the switch has to reach the
+            // Worker or it only silences local notifications.
+            Task {
+                await ShrunkAPIClient.shared.syncDevice(
+                    deviceId: DeviceIdentity.current,
+                    transactionJWS: ""
+                )
+            }
         }
     }
 
@@ -105,6 +114,51 @@ struct NotificationPreferencesView: View {
                 icon: "pause.circle.fill",
                 tint: .shrunkRed,
                 isOn: Binding(get: { prefs.paused }, set: { prefs.paused = $0 })
+            )
+        }
+        .background(Color.surface)
+        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
+                .stroke(Color.borderSoft, lineWidth: 0.5)
+        )
+        .shrunkElevation(ShrunkTheme.Elevation.whisper)
+    }
+
+    // MARK: - Alert kinds
+
+    private var alertKindsCard: some View {
+        VStack(spacing: 0) {
+            preferenceToggle(
+                title: "Size drops",
+                subtitle: "A product you watch got smaller.",
+                icon: "arrow.down.right.circle.fill",
+                tint: .shrunkRed,
+                isOn: Binding(get: { prefs.sizeDropEnabled }, set: { prefs.sizeDropEnabled = $0 })
+            )
+            Divider().overlay(Color.borderSoft)
+            preferenceToggle(
+                title: "Price per unit up",
+                subtitle: "Up 5% or more at your store.",
+                icon: "chart.line.uptrend.xyaxis",
+                tint: .verdictWarn,
+                isOn: Binding(get: { prefs.priceHikeEnabled }, set: { prefs.priceHikeEnabled = $0 })
+            )
+            Divider().overlay(Color.borderSoft)
+            preferenceToggle(
+                title: "Verified cases",
+                subtitle: "We publish a confirmed shrink for something you watch.",
+                icon: "checkmark.seal.fill",
+                tint: .verdictGood,
+                isOn: Binding(get: { prefs.verifiedCaseEnabled }, set: { prefs.verifiedCaseEnabled = $0 })
+            )
+            Divider().overlay(Color.borderSoft)
+            preferenceToggle(
+                title: "Weekly digest",
+                subtitle: "Monday summary of what shrank in your categories.",
+                icon: "calendar",
+                tint: .shrunkRed,
+                isOn: Binding(get: { prefs.digestEnabled }, set: { prefs.digestEnabled = $0 })
             )
         }
         .background(Color.surface)
