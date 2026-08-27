@@ -10,6 +10,10 @@ struct NotificationPreferencesView: View {
 
     @State private var prefs: NotificationPreferences = .default
     @State private var iosStatus: UNAuthorizationStatus = .notDetermined
+    // Guards `.onChange(of: prefs)` from firing on the initial `.task` decode,
+    // which would otherwise fire a spurious `POST /v1/devices` on every screen
+    // open for any user whose stored prefs differ from `.default`.
+    @State private var hasLoadedPrefs = false
 
     var body: some View {
         NavigationStack {
@@ -47,8 +51,10 @@ struct NotificationPreferencesView: View {
         .task {
             prefs = NotificationPreferences.decoded(rawPrefs)
             iosStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            hasLoadedPrefs = true
         }
         .onChange(of: prefs) { _, newValue in
+            guard hasLoadedPrefs else { return }
             rawPrefs = newValue.encoded()
             // The crons read `devices.prefs`, so the switch has to reach the
             // Worker or it only silences local notifications.
