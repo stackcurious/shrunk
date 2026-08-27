@@ -37,7 +37,12 @@ productRoute.get("/v1/product/:gtin", async (c) => {
   }
 
   const locationId = c.req.query("locationId") ?? null;
-  c.header("Cache-Control", "public, max-age=3600");
+  // I7: a locationId means the body may carry Kroger-derived price_snapshots
+  // (store-level prices). Kroger returns `private` on its own price
+  // responses (routes/kroger.ts) — spec §9 says we never widen that, so this
+  // response must not be publicly cacheable for an hour. Without a
+  // locationId, buildProductResponse never queries snapshots at all.
+  c.header("Cache-Control", locationId ? "private, max-age=60" : "public, max-age=3600");
   return c.json(await buildProductResponse(c.env.DB, product, locationId));
 });
 

@@ -57,6 +57,22 @@ describe("GET /v1/product/:gtin", () => {
     expect((await other.json<any>()).price_snapshots).toEqual([]);
   });
 
+  // I7: Kroger returns `private` on price responses (routes/kroger.ts) — a
+  // response carrying store-level price_snapshots must not widen that to
+  // publicly cacheable for an hour (spec §9's posture: never widen Kroger's
+  // own caching terms).
+  it("I7: is privately cacheable for 60s when a locationId is given (price_snapshots may be present)", async () => {
+    await seedProduct("0028400642255");
+    const res = await app.request("/v1/product/0028400642255?locationId=01400943", {}, env);
+    expect(res.headers.get("cache-control")).toBe("private, max-age=60");
+  });
+
+  it("I7: stays publicly cacheable for an hour without a locationId (no snapshots possible)", async () => {
+    await seedProduct("0028400642255");
+    const res = await app.request("/v1/product/0028400642255", {}, env);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+  });
+
   it("rejects an invalid gtin", async () => {
     const res = await app.request("/v1/product/12345", {}, env);
     expect(res.status).toBe(400);
