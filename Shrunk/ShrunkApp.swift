@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 @main
 struct ShrunkApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var storeKit = StoreKitService.shared
 
     @AppStorage("shrunk.has_completed_onboarding")
@@ -18,6 +20,9 @@ struct ShrunkApp: App {
         } catch {
             fatalError("SwiftData container failed to initialize: \(error)")
         }
+
+        // The app delegate writes pushes into this container.
+        PushInbox.shared.container = modelContainer
 
         NotificationScheduler.shared.registerBackgroundTask { [container = modelContainer] in
             await Self.runWatchlistSweep(container: container)
@@ -77,12 +82,20 @@ struct RootView: View {
     @Binding var hasCompletedOnboarding: Bool
 
     var body: some View {
-        if hasCompletedOnboarding {
-            MainTabsView()
-        } else {
-            OnboardingContainerView {
-                hasCompletedOnboarding = true
+        Group {
+            if hasCompletedOnboarding {
+                MainTabsView()
+            } else {
+                OnboardingContainerView {
+                    hasCompletedOnboarding = true
+                }
             }
+        }
+        .sheet(item: Binding<ScannedBarcode?>(
+            get: { PushInbox.shared.pendingBarcode.map { ScannedBarcode(id: $0) } },
+            set: { PushInbox.shared.pendingBarcode = $0?.id }
+        )) { wrapper in
+            ResultView(barcode: wrapper.id)
         }
     }
 }

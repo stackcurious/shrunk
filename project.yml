@@ -25,9 +25,11 @@ targets:
       - path: Shrunk
         excludes:
           - "**/*.md"
+          - "**/*.entitlements"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shrunk.app
+        CODE_SIGN_ENTITLEMENTS: Shrunk/Shrunk.entitlements
         PRODUCT_NAME: Shrunk
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"

@@ -37,6 +37,9 @@ struct WatchlistView: View {
             if vm == nil {
                 vm = WatchlistViewModel(service: WatchlistService(context: modelContext))
             }
+            // Asking here rather than at launch: the user is looking at the
+            // feature the permission is for. Already-answered prompts no-op.
+            await NotificationScheduler.shared.requestPermissionAndRegister()
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView()

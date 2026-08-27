@@ -56,6 +56,17 @@ final class ShrinkAlertFromPushTests: XCTestCase {
         XCTAssertFalse(alert.isRead)
     }
 
+    func test_prefersTheServersProductNameOverTheTitle() throws {
+        var userInfo = payload(
+            kind: "sizeDrop", gtin: "0052000133417",
+            title: "Something else entirely",
+            body: "Now 28 fl oz"
+        )
+        userInfo["product_name"] = "Gatorade Thirst Quencher"
+        let alert = try XCTUnwrap(ShrinkAlert.from(pushUserInfo: userInfo))
+        XCTAssertEqual(alert.productName, "Gatorade Thirst Quencher")
+    }
+
     func test_aDigestPushHasNoBarcode() throws {
         let alert = try XCTUnwrap(ShrinkAlert.from(pushUserInfo: payload(
             kind: "digest", gtin: nil, title: "What shrank this week", body: "3 new shrinks in Snacks"

@@ -118,9 +118,12 @@ extension ShrinkAlert {
         let title = (alert?["title"] as? String) ?? ""
         let body = (alert?["body"] as? String) ?? ""
 
+        let trimmedName = (userInfo["product_name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (trimmedName?.isEmpty == false ? trimmedName : nil) ?? productName(fromPushTitle: title)
+
         return ShrinkAlert(
             barcode: (userInfo["gtin"] as? String) ?? "",
-            productName: productName(fromPushTitle: title),
+            productName: name,
             brand: "",
             kind: kind,
             message: body
