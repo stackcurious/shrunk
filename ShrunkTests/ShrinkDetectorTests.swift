@@ -334,5 +334,59 @@ final class ShrinkDetectorTests: XCTestCase {
     func test_costPerOunce_nilWhenUnitKindMissing() {
         XCTAssertNil(ShrinkDetector.costPerOunce(price: 1.0, quantity: 100, unitKind: nil))
     }
+
+    // MARK: - C2 plausibility clamp (final fix wave)
+    //
+    // A same-kind pair from two *different* sources whose implied ratio is
+    // outside 0.25x–4x is more likely a unit-parsing mismatch between
+    // sources (e.g. a multipack total from one source vs. a per-unit size
+    // from another) than a real shrink/growth.
+
+    fileprivate func crossSourceProduct(previous: (Double, String), current: (Double, String)) -> ShrunkProduct {
+        let now = Date()
+        return ShrunkProduct(
+            id: "test", name: "Test", brand: "", category: "", imageURL: nil,
+            sizeHistory: [
+                SizeRecord(date: now, quantity: previous.0, unit: "g", source: previous.1),
+                SizeRecord(date: now.addingTimeInterval(86400), quantity: current.0, unit: "g", source: current.1)
+            ],
+            currentPrice: nil, currency: "USD"
+        )
+    }
+
+    func test_crossSourceRatioBelowQuarter_clampsToInsufficientData() {
+        // 4258.584 (fdc, whole 12-pack) -> 354.882 (kroger, one can):
+        // ratio ~0.083, far under the 0.25x floor.
+        let product = crossSourceProduct(previous: (4258.584, "fdc"), current: (354.882, "kroger"))
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .insufficientData)
+    }
+
+    func test_crossSourceRatioAboveFour_clampsToInsufficientData() {
+        let product = crossSourceProduct(previous: (354.882, "kroger"), current: (4258.584, "fdc"))
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .insufficientData)
+    }
+
+    func test_crossSourceRatioExactlyFour_isInclusiveAndStillVerdicts() {
+        // The bound is inclusive (">4x" / "<0.25x" is implausible, "=4x" is not).
+        let product = crossSourceProduct(previous: (100, "fdc"), current: (400, "kroger"))
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .grew)
+    }
+
+    func test_crossSourceRatioExactlyQuarter_isInclusiveAndStillVerdicts() {
+        let product = crossSourceProduct(previous: (400, "fdc"), current: (100, "kroger"))
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .significantShrink)
+    }
+
+    func test_sameSourceImplausibleRatio_isNotClamped() {
+        // Same source, huge ratio — not a cross-source mismatch, so the
+        // plausibility clamp must not swallow a real (if extreme) verdict.
+        let product = crossSourceProduct(previous: (1000, "fdc"), current: (100, "fdc"))
+        let record = detector.analyze(product: product)
+        XCTAssertEqual(record.verdict, .significantShrink)
+    }
 }
 

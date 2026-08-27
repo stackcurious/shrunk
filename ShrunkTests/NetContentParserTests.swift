@@ -158,4 +158,57 @@ final class NetContentParserTests: XCTestCase {
     func test_firstNetContent_returnsNilWhenNothingParses() {
         XCTAssertNil(NetContentParser.firstNetContent(in: ["DORITOS", "INGREDIENTS: CORN", ""]))
     }
+
+    // MARK: - R45 multipack rule (final fix wave, C2)
+    //
+    // A leading bare integer or "N ct"/"N pk"/"N pack" segment is a pack
+    // multiplier for the segment right after it — the "/"-spelling of a
+    // multipack must yield the same whole-pack total as its "-"/"x" spelling
+    // ("12 - 12 FL OZ CANS" == 4258.584 mL, one 12-pack of 12 fl oz cans), not
+    // the per-unit size of a single item. Mirrors `backend/src/normalize.ts` /
+    // `scripts/fdc/normalize.py`.
+
+    func test_multipack_slashSpelling_bareLeadingInteger() {
+        // 12-pack of 12 fl oz cans: 144 fl oz total, same whole-pack figure as
+        // the "12 - 12 FL OZ CANS" hyphen spelling.
+        let parsed = NetContentParser.parse("12/12 fl oz")
+        XCTAssertEqual(parsed?.quantity ?? 0, 4258.584, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .volume)
+    }
+
+    func test_multipack_slashSpelling_decimalPerUnitSize() {
+        // 6-pack of 16.9 fl oz bottles: 101.4 fl oz total.
+        let parsed = NetContentParser.parse("6/16.9 fl oz")
+        XCTAssertEqual(parsed?.quantity ?? 0, 2998.753, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .volume)
+    }
+
+    func test_multipack_slashSpelling_massUnit() {
+        let parsed = NetContentParser.parse("2/1 lb")
+        XCTAssertEqual(parsed?.quantity ?? 0, 907.184, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .mass)
+    }
+
+    func test_multipack_leadingCtSegment() {
+        // Same 12-pack of 12 fl oz cans, spelled with an explicit count unit.
+        let parsed = NetContentParser.parse("12 ct / 12 fl oz")
+        XCTAssertEqual(parsed?.quantity ?? 0, 4258.584, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .volume)
+    }
+
+    func test_multipack_leadingBareCountWithNoPerUnitSize_rejects() {
+        // The leading segment is a pack multiplier, but what follows is
+        // itself just a count, not a physical per-unit size — reject rather
+        // than silently falling back to some other reading of the string.
+        XCTAssertNil(NetContentParser.parse("6 pk / 6 ct"))
+    }
+
+    func test_multipack_plainSingleSegmentCount_stillParsesAsACount() {
+        // Regression guard: the R45 branch only fires with ≥2 "/"-split
+        // segments — a bare "12 ct" with no "/" must still parse as a plain
+        // count of 12, exactly as before this fix.
+        let parsed = NetContentParser.parse("12 ct")
+        XCTAssertEqual(parsed?.quantity ?? 0, 12, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .count)
+    }
 }

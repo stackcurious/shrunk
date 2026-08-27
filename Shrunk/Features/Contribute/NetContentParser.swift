@@ -106,14 +106,43 @@ enum NetContentParser {
     )
     private static let fractionDenominators: Set<Int> = [2, 3, 4, 8]
 
+    /// R45 — a leading bare integer segment ("12/12 fl oz") or a leading
+    /// `N ct`/`N pk`/`N pack` segment ("12 ct / 12 fl oz") is a pack
+    /// multiplier for the segment right after it, not a value in its own
+    /// right: a 12-pack of 12 fl oz cans is 144 fl oz, not one can. Mirrors
+    /// `backend/src/normalize.ts` / `scripts/fdc/normalize.py` byte-for-byte
+    /// in intent. Only ever consulted when there are ≥2 segments, so a
+    /// standalone "12 ct" (one segment, no "/") is untouched and still parses
+    /// as a plain count of 12.
+    private static let leadingBareInteger = try! NSRegularExpression(pattern: #"^(\d+)$"#)
+    private static let leadingCountMultiplier = try! NSRegularExpression(
+        pattern: #"^(\d+)\s*(?:ct|pk|pack)$"#,
+        options: [.caseInsensitive]
+    )
+
     // MARK: - Public API
 
     static func parse(_ raw: String) -> ParsedQuantity? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         let text = expandLeadingFraction(trimmed)
+        let rawSegments = segments(of: text)
 
-        let parsed = segments(of: text).compactMap(parseSegment)
+        // R45 multipack rule: a leading pack-count segment multiplies the
+        // segment right after it. Only fires with ≥2 segments, so it never
+        // touches a plain single-segment "12 ct".
+        if rawSegments.count >= 2, let multiplier = leadingMultiplierValue(rawSegments[0]) {
+            // A leading pack count with no usable per-unit size after it is a
+            // reject, not a fallback to whatever else is in the string.
+            guard let size = parseSegment(rawSegments[1]), size.kind != .count else { return nil }
+            return ParsedQuantity(
+                quantity: (multiplier * size.value * 1000).rounded() / 1000,
+                unitKind: size.kind,
+                raw: raw
+            )
+        }
+
+        let parsed = rawSegments.compactMap(parseSegment)
         guard !parsed.isEmpty else { return nil }
 
         // Prefer mass/volume over count when both appear ("12 ct / 340 g").
@@ -226,5 +255,23 @@ enum NetContentParser {
 
     private static func unit(_ token: String) -> (UnitKind, Double)? {
         units[token.lowercased().replacingOccurrences(of: " ", with: "")]
+    }
+
+    /// R45 — the multiplier a segment represents when it *leads* a `/`-split
+    /// size string: a bare integer ("12") or an `N ct`/`N pk`/`N pack` count
+    /// ("12 ct"). nil for anything else (a real unit like "12 oz", a decimal,
+    /// or an empty segment), which tells `parse` this isn't a multipack lead.
+    private static func leadingMultiplierValue(_ segment: String) -> Double? {
+        let text = segment.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        let range = fullRange(of: text)
+        let ns = text as NSString
+        if let match = leadingBareInteger.firstMatch(in: text, range: range) {
+            return number(ns.substring(with: match.range(at: 1)))
+        }
+        if let match = leadingCountMultiplier.firstMatch(in: text, range: range) {
+            return number(ns.substring(with: match.range(at: 1)))
+        }
+        return nil
     }
 }

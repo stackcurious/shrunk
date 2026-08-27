@@ -62,6 +62,32 @@ struct ShrinkDetector {
             )
         }
 
+        // C2 plausibility clamp: a same-kind pair from two *different* sources
+        // whose implied ratio is outside a sane single-step range is far more
+        // likely a unit-parsing mismatch between sources (e.g. a multipack
+        // total from one source vs. a per-unit size from another) than a real
+        // shrink/growth — render `.insufficientData` rather than a confident,
+        // wrong verdict. Same-source pairs are never clamped: a real shrink
+        // reported twice by one source is exactly the case this app exists to
+        // catch, however large.
+        if previous.source != current.source {
+            let ratio = current.quantity / previous.quantity
+            guard ratio <= 4 && ratio >= 0.25 else {
+                return ShrinkRecord(
+                    product: product,
+                    previousSize: sameKind[sameKind.count - 2],
+                    currentSize: sameKind.last!,
+                    shrinkPercent: 0,
+                    priceThen: priceThen,
+                    priceNow: priceNow,
+                    costPerUnitThen: nil,
+                    costPerUnitNow: current.quantity > 0 ? priceNow.map { $0 / current.quantity } : nil,
+                    priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
+                    verdict: .insufficientData
+                )
+            }
+        }
+
         let percentChange = ((current.quantity - previous.quantity) / previous.quantity) * 100
 
         // "Now" is today's price over today's size; "then" is the older snapshot
