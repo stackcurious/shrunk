@@ -133,10 +133,10 @@ describe("APNsSender", () => {
     });
   });
 
-  it("reports an invalid token on 400 BadDeviceToken", async () => {
+  it("does NOT report 400 BadDeviceToken as an invalid token — it's also what an APNS_ENV mismatch looks like (I3)", async () => {
     stubFetch([{ status: 400, body: JSON.stringify({ reason: "BadDeviceToken" }) }]);
     expect(await new APNsSender(apnsEnv).send(TOKEN, { title: "a", body: "b", kind: "sizeDrop" })).toEqual({
-      ok: false, status: 400, invalidToken: true,
+      ok: false, status: 400, invalidToken: false, badDeviceToken: true,
     });
   });
 

@@ -177,6 +177,9 @@ export async function runAlertDrain(
 ): Promise<DrainResult> {
   const result: DrainResult = { jobs: 0, pushes: 0, cleared: 0, failures: 0 };
   let budget = MAX_PUSHES_PER_RUN;
+  // I3 — count only, never logged with a device id or token; see the
+  // badDeviceToken handling below.
+  let badDeviceTokenCount = 0;
 
   const { results: jobs } = await env.DB
     .prepare(
@@ -206,6 +209,13 @@ export async function runAlertDrain(
           if (sendResult.invalidToken) {
             await env.DB.prepare("UPDATE devices SET apns_token = NULL WHERE id = ?").bind(device.id).run();
             result.cleared += 1;
+          } else if (sendResult.badDeviceToken) {
+            // I3 — do NOT clear the token: 400 BadDeviceToken is also what an
+            // APNS_ENV mismatch looks like. Counted as a failure and logged
+            // (as a count, below) so an environment flip that starts
+            // producing these is visible without wiping the fleet's tokens.
+            result.failures += 1;
+            badDeviceTokenCount += 1;
           }
         } catch {
           // C1 — one recipient's send rejecting (a missing/malformed
@@ -233,6 +243,12 @@ export async function runAlertDrain(
       // untouched), so it is retried whole on the next tick.
       result.failures += 1;
     }
+  }
+
+  if (badDeviceTokenCount > 0) {
+    // No device id or token in the log — same policy as db.ts's
+    // entitlement-write warning.
+    console.warn(`alerts: APNs BadDeviceToken (token not cleared): ${badDeviceTokenCount}`);
   }
 
   return result;

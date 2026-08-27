@@ -67,10 +67,18 @@ export class APNsSender implements PushSender {
     if (res.ok) return { ok: true, status: res.status, invalidToken: false };
 
     const text = await res.text().catch(() => "");
+    // I3 — 410 Unregistered is the only reliable "this token is dead"
+    // signal. APNs also answers 400 BadDeviceToken when APNS_ENV
+    // (sandbox/production) doesn't match the build's aps-environment
+    // entitlement — a config error, not proof the token is bad — so it must
+    // not clear devices.apns_token. The caller counts it as a failure and
+    // logs how often it happens instead.
+    const badDeviceToken = res.status === 400 && text.includes("BadDeviceToken");
     return {
       ok: false,
       status: res.status,
-      invalidToken: res.status === 410 || (res.status === 400 && text.includes("BadDeviceToken")),
+      invalidToken: res.status === 410,
+      ...(badDeviceToken ? { badDeviceToken: true as const } : {}),
     };
   }
 }

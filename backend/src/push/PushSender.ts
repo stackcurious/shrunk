@@ -14,6 +14,15 @@ export interface PushResult {
   status: number;
   /** The device token is dead — the caller clears `devices.apns_token`. */
   invalidToken: boolean;
+  /**
+   * I3 — APNs answered 400 BadDeviceToken, which it also returns for an
+   * APNS_ENV (sandbox/production) mismatch, not only a genuinely dead
+   * token. The caller must not clear `devices.apns_token` on this alone
+   * (only `invalidToken` does that); it should count it as a failure and
+   * log how often it happens instead. Absent (not `false`) when it doesn't
+   * apply.
+   */
+  badDeviceToken?: boolean;
 }
 
 export interface PushSender {

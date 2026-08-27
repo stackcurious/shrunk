@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_PUSHES_PER_RUN, alertCopy, prefAllows, runAlertDrain } from "../src/alerts";
 import type { PushPayload, PushResult, PushSender } from "../src/push/PushSender";
 
@@ -258,6 +258,29 @@ describe("runAlertDrain", () => {
 
     const row = await env.DB.prepare("SELECT apns_token FROM devices WHERE id = 'dev-1'").first<{ apns_token: string | null }>();
     expect(row!.apns_token).toBeNull();
+  });
+
+  describe("I3 — 400 BadDeviceToken is not a token wipe", () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("does not clear the token on 400 BadDeviceToken, counts it as a failure, and logs the count", async () => {
+      await seedDevice("dev-1");
+      await seedWatch("dev-1", GTIN, "Gatorade");
+      await seedJob("size_drop");
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const { sender } = fakeSender([{ ok: false, status: 400, invalidToken: false, badDeviceToken: true }]);
+      expect(await runAlertDrain(env, sender, NOW)).toEqual({ jobs: 1, pushes: 0, cleared: 0, failures: 1 });
+
+      const row = await env.DB.prepare("SELECT apns_token FROM devices WHERE id = 'dev-1'").first<{ apns_token: string | null }>();
+      expect(row!.apns_token).toBe("token-dev-1");
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const [message] = warn.mock.calls[0];
+      expect(message).toContain("1");
+      expect(message).not.toContain("dev-1");
+      expect(message).not.toContain("token-dev-1");
+    });
   });
 
   it("caps a run at 40 pushes and resumes the job on the next run", async () => {
