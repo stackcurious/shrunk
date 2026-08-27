@@ -24,8 +24,16 @@ struct AlternativesEngine {
     ) async -> AlternativesResult {
         guard !product.category.isEmpty else { return .empty }
 
-        if let locationId {
-            let rows = await storeAlternatives(for: product, record: shrinkRecord, locationId: locationId)
+        // Only compare like with like. Without a known kind — no size history,
+        // or an "unknown" unit — mass and volume candidates would be ranked
+        // together by numerically-incomparable $/oz vs $/fl oz, so skip the
+        // store search entirely and go straight to curated (spec §7, §8).
+        let scannedKind: String? = shrinkRecord.currentSize
+            .map(\.unitKind)
+            .flatMap { $0 == "unknown" ? nil : $0 }
+
+        if let locationId, let scannedKind {
+            let rows = await storeAlternatives(for: product, record: shrinkRecord, scannedKind: scannedKind, locationId: locationId)
             if !rows.isEmpty { return cap(rows, isPro: isPro, isCurated: false) }
         }
         return cap(await curatedAlternatives(for: product), isPro: isPro, isCurated: true)
@@ -36,6 +44,7 @@ struct AlternativesEngine {
     private func storeAlternatives(
         for product: ShrunkProduct,
         record: ShrinkRecord,
+        scannedKind: String,
         locationId: String
     ) async -> [Alternative] {
         let results: [StoreSearchResult]
@@ -45,16 +54,12 @@ struct AlternativesEngine {
             return []   // Kroger never blocks the screen (spec §8)
         }
 
-        // Only compare like with like: an "unknown" kind means no filter.
-        let scannedKind: String? = record.currentSize
-            .map(\.unitKind)
-            .flatMap { $0 == "unknown" ? nil : $0 }
         let scannedCostPerOz = record.costPerUnitNow
 
         return results
             .filter { $0.gtin != product.id }
             .filter { $0.inStock }
-            .filter { scannedKind == nil || $0.unitKind == scannedKind }
+            .filter { $0.unitKind == scannedKind }
             .compactMap { result -> (StoreSearchResult, Double)? in
                 guard let cost = Self.costPerOunce(result) else { return nil }
                 return (result, cost)

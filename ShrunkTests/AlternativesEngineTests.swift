@@ -72,12 +72,18 @@ final class AlternativesEngineTests: XCTestCase {
 
     func test_freeUsersGetThreeRowsAndAHiddenCount() async {
         let store = StubStoreData()
-        store.searchResult = .success((1...5).map { candidate("000000000\($0)0\($0)", price: Double($0), ml: 1000) })
+        // Prices are deliberately out of order so this can't pass by accident:
+        // a cap-before-sort bug would keep indices 1-3 (0.30, 0.10, 0.50), not
+        // the three cheapest.
+        let prices: [Double] = [0.30, 0.10, 0.50, 0.20, 0.40]
+        store.searchResult = .success(zip(1...5, prices).map { index, price in
+            candidate("000000000\(index)0\(index)", price: price, ml: 1000)
+        })
         let product = scanned()
         let record = detector.analyze(product: product)
 
         let free = await engine(store).findAlternatives(for: product, shrinkRecord: record, locationId: "01400943", isPro: false)
-        XCTAssertEqual(free.alternatives.count, 3)
+        XCTAssertEqual(free.alternatives.map(\.id), ["000000000202", "000000000404", "000000000101"])
         XCTAssertEqual(free.hiddenCount, 2)
 
         let pro = await engine(store).findAlternatives(for: product, shrinkRecord: record, locationId: "01400943", isPro: true)
@@ -119,6 +125,28 @@ final class AlternativesEngineTests: XCTestCase {
         XCTAssertEqual(result.alternatives.map(\.id), ["0000000000011"])
         XCTAssertEqual(result.alternatives[0].source, .curated)
         XCTAssertNil(result.alternatives[0].costPerUnit)
+    }
+
+    func test_noSizeHistoryFallsBackToCuratedWithoutSearchingTheStore() async {
+        let store = StubStoreData()
+        store.searchResult = .success([candidate("0000000000011", price: 1.00, ml: 1000)])
+        let feed = StubTrendingFeed()
+        feed.feed = TrendingFeed(version: 1, updated: Date(), trending: [
+            TrendingEntry(barcode: "0000000000011", name: "Verified Case", brand: "Brand", category: "Beverages",
+                          imageUrl: nil, history: [], currentPrice: nil, currency: "USD", evidenceUrl: nil, addedAt: Date())
+        ])
+        let product = ShrunkProduct(
+            id: "0028400642255", name: "Gatorade", brand: "Gatorade", category: "Beverages",
+            imageURL: nil, sizeHistory: [], currentPrice: nil, currency: "USD",
+            needsConfirmation: false, priceHistory: []
+        )
+        let record = detector.analyze(product: product)
+
+        let result = await AlternativesEngine(store: store, feed: feed)
+            .findAlternatives(for: product, shrinkRecord: record, locationId: "01400943", isPro: true)
+
+        XCTAssertTrue(store.searchTerms.isEmpty)
+        XCTAssertTrue(result.isCurated)
     }
 
     func test_krogerFailureFallsBackToCurated() async {
