@@ -22,6 +22,16 @@ export const SWEEP_PAIR_CAP = 400;
 /** Matches the six-hourly cron cadence (spec §6.2). */
 const SWEEP_ROTATION_PERIOD_SECONDS = 6 * 60 * 60;
 
+/**
+ * I3 — the `price_snapshots`-derived half of the pair union is bounded to
+ * this window; the `watches x devices` half stays unbounded (spec §6.2 names
+ * only that as the pair source). Without this, a product scanned once at one
+ * store by a user who never watched it gets re-fetched from Kroger and
+ * re-snapshotted forever — a quota problem and exactly the "systematically
+ * gathering response data" behaviour spec §9 is trying to minimise.
+ */
+const SNAPSHOT_PAIR_WINDOW_SECONDS = 30 * 24 * 60 * 60;
+
 export interface SweepResult {
   pairs: number;
   snapshots: number;
@@ -52,7 +62,9 @@ export async function runKrogerSweep(env: Env, client: KrogerClient = new Kroger
   const now = Math.floor(Date.now() / 1000);
 
   // Spec §6.2 — the sweep follows the watchlists: every product a device
-  // watches, at that device's store, plus every pair we already snapshot.
+  // watches, at that device's store, plus every pair we already snapshot in
+  // the last 30 days (I3 — unbounded here meant sweeping every pair ever
+  // snapshotted, forever, even for a product nobody ever watched).
   // Ordered deterministically (I2) so `selectSweepPairs` can cap and rotate.
   const { results: allPairs } = await env.DB
     .prepare(
@@ -60,9 +72,10 @@ export async function runKrogerSweep(env: Env, client: KrogerClient = new Kroger
        FROM watches w JOIN devices d ON d.id = w.device_id
        WHERE d.location_id IS NOT NULL AND d.location_id <> ''
        UNION
-       SELECT DISTINCT gtin AS gtin, location_id AS location_id FROM price_snapshots
+       SELECT DISTINCT gtin AS gtin, location_id AS location_id FROM price_snapshots WHERE observed_at >= ?
        ORDER BY location_id, gtin`
     )
+    .bind(now - SNAPSHOT_PAIR_WINDOW_SECONDS)
     .all<{ gtin: string; location_id: string }>();
   const pairs = selectSweepPairs(allPairs, now);
   result.pairs = pairs.length;

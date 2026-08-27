@@ -39,10 +39,13 @@ async function seedWatch(deviceId: string, gtin: string, alertEnabled: number = 
     .run();
 }
 
-async function seedSnapshot(gtin: string, locationId: string) {
+/** I3: the snapshot-derived half of the pair union only looks back 30 days —
+ * seed a recent observed_at by default so this stays a "sweeps snapshots we
+ * already hold" fixture rather than one that accidentally tests the window. */
+async function seedSnapshot(gtin: string, locationId: string, observedAt: number = Math.floor(Date.now() / 1000) - 3600) {
   await env.DB.prepare(
-    "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', 1700000000)"
-  ).bind(gtin, locationId).run();
+    "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', ?)"
+  ).bind(gtin, locationId, observedAt).run();
 }
 
 beforeEach(async () => {
@@ -127,5 +130,36 @@ describe("runKrogerSweep pair selection", () => {
     expect(batches).toHaveLength(1);
     expect(batches[0].locationId).toBe(LOCATION);
     expect(batches[0].ids).toHaveLength(1);
+  });
+
+  describe("I3 — snapshot-derived pairs are bounded to the last 30 days", () => {
+    const THIRTY_DAYS = 30 * 24 * 60 * 60;
+    const now = () => Math.floor(Date.now() / 1000);
+
+    it("still sweeps a snapshot from 29 days ago", async () => {
+      await seedSnapshot(GTIN_SNAPSHOT, LOCATION, now() - (THIRTY_DAYS - 3600));
+      const { client, batches } = fakeClient();
+      expect((await runKrogerSweep(on(), client)).pairs).toBe(1);
+      expect(batches).toHaveLength(1);
+    });
+
+    it("drops a snapshot from 31 days ago — a product nobody watches must not be swept forever", async () => {
+      await seedSnapshot(GTIN_SNAPSHOT, LOCATION, now() - (THIRTY_DAYS + 3600));
+      const { client, batches } = fakeClient();
+      expect((await runKrogerSweep(on(), client)).pairs).toBe(0);
+      expect(batches).toHaveLength(0);
+    });
+
+    it("the watches x devices half stays unbounded regardless of snapshot age", async () => {
+      await seedDevice("dev-1", LOCATION);
+      await seedWatch("dev-1", GTIN_WATCHED);
+      // An old snapshot for the same pair must not affect anything — the pair
+      // is already included via the watch, which has no age bound.
+      await seedSnapshot(GTIN_WATCHED, LOCATION, now() - (THIRTY_DAYS + 3600));
+
+      const { client, batches } = fakeClient();
+      expect((await runKrogerSweep(on(), client)).pairs).toBe(1);
+      expect(batches).toHaveLength(1);
+    });
   });
 });

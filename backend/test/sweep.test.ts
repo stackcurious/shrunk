@@ -36,12 +36,17 @@ function stubBatch(size: string, perUnit: number, regular = 4.0) {
   );
 }
 
+// I3: the snapshot-derived half of the pairs union only looks back 30 days —
+// every fixture below seeds a recent observed_at so a test stays about sweep
+// comparison behaviour, not accidentally about the window itself.
+const RECENT_OBSERVED_AT = () => Math.floor(Date.now() / 1000) - 3600;
+
 /** Seed the previous snapshot the sweep will compare against. */
 async function seedSnapshot(sizeRaw: string, perUnit: number) {
   await env.DB.prepare("INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'G', 'G', 'Beverages', NULL, 'volume', 1, 1)").bind(GTIN).run();
   await env.DB.prepare(
-    "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, ?, ?, 'HIGH', 1700000000)",
-  ).bind(GTIN, LOCATION, perUnit, sizeRaw).run();
+    "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, ?, ?, 'HIGH', ?)",
+  ).bind(GTIN, LOCATION, perUnit, sizeRaw, RECENT_OBSERVED_AT()).run();
 }
 
 const on = () => ({ ...env, KROGER_PERSIST: "on" as const });
@@ -108,8 +113,8 @@ describe("runKrogerSweep", () => {
     // an unchanged $4.00/32 fl oz price files nothing.
     await env.DB.prepare("INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'G', 'G', 'Beverages', NULL, 'volume', 1, 1)").bind(GTIN).run();
     await env.DB.prepare(
-      "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, NULL, '32 fl oz', 'HIGH', 1700000000)",
-    ).bind(GTIN, LOCATION).run();
+      "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, NULL, '32 fl oz', 'HIGH', ?)",
+    ).bind(GTIN, LOCATION, RECENT_OBSERVED_AT()).run();
     stubBatch("32 fl oz", 0.07, 4.0);
 
     const result = await runKrogerSweep(on());
@@ -143,7 +148,7 @@ describe("runKrogerSweep", () => {
     for (let i = 0; i < 60; i++) {
       const gtin = `00284006422${String(i).padStart(2, "0")}`;
       await env.DB.prepare("INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'x','x','x',NULL,'volume',1,1)").bind(gtin).run();
-      await env.DB.prepare("INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', 1700000000)").bind(gtin, LOCATION).run();
+      await env.DB.prepare("INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', ?)").bind(gtin, LOCATION, RECENT_OBSERVED_AT()).run();
     }
 
     const batchSizes: number[] = [];
@@ -205,9 +210,9 @@ describe("I2 — error containment and per-invocation cap", () => {
       statements.push(
         env.DB
           .prepare(
-            "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', 1700000000)",
+            "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', ?)",
           )
-          .bind(gtin, LOCATION),
+          .bind(gtin, LOCATION, RECENT_OBSERVED_AT()),
       );
     }
     for (let i = 0; i < statements.length; i += 100) {
