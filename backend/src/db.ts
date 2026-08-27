@@ -236,6 +236,37 @@ export async function setProductUnitKindIfMissing(
     .run();
 }
 
+export interface ProductLookupState {
+  /** Which path created the row — only 'lookup' rows are ours to re-fetch. */
+  origin: string;
+  /** Doubles as the "last backfill attempt" clock (`touchProduct`). */
+  updated_at: number;
+  accepted_observations: number;
+}
+
+/**
+ * Everything `/v1/product`'s size backfill needs about an existing row, in one
+ * round trip: `accepted_observations` is the same predicate
+ * `getAcceptedObservations` filters on (gtin + status='accepted', served by
+ * `obs_gtin`), counted rather than materialized because the backfill only ever
+ * asks "is it still zero?".
+ */
+export async function getProductLookupState(db: D1Database, gtin: string): Promise<ProductLookupState | null> {
+  return db
+    .prepare(
+      `SELECT origin, updated_at,
+              (SELECT COUNT(*) FROM observations o WHERE o.gtin = p.gtin AND o.status = 'accepted') AS accepted_observations
+       FROM products p WHERE p.gtin = ?`
+    )
+    .bind(gtin)
+    .first<ProductLookupState>();
+}
+
+/** Records that we tried something for this product, without changing it. */
+export async function touchProduct(db: D1Database, gtin: string, now: number): Promise<void> {
+  await db.prepare("UPDATE products SET updated_at = ? WHERE gtin = ?").bind(now, gtin).run();
+}
+
 // ---------------------------------------------------------------------------
 // Phase 4 — devices, watches (spec §5)
 // ---------------------------------------------------------------------------

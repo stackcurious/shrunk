@@ -104,7 +104,7 @@ python3 scripts/seed_curated.py --curated data/trending.json --out scripts/out/c
 cd backend && npx wrangler d1 execute shrunk --remote --file ../scripts/out/curated.sql
 npx wrangler d1 execute shrunk --remote --command "SELECT source, COUNT(*) AS n FROM observations GROUP BY source;"
 ```
-Expected: a `curated` row with roughly 70 observations alongside the `fdc` rows.
+Expected: a `curated` row with roughly 70 observations alongside the `fdc` rows (once the app is live, `kroger` and `off` rows join them — `/v1/product` records the size an on-miss FDC/OFF lookup reports, spec §1 rule 6).
 
 ---
 
