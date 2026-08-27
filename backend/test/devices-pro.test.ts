@@ -48,13 +48,18 @@ describe("POST /v1/devices — subscription verification", () => {
     await env.DB.prepare("DELETE FROM devices").run();
   });
 
-  it("sets pro_until and the lowercased app account token from a valid JWS", async () => {
+  it("sets pro_until and the lowercased app account token from a valid JWS, and never persists the JWS itself (R34)", async () => {
     const res = await postDevice(
       { device_id: DEVICE_ID, transaction_jws: await signTestJWS(chain, transaction()) },
       testEnv(chain),
     );
     expect(res.status).toBe(200);
     expect(await deviceRow()).toEqual({ pro_until: Math.floor(EXPIRES_MS / 1000), app_account_token: TOKEN });
+
+    const jwsColumn = await env.DB.prepare("SELECT transaction_jws FROM devices WHERE id = ?")
+      .bind(DEVICE_ID)
+      .first<{ transaction_jws: string | null }>();
+    expect(jwsColumn!.transaction_jws).toBeNull();
   });
 
   it("leaves an existing pro_until untouched when the JWS does not verify (spec §8)", async () => {

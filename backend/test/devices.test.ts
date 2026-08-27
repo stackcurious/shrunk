@@ -72,7 +72,7 @@ describe("POST /v1/devices", () => {
     expect(JSON.parse(row.categories)).toEqual(["Snacks", "Beverages"]);
     expect(JSON.parse(row.prefs)).toEqual({ digest: false });
     expect(row.pro_until).toBeNull();
-    expect(row.transaction_jws).toBe("aaa.bbb.ccc");   // stored raw, unverified
+    expect(row.transaction_jws).toBeNull();   // R34: verified-and-discarded, never persisted
 
     expect(await watchRows()).toEqual([
       { gtin: "0028400642255", brand: "Gatorade", alert_enabled: 1 },   // 12-digit UPC padded

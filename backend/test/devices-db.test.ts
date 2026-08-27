@@ -30,7 +30,7 @@ describe("device helpers", () => {
   });
 
   it("keeps columns the second upsert omits, and never touches pro_until", async () => {
-    await upsertDevice(env.DB, { id: DEVICE, apns_token: "aa11", location_id: "01400943", categories: ["Snacks"], transaction_jws: "a.b.c" }, 1700000000);
+    await upsertDevice(env.DB, { id: DEVICE, apns_token: "aa11", location_id: "01400943", categories: ["Snacks"] }, 1700000000);
     await env.DB.prepare("UPDATE devices SET pro_until = 1800000000 WHERE id = ?").bind(DEVICE).run();
 
     await upsertDevice(env.DB, { id: DEVICE, apns_token: "bb22" }, 1700000900);
@@ -39,7 +39,6 @@ describe("device helpers", () => {
     expect(row).toMatchObject({
       apns_token: "bb22",            // updated
       location_id: "01400943",       // preserved
-      transaction_jws: "a.b.c",      // preserved
       pro_until: 1800000000,         // Phase 4 never writes this
     });
     expect(JSON.parse(row!.categories!)).toEqual(["Snacks"]);

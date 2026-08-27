@@ -248,7 +248,6 @@ export interface DeviceRow {
   prefs: string | null;
   pro_until: number | null;
   app_account_token: string | null;
-  transaction_jws: string | null;
 }
 
 /** Every field except `id` is optional: an omitted field keeps its stored value. */
@@ -258,7 +257,6 @@ export interface DeviceUpsert {
   location_id?: string | null;
   categories?: string[] | null;
   prefs?: Record<string, boolean> | null;
-  transaction_jws?: string | null;
 }
 
 export interface WatchInput {
@@ -275,6 +273,9 @@ export interface WatchInput {
  * route's own direct `UPDATE` (`routes/appstore.ts`) that writes `pro_until`,
  * so the "an unverified sync never downgrades or clears a subscriber"
  * invariant lives here, once, via the `ON CONFLICT` `COALESCE`.
+ *
+ * devices.transaction_jws is intentionally never written since R34; a later
+ * migration drops it.
  */
 export async function upsertDevice(
   db: D1Database,
@@ -284,8 +285,8 @@ export async function upsertDevice(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, transaction_jws, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO devices (id, apns_token, location_id, categories, prefs, pro_until, app_account_token, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          apns_token        = COALESCE(excluded.apns_token, devices.apns_token),
          location_id       = COALESCE(excluded.location_id, devices.location_id),
@@ -293,7 +294,6 @@ export async function upsertDevice(
          prefs             = COALESCE(excluded.prefs, devices.prefs),
          pro_until         = COALESCE(excluded.pro_until, devices.pro_until),
          app_account_token = COALESCE(excluded.app_account_token, devices.app_account_token),
-         transaction_jws   = COALESCE(excluded.transaction_jws, devices.transaction_jws),
          updated_at        = excluded.updated_at`
     )
     .bind(
@@ -304,7 +304,6 @@ export async function upsertDevice(
       row.prefs ? JSON.stringify(row.prefs) : null,
       verified?.proUntil ?? null,
       verified?.appAccountToken ?? null,
-      row.transaction_jws ?? null,
       now
     )
     .run();
@@ -313,7 +312,7 @@ export async function upsertDevice(
 export async function getDevice(db: D1Database, id: string): Promise<DeviceRow | null> {
   return db
     .prepare(
-      "SELECT id, apns_token, location_id, categories, prefs, pro_until, app_account_token, transaction_jws FROM devices WHERE id = ?"
+      "SELECT id, apns_token, location_id, categories, prefs, pro_until, app_account_token FROM devices WHERE id = ?"
     )
     .bind(id)
     .first<DeviceRow>();

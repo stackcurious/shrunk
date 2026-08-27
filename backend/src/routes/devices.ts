@@ -54,7 +54,6 @@ devicesRoute.post("/v1/devices", async (c) => {
       location_id: text(body.location_id, 32),
       categories: categories(body.categories),
       prefs: prefs(body.prefs),
-      transaction_jws: transactionJws,
     },
     now,
     verified
