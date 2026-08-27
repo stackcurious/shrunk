@@ -70,40 +70,63 @@ describe("runKrogerSweep", () => {
     expect(await jobKinds()).toEqual([]);
   });
 
-  it("files a size_drop when the package shrank", async () => {
+  it("files a size_drop, and I1: the real per-unit price rise from that shrink also files a price_hike", async () => {
+    // Same $4.00 shelf price, 32 fl oz -> 28 fl oz is a genuine ~14.3%
+    // per-unit price increase (I1: computed from OUR price/quantity, not
+    // Kroger's estimate) — the sweep should catch it as both event kinds.
     await seedSnapshot("32 fl oz", 2.0);
     stubBatch("28 fl oz", 2.0);
 
     const result = await runKrogerSweep(on());
-    expect(result).toMatchObject({ pairs: 1, snapshots: 1, sizeDrops: 1, priceHikes: 0 });
-    expect(await jobKinds()).toEqual(["size_drop"]);
+    expect(result).toMatchObject({ pairs: 1, snapshots: 1, sizeDrops: 1, priceHikes: 1 });
+    expect(await jobKinds()).toEqual(["size_drop", "price_hike"]);
 
-    const job = await env.DB.prepare("SELECT gtin, location_id, payload FROM alert_jobs").first<any>();
+    const job = await env.DB.prepare("SELECT gtin, location_id, payload FROM alert_jobs WHERE kind = 'size_drop'").first<any>();
     expect(job.gtin).toBe(GTIN);
     expect(job.location_id).toBe(LOCATION);
     expect(JSON.parse(job.payload)).toEqual({ previous_size: "32 fl oz", size: "28 fl oz" });
   });
 
-  it("ignores a +4.9% per-unit price move", async () => {
-    await seedSnapshot("32 fl oz", 2.0);
-    stubBatch("32 fl oz", 2.098);
+  it("ignores a +4.9% per-unit price move at a fixed size", async () => {
+    // "1000 g" (metric, no oz/lb conversion factor) keeps the ratio exact —
+    // "32 fl oz" -> mL involves an irrational constant whose float rounding
+    // can land a hair below a razor's-edge threshold.
+    await seedSnapshot("1000 g", 2.0);
+    stubBatch("1000 g", 2.0, 4.196);
 
     const result = await runKrogerSweep(on());
     expect(result).toMatchObject({ sizeDrops: 0, priceHikes: 0 });
     expect(await jobKinds()).toEqual([]);
   });
 
-  it("files a price_hike at exactly +5%", async () => {
-    await seedSnapshot("32 fl oz", 2.0);
-    stubBatch("32 fl oz", 2.1);
+  it("I1: never compares Kroger's per_unit_estimate — a null-then-positive estimate files no alert", async () => {
+    // The previous snapshot has no per_unit_estimate (Kroger omits it per-item,
+    // not per-product); the new one has a large positive estimate in Kroger's
+    // own unit ($/fl oz). Comparing per_unit_estimate directly against our own
+    // price/quantity space would read as a ~1550% "price_hike". Both sides
+    // must be computed the same way (our price ÷ our normalized quantity), so
+    // an unchanged $4.00/32 fl oz price files nothing.
+    await env.DB.prepare("INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'G', 'G', 'Beverages', NULL, 'volume', 1, 1)").bind(GTIN).run();
+    await env.DB.prepare(
+      "INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, NULL, '32 fl oz', 'HIGH', 1700000000)",
+    ).bind(GTIN, LOCATION).run();
+    stubBatch("32 fl oz", 0.07, 4.0);
+
+    const result = await runKrogerSweep(on());
+    expect(result).toMatchObject({ sizeDrops: 0, priceHikes: 0 });
+    expect(await jobKinds()).toEqual([]);
+  });
+
+  it("files a price_hike at exactly +5% (real price, at a fixed size)", async () => {
+    await seedSnapshot("1000 g", 2.0);
+    stubBatch("1000 g", 2.0, 4.2);
 
     const result = await runKrogerSweep(on());
     expect(result).toMatchObject({ sizeDrops: 0, priceHikes: 1 });
     expect(await jobKinds()).toEqual(["price_hike"]);
-    expect(JSON.parse((await env.DB.prepare("SELECT payload FROM alert_jobs").first<any>()).payload)).toEqual({
-      previous_per_unit: 2.0,
-      per_unit: 2.1,
-    });
+    const payload = JSON.parse((await env.DB.prepare("SELECT payload FROM alert_jobs").first<any>()).payload);
+    expect(payload.previous_per_unit).toBeCloseTo(4.0 / 1000, 8);
+    expect(payload.per_unit).toBeCloseTo(4.2 / 1000, 8);
   });
 
   it("writes a fresh snapshot on every pass", async () => {
@@ -153,7 +176,9 @@ describe("worker.scheduled", () => {
     await worker.scheduled({ cron: "0 */6 * * *", scheduledTime: Date.now() } as ScheduledController, on(), ctx);
     await waitOnExecutionContext(ctx);
 
-    expect(await jobKinds()).toEqual(["size_drop"]);
+    // I1: the same shrink (§32 fl oz -> 28 fl oz at an unchanged $4.00) is
+    // also a genuine ~14.3% real per-unit price rise.
+    expect(await jobKinds()).toEqual(["size_drop", "price_hike"]);
   });
 
   it("does nothing for an unrelated cron string", async () => {

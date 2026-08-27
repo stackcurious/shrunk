@@ -61,14 +61,23 @@ export async function persistKrogerProduct(
     .run();
 }
 
-/** Comparable $/unit for one snapshot row, or null when we cannot derive one. */
+/**
+ * Comparable $/unit for one snapshot row, or null when we cannot derive one.
+ *
+ * I1: always OUR price/quantity space — never Kroger's `per_unit_estimate`.
+ * Kroger's estimate is in Kroger's own unit ($/fl oz, $/lb) and is supplied
+ * per-item, not per-product, so it can be present on one snapshot and absent
+ * on the next for the same pair. Comparing it directly against our own
+ * price/quantity (or against itself across a unit change) produces false
+ * multi-hundred-percent "price_hike" alerts. It stays display-only —
+ * `LiveProduct.per_unit_estimate` is what the app renders.
+ */
 export function snapshotPerUnit(row: {
   regular: number | null;
   promo: number | null;
   per_unit_estimate: number | null;
   size_raw: string | null;
 }): number | null {
-  if (row.per_unit_estimate !== null && row.per_unit_estimate > 0) return row.per_unit_estimate;
   const price = row.promo !== null && row.promo > 0 ? row.promo : row.regular;
   if (price === null || price <= 0) return null;
   const parsed = row.size_raw ? parsePackageWeight(row.size_raw) : null;

@@ -111,11 +111,13 @@ describe("KROGER_PERSIST", () => {
 });
 
 describe("snapshotPerUnit", () => {
-  it("prefers Kroger's estimate", () => {
-    expect(snapshotPerUnit({ regular: 1.89, promo: null, per_unit_estimate: 0.07, size_raw: "28 fl oz" })).toBe(0.07);
-  });
-
-  it("falls back to effective price over parsed quantity", () => {
+  // I1: comparisons must live in one unit space — Kroger's per_unit_estimate
+  // is that store's own unit ($/fl oz, $/lb) and is display-only (kept in
+  // LiveProduct.per_unit_estimate); this function always computes OUR
+  // price/quantity so `before` and `after` are directly comparable even when
+  // Kroger supplies an estimate on only one of the two calls.
+  it("always computes effective price over our parsed quantity, ignoring per_unit_estimate", () => {
+    expect(snapshotPerUnit({ regular: 1.89, promo: null, per_unit_estimate: 0.07, size_raw: "28 fl oz" })).toBeCloseTo(1.89 / 828.058, 8);
     expect(snapshotPerUnit({ regular: 1.89, promo: 1.5, per_unit_estimate: null, size_raw: "28 fl oz" })).toBeCloseTo(1.5 / 828.058, 8);
   });
 
