@@ -27,12 +27,15 @@ struct SettingsView: View {
                             showNotificationPrefs = true
                         }
                     }
-                    sectionGroup(title: "Data", subtitle: "Shrunk has no relationship with any brand or manufacturer. Size and price data comes from USDA FoodData Central, Kroger, and shoppers like you. Open Food Facts is credited below for product names and images.") {
-                        SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts", isLink: true) {
-                            if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
+                    sectionGroup(title: "Data sources", subtitle: "Shrunk has no relationship with any brand or manufacturer. Size history comes from the USDA's public FoodData Central dataset, from shoppers' label photos, and from Kroger.") {
+                        SettingsRow(icon: "building.columns.fill", iconTint: .verdictGood, label: "USDA FoodData Central", isLink: true) {
+                            if let url = URL(string: "https://fdc.nal.usda.gov") { openURL(url) }
                         }
-                        SettingsRow(icon: "plus.circle.fill", iconTint: .verdictGood, label: "Contribute a product", isLink: true) {
-                            if let url = URL(string: "https://world.openfoodfacts.org/contribute") { openURL(url) }
+                        SettingsRow(icon: "cart.fill", iconTint: .verdictGood, label: "Prices from Kroger", isLink: true) {
+                            if let url = URL(string: "https://www.kroger.com") { openURL(url) }
+                        }
+                        SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts (ODbL)", isLink: true) {
+                            if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
                         }
                         SettingsRow(icon: "trash.fill", iconTint: .smoke, label: "Clear scan history") {
                             UserDefaults.standard.removeObject(forKey: "shrunk.recent_barcodes")
@@ -40,6 +43,7 @@ struct SettingsView: View {
                     }
                     sectionGroup(title: "About", subtitle: nil) {
                         SettingsValueRow(icon: "info.circle.fill", iconTint: .smoke, label: "Version", value: versionString)
+                        SettingsValueRow(icon: "number", iconTint: .smoke, label: "Device ID", value: String(DeviceIdentity.current.prefix(8)))
                         SettingsRow(icon: "hand.raised.fill", iconTint: .smoke, label: "Privacy policy", isLink: true) {
                             if let url = URL(string: "https://stackcurious.com/shrunk/privacy") { openURL(url) }
                         }
