@@ -9,47 +9,33 @@ struct CategoryDetailView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: ShrunkTheme.Spacing.lg) {
-                    header
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                        .padding(.top, ShrunkTheme.Spacing.md)
-
-                    if records.isEmpty {
-                        emptyState
-                            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                            .padding(.top, ShrunkTheme.Spacing.xl)
-                    } else {
-                        VStack(spacing: 8) {
-                            ForEach(Array(records.enumerated()), id: \.element.product.id) { idx, record in
-                                Button {
-                                    onSelectRecord(record)
-                                } label: {
-                                    ShameRow(rank: idx + 1, record: record)
-                                }
-                                .buttonStyle(.plain)
-                            }
+            Group {
+                if records.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView {
+                        VStack(spacing: 16) {
+                            header
+                            rows
                         }
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
+                        .padding(.bottom, 32)
                     }
                 }
-                .padding(.bottom, ShrunkTheme.Spacing.xl)
             }
-            .scrollIndicators(.hidden)
-            .background(Color.paper.ignoresSafeArea())
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(category.rawValue)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .heavy))
-                            .foregroundStyle(Color.ink)
-                            .frame(width: 32, height: 32)
-                            .background(Color.mist)
-                            .clipShape(Circle())
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
+                    .accessibilityLabel("Close")
                 }
             }
         }
@@ -58,26 +44,17 @@ struct CategoryDetailView: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(Color.shrunkRedLight)
-                    .frame(width: 80, height: 80)
-                Image(systemName: category.icon)
-                    .font(.system(size: 34, weight: .semibold))
-                    .foregroundStyle(Color.shrunkRed)
-            }
-            VStack(spacing: 4) {
-                Text(category.rawValue)
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
-                Text(summarySubtitle)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-            }
+        VStack(spacing: 10) {
+            Image(systemName: category.icon)
+                .font(.largeTitle)
+                .foregroundStyle(Color.shrunkRed)
+            Text(summarySubtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
 
     private var summarySubtitle: String {
@@ -89,31 +66,31 @@ struct CategoryDetailView: View {
         return "\(records.count) tracked case\(records.count == 1 ? "" : "s") · avg \(avgPctString) shrink"
     }
 
+    private var rows: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(records.enumerated()), id: \.element.product.id) { idx, record in
+                Button {
+                    onSelectRecord(record)
+                } label: {
+                    ShameRow(rank: idx + 1, record: record)
+                }
+                .buttonStyle(.plain)
+                if idx < records.count - 1 {
+                    Divider().padding(.leading, 68)
+                }
+            }
+        }
+        .background(Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     // MARK: - Empty state
 
     private var emptyState: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(Color.mist)
-                    .frame(width: 120, height: 120)
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.system(size: 46, weight: .light))
-                    .foregroundStyle(Color.smokeSoft)
-            }
-            VStack(spacing: 8) {
-                Text("Nothing tracked here yet")
-                    .font(.shrunkTitle)
-                    .foregroundStyle(Color.ink)
-                    .multilineTextAlignment(.center)
-                Text("We haven't documented shrinkflation in \(category.rawValue.lowercased()) yet. Scan a product in this category and we'll start tracking.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-                    .padding(.horizontal, ShrunkTheme.Spacing.md)
-            }
+        ContentUnavailableView {
+            Label("Nothing tracked here yet", systemImage: "doc.text.magnifyingglass")
+        } description: {
+            Text("We haven't documented shrinkflation in \(category.rawValue.lowercased()) yet. Scan a product in this category and we'll start tracking.")
         }
-        .frame(maxWidth: .infinity)
     }
 }

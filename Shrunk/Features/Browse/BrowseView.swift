@@ -7,27 +7,34 @@ struct BrowseView: View {
     @State private var presentedCategory: BrowseViewModel.BrowseCategory?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.lg) {
-                ShrunkPageHeader(title: "Browse", subtitle: subtitle)
-                switch vm.loadState {
-                case .loading where vm.trending.isEmpty:
-                    loadingPlaceholder
-                case .error(let message) where vm.trending.isEmpty:
-                    errorPlaceholder(message: message)
-                default:
-                    trendingSection
-                    categoriesSection
-                    hallOfShameSection
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 20)
+
+                    switch vm.loadState {
+                    case .loading where vm.trending.isEmpty:
+                        loadingPlaceholder
+                    case .error(let message) where vm.trending.isEmpty:
+                        errorPlaceholder(message: message)
+                    default:
+                        trendingSection
+                        categoriesSection
+                        hallOfShameSection
+                    }
                 }
+                .padding(.top, 4)
+                .padding(.bottom, 24)
             }
-            .padding(.bottom, 100)   // clearance for translucent tab bar
+            .refreshable {
+                await vm.refresh()
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Browse")
         }
-        .scrollIndicators(.hidden)
-        .refreshable {
-            await vm.refresh()
-        }
-        .background(Color.paper.ignoresSafeArea())
         .onAppear { vm.bootstrap() }
         .sheet(item: $presentedRecord) { record in
             ResultView(prebakedProduct: record.product, prebakedRecord: record)
@@ -63,74 +70,32 @@ struct BrowseView: View {
     }
 
     private var loadingPlaceholder: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            ProgressView().controlSize(.regular).tint(Color.shrunkRed)
+        VStack(spacing: 12) {
+            ProgressView()
             Text("Loading the latest shrinkflation cases…")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.smoke)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, ShrunkTheme.Spacing.xxl)
+        .padding(.vertical, 48)
     }
 
     private func errorPlaceholder(message: String) -> some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(Color.shrunkRedLight)
-                    .frame(width: 80, height: 80)
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.system(size: 32, weight: .regular))
-                    .foregroundStyle(Color.shrunkRed)
-            }
-            Text("Can't reach the feed")
-                .font(.shrunkTitle)
-                .foregroundStyle(Color.ink)
+        ContentUnavailableView {
+            Label("Can't reach the feed", systemImage: "wifi.exclamationmark")
+        } description: {
             Text(message)
-                .font(.shrunkBody)
-                .foregroundStyle(Color.smoke)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, ShrunkTheme.Spacing.xxl)
-    }
-
-    // MARK: - Header strip
-
-    private var headerStrip: some View {
-        HStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(Color.shrunkRedLight)
-                    .frame(width: 52, height: 52)
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color.shrunkRed)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Hall of fame for sneaky brands")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.ink)
-                Text("Cases people are talking about, with the receipts.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 0)
-        }
-        .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
-        .padding(.horizontal, ShrunkTheme.Spacing.lg)
     }
 
     // MARK: - Trending
 
     private var trendingSection: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionHeader(title: "Trending shrinks", subtitle: "Tap any to see the receipts")
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                .padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: ShrunkTheme.Spacing.md) {
+                HStack(spacing: 12) {
                     ForEach(vm.trending, id: \.product.id) { record in
                         Button {
                             presentedRecord = record
@@ -140,8 +105,8 @@ struct BrowseView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                .padding(.vertical, 4)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 2)
             }
         }
     }
@@ -149,9 +114,9 @@ struct BrowseView: View {
     // MARK: - Categories
 
     private var categoriesSection: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionHeader(title: "Categories", subtitle: nil)
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                .padding(.horizontal, 20)
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
                 spacing: 10
@@ -165,37 +130,41 @@ struct BrowseView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
         }
     }
 
     // MARK: - Hall of shame
 
     private var hallOfShameSection: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionHeader(title: "Hall of shame", subtitle: "Worst offenders, ranked")
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            VStack(spacing: 8) {
+                .padding(.horizontal, 20)
+            VStack(spacing: 0) {
                 ForEach(Array(vm.hallOfShame.enumerated()), id: \.element.product.id) { idx, record in
                     Button { presentedRecord = record } label: {
                         ShameRow(rank: idx + 1, record: record)
                     }
                     .buttonStyle(.plain)
+                    if idx < vm.hallOfShame.count - 1 {
+                        Divider().padding(.leading, 68)
+                    }
                 }
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .background(Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 20)
         }
     }
 
     private func sectionHeader(title: String, subtitle: String?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 1) {
             Text(title)
-                .font(.shrunkTitle)
-                .foregroundStyle(Color.ink)
+                .font(.title3.bold())
             if let subtitle {
                 Text(subtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color.smoke)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -214,36 +183,29 @@ private struct TrendingCard: View {
                 size: .compact
             )
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(record.product.category.uppercased())
-                    .font(.system(size: 9, weight: .heavy))
-                    .tracking(0.8)
-                    .foregroundStyle(Color.smoke)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(record.product.category)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
                 Text(record.product.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.subheadline.weight(.medium))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 if let prev = record.previousSize, let curr = record.currentSize {
                     Text("\(prev.quantity.formattedQuantity(unit: prev.unit)) → \(curr.quantity.formattedQuantity(unit: curr.unit))")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Color.smoke)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             ProductImage(url: record.product.imageURL, size: 56, cornerRadius: 10)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, ShrunkTheme.Spacing.md)
+        .padding(14)
         .frame(width: 320, height: 132)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.card)
+        .background(Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -255,32 +217,22 @@ private struct CategoryTile: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.shrunkRedLight)
-                    .frame(width: 44, height: 44)
-                Image(systemName: category.icon)
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(Color.shrunkRed)
-            }
+            Image(systemName: category.icon)
+                .font(.title2)
+                .foregroundStyle(Color.shrunkRed)
+                .frame(height: 30)
             Text(category.rawValue)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.ink)
+                .font(.subheadline.weight(.medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
             Text(count == 0 ? "Tap to scan" : "\(count) case\(count == 1 ? "" : "s")")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(Color.smoke)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
+        .background(Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -291,64 +243,36 @@ struct ShameRow: View {
     let record: ShrinkRecord
 
     var body: some View {
-        HStack(alignment: .center, spacing: ShrunkTheme.Spacing.md) {
-            rankBadge
+        HStack(alignment: .center, spacing: 12) {
+            Text("\(rank)")
+                .font(.footnote.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(rank <= 3 ? Color.shrunkRed : Color.secondary)
+                .frame(width: 20, alignment: .center)
 
             ProductImage(url: record.product.imageURL, size: 44, cornerRadius: 8)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text(record.product.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.ink)
+                    .font(.subheadline)
                     .lineLimit(1)
                 if let prev = record.previousSize, let curr = record.currentSize {
                     Text("\(prev.quantity.formattedQuantity(unit: prev.unit)) → \(curr.quantity.formattedQuantity(unit: curr.unit))")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Color.smoke)
+                        .font(.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
             }
-            Spacer()
+            Spacer(minLength: 8)
 
             Text(record.shrinkPercent.formattedPercentChange(decimals: 1))
-                .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
                 .foregroundStyle(Color.shrunkRedDark)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color.shrunkRedLight)
-                .clipShape(Capsule())
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .background(Color.surface)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
-        .shrunkElevation(ShrunkTheme.Elevation.whisper)
-    }
-
-    @ViewBuilder
-    private var rankBadge: some View {
-        if rank <= 3 {
-            ZStack {
-                Circle()
-                    .fill(LinearGradient.shrunkRedDiagonal)
-                    .frame(width: 38, height: 38)
-                Text("#\(rank)")
-                    .font(.system(size: 14, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-            }
-            .shrunkElevation(ShrunkTheme.Elevation.whisper)
-        } else {
-            ZStack {
-                Circle()
-                    .fill(Color.mist)
-                    .frame(width: 38, height: 38)
-                Text("#\(rank)")
-                    .font(.system(size: 13, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color.smoke)
-            }
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 }
 

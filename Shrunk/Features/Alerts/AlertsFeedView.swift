@@ -17,16 +17,19 @@ struct AlertsFeedView: View {
     @AppStorage("shrunk.onboarding_profile") private var rawProfile: String = "{}"
 
     var body: some View {
-        Group {
-            if !storeKit.isProUser {
-                proGate
-            } else if alerts.isEmpty {
-                emptyState
-            } else {
-                feed
+        NavigationStack {
+            Group {
+                if !storeKit.isProUser {
+                    proGate
+                } else if alerts.isEmpty {
+                    emptyState
+                } else {
+                    feed
+                }
             }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Alerts")
         }
-        .background(Color.paper.ignoresSafeArea())
         .task {
             if vm == nil {
                 vm = AlertsViewModel(context: modelContext)
@@ -49,26 +52,27 @@ struct AlertsFeedView: View {
     // MARK: - Feed
 
     private var feed: some View {
-        ScrollView {
-            VStack(spacing: ShrunkTheme.Spacing.lg) {
-                ShrunkPageHeader(title: "Alerts", subtitle: "What we caught while you weren't looking")
-                savingsHero
-                filterChips
-                VStack(spacing: 8) {
-                    ForEach(visibleAlerts) { alert in
-                        AlertRow(alert: alert) {
-                            vm?.markRead(alert)
-                            if !alert.barcode.isEmpty {
-                                vm?.presentedBarcode = alert.barcode
-                            }
+        List {
+            Section {
+                savingsRow
+            } footer: {
+                Text("What we caught while you weren't looking.")
+            }
+
+            Section {
+                ForEach(visibleAlerts) { alert in
+                    AlertRow(alert: alert) {
+                        vm?.markRead(alert)
+                        if !alert.barcode.isEmpty {
+                            vm?.presentedBarcode = alert.barcode
                         }
                     }
                 }
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            } header: {
+                filterPicker
             }
-            .padding(.bottom, 100)
         }
-        .scrollIndicators(.hidden)
+        .listStyle(.insetGrouped)
     }
 
     private var visibleAlerts: [ShrinkAlert] {
@@ -76,7 +80,21 @@ struct AlertsFeedView: View {
         return vm.filtered(alerts)
     }
 
-    private var savingsHero: some View {
+    private var filterPicker: some View {
+        Picker("Filter alerts", selection: Binding(
+            get: { vm?.selectedFilter ?? .all },
+            set: { vm?.selectedFilter = $0 }
+        )) {
+            ForEach(AlertsViewModel.Filter.allCases) { filter in
+                Text(filter.rawValue).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .textCase(nil)
+        .padding(.bottom, 6)
+    }
+
+    private var savingsRow: some View {
         let ledger = SavingsLedger.build(
             alerts: alerts,
             watchlist: watchlist,
@@ -85,38 +103,30 @@ struct AlertsFeedView: View {
         return Button {
             showDashboard = true
         } label: {
-            HStack(alignment: .center, spacing: ShrunkTheme.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(.white.opacity(0.18))
-                        .frame(width: 56, height: 56)
-                    Image(systemName: "shield.checkered")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(savingsHeadline(ledger: ledger))
-                        .font(.system(size: 16, weight: .heavy))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                    Text(ledger.entries.isEmpty
-                        ? "Tap to see how the math works"
-                        : "Tap for the full breakdown")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                }
-                Spacer()
+            LabeledContent {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "shield.checkered")
+                        .font(.title3)
+                        .foregroundStyle(Color.verdictGood)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(savingsHeadline(ledger: ledger))
+                            .font(.headline)
+                            .lineLimit(2)
+                        Text(ledger.entries.isEmpty
+                            ? "Tap to see how the math works"
+                            : "Tap for the full breakdown")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
-            .padding(ShrunkTheme.Spacing.md)
-            .background(LinearGradient.verdictGoodDiagonal)
-            .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-            .shrunkElevation(ShrunkTheme.Elevation.card)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, ShrunkTheme.Spacing.lg)
     }
 
     private func savingsHeadline(ledger: SavingsLedger) -> String {
@@ -126,93 +136,27 @@ struct AlertsFeedView: View {
         return "Watching for sneaky shrinkflation"
     }
 
-    private var filterChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(AlertsViewModel.Filter.allCases) { filter in
-                    Button {
-                        vm?.selectedFilter = filter
-                    } label: {
-                        Text(filter.rawValue)
-                            .font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(vm?.selectedFilter == filter ? Color.shrunkRed : Color.surface)
-                            .foregroundStyle(vm?.selectedFilter == filter ? Color.white : Color.inkSubtle)
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(vm?.selectedFilter == filter ? Color.clear : Color.borderSoft,
-                                            lineWidth: 0.5)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-        }
-    }
-
     // MARK: - Empty / gate
 
     private var emptyState: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(Color.verdictGoodTint)
-                    .frame(width: 120, height: 120)
-                Image(systemName: "bell")
-                    .font(.system(size: 50, weight: .light))
-                    .foregroundStyle(Color.verdictGood)
-            }
-            VStack(spacing: 8) {
-                Text("No alerts yet")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
-                Text("Add products to your Watchlist from any scan result. We'll alert you the moment one shrinks.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                    .lineSpacing(2)
-            }
-            Spacer()
+        ContentUnavailableView {
+            Label("No alerts yet", systemImage: "bell")
+        } description: {
+            Text("Add products to your Watchlist from any scan result. We'll alert you the moment one shrinks.")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var proGate: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(LinearGradient.shrunkRedDiagonal)
-                    .frame(width: 110, height: 110)
-                    .shrunkElevation(ShrunkTheme.Elevation.float)
-                Image(systemName: "shield.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(.white)
-            }
-            VStack(spacing: 8) {
-                Text("Real-time protection")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
-                    .multilineTextAlignment(.center)
-                Text("Get notified the second any watched product shrinks. We do the watching, you keep your money.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                    .lineSpacing(2)
-            }
-            ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
+        ContentUnavailableView {
+            Label("Real-time protection", systemImage: "shield.fill")
+        } description: {
+            Text("Get notified the second any watched product shrinks. We do the watching, you keep your money.")
+        } actions: {
+            Button("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")") {
                 showPaywall = true
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.top, ShrunkTheme.Spacing.sm)
-            Spacer()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

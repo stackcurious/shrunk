@@ -15,16 +15,19 @@ struct WatchlistView: View {
     @State private var toastMessage: String?
 
     var body: some View {
-        Group {
-            if !storeKit.isProUser {
-                proGateView
-            } else if watched.isEmpty {
-                emptyStateView
-            } else {
-                listView
+        NavigationStack {
+            Group {
+                if !storeKit.isProUser {
+                    proGateView
+                } else if watched.isEmpty {
+                    emptyStateView
+                } else {
+                    listView
+                }
             }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Watchlist")
         }
-        .background(Color.paper.ignoresSafeArea())
         .overlay(alignment: .bottom) {
             if let toastMessage {
                 Toast(message: toastMessage)
@@ -86,31 +89,53 @@ struct WatchlistView: View {
     // MARK: - List
 
     private var listView: some View {
-        ScrollView {
-            VStack(spacing: ShrunkTheme.Spacing.lg) {
-                ShrunkPageHeader(title: "Watchlist", subtitle: "Background-checked daily")
-                heroStrip
-                VStack(spacing: 8) {
-                    ForEach(watched) { item in
-                        WatchlistRow(
-                            watched: item,
-                            onTap: { vm?.presentedBarcode = item.barcode },
-                            onToggleAlert: { vm?.toggleAlert(for: item) }
-                        )
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingRemoval = item
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
+        List {
+            Section {
+                Button {
+                    showDashboard = true
+                } label: {
+                    LabeledContent {
+                        if vm?.isRefreshing == true {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(watched.count) watched")
+                                .font(.headline)
+                                .monospacedDigit()
+                            Text(vm?.isRefreshing == true ? "Checking now…" : "Tap to see your savings")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                .buttonStyle(.plain)
             }
-            .padding(.bottom, 100)
+
+            Section {
+                ForEach(watched) { item in
+                    WatchlistRow(
+                        watched: item,
+                        onTap: { vm?.presentedBarcode = item.barcode },
+                        onToggleAlert: { vm?.toggleAlert(for: item) }
+                    )
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            pendingRemoval = item
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                        }
+                    }
+                }
+            } footer: {
+                Text("Background-checked daily.")
+            }
         }
-        .scrollIndicators(.hidden)
+        .listStyle(.insetGrouped)
         .refreshable {
             guard let vm else { return }
             let detected = await vm.refresh()
@@ -122,102 +147,25 @@ struct WatchlistView: View {
         }
     }
 
-    private var heroStrip: some View {
-        Button {
-            showDashboard = true
-        } label: {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient.shrunkRedDiagonal)
-                        .frame(width: 64, height: 64)
-                    Image(systemName: "bell.badge.fill")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .shrunkElevation(ShrunkTheme.Elevation.card)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(watched.count) watched")
-                        .font(.shrunkTitle)
-                        .foregroundStyle(Color.ink)
-                    Text(vm?.isRefreshing == true ? "Checking now…" : "Tap to see your savings")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smoke)
-                }
-                Spacer()
-                if vm?.isRefreshing == true {
-                    ProgressView().controlSize(.regular).tint(Color.shrunkRed)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(Color.smokeSoft)
-                }
-            }
-            .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, ShrunkTheme.Spacing.lg)
-    }
-
     private var emptyStateView: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(Color.shrunkRedLight)
-                    .frame(width: 120, height: 120)
-                Image(systemName: "bell.badge")
-                    .font(.system(size: 50, weight: .light))
-                    .foregroundStyle(Color.shrunkRed)
-            }
-            VStack(spacing: 8) {
-                Text("Nothing watched yet")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
-                Text("Watch products from any scan result. We'll alert you the moment one shrinks.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                    .lineSpacing(2)
-            }
-            Spacer()
+        ContentUnavailableView {
+            Label("Nothing watched yet", systemImage: "eye.slash")
+        } description: {
+            Text("Watch products from any scan result. We'll alert you the moment one shrinks.")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var proGateView: some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(LinearGradient.shrunkRedDiagonal)
-                    .frame(width: 110, height: 110)
-                    .shrunkElevation(ShrunkTheme.Elevation.float)
-                Image(systemName: "bell.badge.fill")
-                    .font(.system(size: 44, weight: .regular))
-                    .foregroundStyle(.white)
-            }
-            VStack(spacing: 8) {
-                Text("Watching is a Pro feature")
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
-                    .multilineTextAlignment(.center)
-                Text("Watch any product. We check Kroger in the background and alert you the moment it shrinks.")
-                    .font(.shrunkBody)
-                    .foregroundStyle(Color.smoke)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                    .lineSpacing(2)
-            }
-            ShrunkButton("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")", icon: "lock.open.fill") {
+        ContentUnavailableView {
+            Label("Watching is a Pro feature", systemImage: "bell.badge")
+        } description: {
+            Text("Watch any product. We check Kroger in the background and alert you the moment it shrinks.")
+        } actions: {
+            Button("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")") {
                 showPaywall = true
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.top, ShrunkTheme.Spacing.sm)
-            Spacer()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

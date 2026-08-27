@@ -1,66 +1,42 @@
 import SwiftUI
 
+/// One inset-grouped list cell: status glyph, product, and the per-product
+/// alert `Toggle`. The row is a plain `HStack` rather than a `Button` so the
+/// toggle keeps its own hit target — the tap target for opening the product is
+/// the rest of the cell.
 struct WatchlistRow: View {
     let watched: WatchedProduct
     let onTap: () -> Void
     let onToggleAlert: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: ShrunkTheme.Spacing.md) {
-                statusGlyph
+        HStack(spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: watched.alertEnabled ? "bell.fill" : "bell.slash.fill")
+                    .font(.body)
+                    .foregroundStyle(watched.alertEnabled ? Color.verdictGood : Color.secondary)
+                    .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(watched.productName)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.ink)
+                        .font(.body)
                         .lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(watched.lastKnownSize.formattedQuantity(unit: watched.lastKnownUnit))
-                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color.inkSubtle)
-                        Text("·")
-                            .foregroundStyle(Color.smokeSoft)
-                        Text(daysAgoText)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.smoke)
-                    }
+                    Text("\(watched.lastKnownSize.formattedQuantity(unit: watched.lastKnownUnit)) · \(daysAgoText)")
+                        .font(.footnote)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
-
-                Spacer()
-
-                Toggle("", isOn: Binding(
-                    get: { watched.alertEnabled },
-                    set: { _ in onToggleAlert() }
-                ))
-                .labelsHidden()
-                .tint(Color.shrunkRed)
+                Spacer(minLength: 8)
             }
-            .padding(ShrunkTheme.Spacing.md)
-            .background(Color.surface)
-            .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: ShrunkTheme.Radius.lg, style: .continuous)
-                    .stroke(Color.borderSoft, lineWidth: 0.5)
-            )
-            .shrunkElevation(ShrunkTheme.Elevation.whisper)
-        }
-        .buttonStyle(.plain)
-    }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
 
-    private var statusGlyph: some View {
-        ZStack {
-            Circle()
-                .fill(statusColor.opacity(0.14))
-                .frame(width: 40, height: 40)
-            Image(systemName: watched.alertEnabled ? "bell.fill" : "bell.slash.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(statusColor)
+            Toggle("Alerts for \(watched.productName)", isOn: Binding(
+                get: { watched.alertEnabled },
+                set: { _ in onToggleAlert() }
+            ))
+            .labelsHidden()
         }
-    }
-
-    private var statusColor: Color {
-        watched.alertEnabled ? .verdictGood : .smoke
     }
 
     private var daysAgoText: String {
