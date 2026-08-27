@@ -211,4 +211,31 @@ final class NetContentParserTests: XCTestCase {
         XCTAssertEqual(parsed?.quantity ?? 0, 12, accuracy: 0.01)
         XCTAssertEqual(parsed?.unitKind, .count)
     }
+
+    // MARK: - R46: leading-count alias table matches normalize.ts/.py
+    //
+    // The R45 leading-count check used to recognise only `ct`/`pk`/`pack`
+    // via a hardcoded regex, while the TS/Python mirrors accept the full
+    // `units` count-alias set (`ea`, `each`, `h87`, `pc`, `pcs`, `piece`,
+    // `pieces`, plus `ct`/`pk`/`pack`) by delegating to their own
+    // `parseSegment`. Swift now delegates the same way, so it can't drift
+    // from the unit table again.
+
+    func test_multipack_leadingEaSegment() {
+        // Same 12-pack of 12 fl oz cans, spelled with the GS1 "ea" alias
+        // instead of "ct" — must yield the identical whole-pack total.
+        let parsed = NetContentParser.parse("12 ea / 12 fl oz")
+        XCTAssertEqual(parsed?.quantity ?? 0, 4258.584, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .volume)
+    }
+
+    func test_multipack_zeroLeadingCount_fallsBackToTheRemainingSegment() {
+        // A leading "0 ct" is not a zero-size package and not a multipack
+        // lead at all (mirrors normalize.ts's `factor > 0` gate) — it falls
+        // through to the general parser, which drops the unparseable "0 ct"
+        // segment (zero quantity) and reads the string as plain "12 fl oz".
+        let parsed = NetContentParser.parse("0 ct / 12 fl oz")
+        XCTAssertEqual(parsed?.quantity ?? 0, 354.882, accuracy: 0.01)
+        XCTAssertEqual(parsed?.unitKind, .volume)
+    }
 }

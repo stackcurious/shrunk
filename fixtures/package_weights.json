@@ -32,5 +32,6 @@
   { "input": "12/12 fl oz", "quantity": 4258.584, "unit_kind": "volume", "note": "R45: not a fraction — leading count multiplies (12-pack of 12 fl oz)" },
   { "input": "6/16.9 fl oz", "quantity": 2998.753, "unit_kind": "volume", "note": "R45: leading count multiplies (6-pack of 16.9 fl oz)" },
   { "input": "2/1 lb", "quantity": 907.184, "unit_kind": "mass", "note": "R45: leading count multiplies (2-pack of 1 lb)" },
-  { "input": "12 ct / 12 fl oz", "quantity": 4258.584, "unit_kind": "volume", "note": "R45: leading 'N ct' segment multiplies the per-unit size" }
+  { "input": "12 ct / 12 fl oz", "quantity": 4258.584, "unit_kind": "volume", "note": "R45: leading 'N ct' segment multiplies the per-unit size" },
+  { "input": "12 ea / 12 fl oz", "quantity": 4258.584, "unit_kind": "volume", "note": "R46: leading 'N ea' count alias multiplies the per-unit size, same as 'N ct'" }
 ]
