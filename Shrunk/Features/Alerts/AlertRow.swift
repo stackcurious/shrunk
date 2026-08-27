@@ -20,7 +20,7 @@ struct AlertRow: View {
                                 .frame(width: 6, height: 6)
                         }
                     }
-                    Text(headline)
+                    Text(alert.headline)
                         .font(.system(size: 13))
                         .foregroundStyle(Color.smoke)
                         .lineLimit(2)
@@ -29,7 +29,7 @@ struct AlertRow: View {
                         .foregroundStyle(Color.smokeSoft)
                 }
                 Spacer()
-                if alert.kind == .newShrink, alert.shrinkPercent != 0 {
+                if alert.kind.isConfirmedShrink, alert.shrinkPercent != 0 {
                     Text(alert.shrinkPercent.formattedPercentChange(decimals: 1))
                         .font(.system(size: 12, weight: .heavy, design: .monospaced))
                         .foregroundStyle(Color.shrunkRedDark)
@@ -64,46 +64,33 @@ struct AlertRow: View {
 
     private var glyphSymbol: String {
         switch alert.kind {
-        case .newShrink:   return "exclamationmark.triangle.fill"
-        case .unconfirmed: return "questionmark"
-        case .stable:      return "checkmark"
+        case .newShrink, .sizeDrop: return "exclamationmark.triangle.fill"
+        case .unconfirmed:          return "questionmark"
+        case .stable:                return "checkmark"
+        case .priceHike:            return "chart.line.uptrend.xyaxis"
+        case .verifiedCase:         return "checkmark.seal.fill"
+        case .digest:                return "calendar"
         }
     }
 
     private var dotColor: Color {
         switch alert.kind {
-        case .newShrink:   return .shrunkRed
-        case .unconfirmed: return .verdictWarn
-        case .stable:      return .verdictGood
+        case .newShrink, .sizeDrop:      return .shrunkRed
+        case .unconfirmed, .priceHike:   return .verdictWarn
+        case .stable, .verifiedCase:     return .verdictGood
+        case .digest:                    return .shrunkRed
         }
     }
 
     private var borderColor: Color {
         switch alert.kind {
-        case .newShrink:   return .shrunkRed.opacity(0.35)
-        case .unconfirmed: return .verdictWarn.opacity(0.25)
-        case .stable:      return .borderSoft
+        case .newShrink, .sizeDrop:    return .shrunkRed.opacity(0.35)
+        case .unconfirmed, .priceHike: return .verdictWarn.opacity(0.25)
+        case .stable, .verifiedCase, .digest: return .borderSoft
         }
     }
 
     private var borderWidth: CGFloat {
-        alert.kind == .newShrink ? 1.5 : 0.5
-    }
-
-    private var headline: String {
-        switch alert.kind {
-        case .newShrink:
-            if let prevQ = alert.previousQuantity,
-               let prevU = alert.previousUnit,
-               let currQ = alert.currentQuantity,
-               let currU = alert.currentUnit {
-                return "\(alert.brand) just shrank — \(prevQ.formattedQuantity(unit: prevU)) → \(currQ.formattedQuantity(unit: currU))"
-            }
-            return "Confirmed shrink. Tap to see details."
-        case .unconfirmed:
-            return "Possible size change in \(alert.brand) — scan to confirm."
-        case .stable:
-            return "\(alert.brand) unchanged — still watching."
-        }
+        alert.kind.isConfirmedShrink ? 1.5 : 0.5
     }
 }

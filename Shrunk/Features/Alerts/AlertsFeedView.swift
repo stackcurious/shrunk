@@ -55,7 +55,9 @@ struct AlertsFeedView: View {
                     ForEach(visibleAlerts) { alert in
                         AlertRow(alert: alert) {
                             vm?.markRead(alert)
-                            vm?.presentedBarcode = alert.barcode
+                            if !alert.barcode.isEmpty {
+                                vm?.presentedBarcode = alert.barcode
+                            }
                         }
                     }
                 }
