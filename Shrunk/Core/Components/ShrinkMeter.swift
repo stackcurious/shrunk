@@ -26,7 +26,7 @@ struct ShrinkMeter: View {
         ZStack {
             // Outer track ring
             Circle()
-                .stroke(Color.borderSoft, lineWidth: trackWidth)
+                .stroke(Color(.systemFill), lineWidth: trackWidth)
 
             // Filled arc — represents the magnitude of the change
             Circle()
@@ -40,9 +40,8 @@ struct ShrinkMeter: View {
 
             // Center disc — gives the meter physical depth
             Circle()
-                .fill(Color.surface)
+                .fill(Color(.secondarySystemGroupedBackground))
                 .padding(trackWidth + 4)
-                .shrunkElevation(ShrunkTheme.Elevation.whisper)
 
             // Faint inner accent ring — the meter's "heartbeat"
             Circle()
@@ -53,14 +52,14 @@ struct ShrinkMeter: View {
             VStack(spacing: centerSpacing) {
                 Text(headline)
                     .font(headlineFont)
+                    .monospacedDigit()
                     .foregroundStyle(accentColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                 if let sub = subtitle {
-                    Text(sub.uppercased())
+                    Text(sub)
                         .font(subtitleFont)
-                        .tracking(subtitleTracking)
-                        .foregroundStyle(Color.smoke)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, dimension * 0.12)
@@ -181,25 +180,17 @@ struct ShrinkMeter: View {
 
     private var headlineFont: Font {
         switch size {
-        case .hero:    return Font.system(size: 56, weight: .heavy, design: .rounded)
-        case .compact: return Font.system(size: 22, weight: .heavy, design: .rounded)
-        case .mini:    return Font.system(size: 14, weight: .heavy, design: .rounded)
+        case .hero:    return Font.system(size: 56, weight: .bold)
+        case .compact: return Font.system(size: 22, weight: .bold)
+        case .mini:    return Font.system(size: 14, weight: .bold)
         }
     }
 
     private var subtitleFont: Font {
         switch size {
-        case .hero:    return Font.system(size: 13, weight: .heavy)
-        case .compact: return Font.system(size: 9,  weight: .heavy)
-        case .mini:    return Font.system(size: 8,  weight: .heavy)
-        }
-    }
-
-    private var subtitleTracking: CGFloat {
-        switch size {
-        case .hero:    return 1.2
-        case .compact: return 0.8
-        case .mini:    return 0.6
+        case .hero:    return Font.system(size: 13, weight: .semibold)
+        case .compact: return Font.system(size: 10, weight: .semibold)
+        case .mini:    return Font.system(size: 9,  weight: .semibold)
         }
     }
 }
@@ -219,5 +210,5 @@ struct ShrinkMeter: View {
         ShrinkMeter(percentChange: -12.5, verdict: .significantShrink, size: .hero)
     }
     .padding(32)
-    .background(Color.paper)
+    .background(Color(.systemGroupedBackground))
 }

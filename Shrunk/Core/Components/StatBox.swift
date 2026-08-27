@@ -1,12 +1,14 @@
 import SwiftUI
 
 enum StatBoxTone {
-    case neutral    // default white card with hairline border
-    case alert      // light red wash — used when this stat is the bad news
-    case good       // light green wash — used when this stat is the good news
-    case muted      // gray wash — used for missing data
+    case neutral    // default grouped-cell surface
+    case alert      // this stat is the bad news
+    case good       // this stat is the good news
+    case muted      // missing data
 }
 
+/// A single labelled figure, rendered as a `GroupBox`-style cell: system text
+/// styles, `.monospacedDigit()` numerals, semantic background (spec §3).
 struct StatBox: View {
     let label: String
     let value: String
@@ -21,67 +23,53 @@ struct StatBox: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label.uppercased())
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.5)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
                 .foregroundStyle(labelColor)
 
             Text(value)
-                .font(.shrunkMonoNumber)
+                .font(.headline)
+                .monospacedDigit()
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
             if let subline {
                 Text(subline)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.smoke)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, ShrunkTheme.Spacing.md)
-        .padding(.vertical, 14)
-        .background(backgroundColor)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                .stroke(borderColor, lineWidth: 1)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(backgroundColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var backgroundColor: Color {
         switch tone {
-        case .neutral: return .white
+        case .neutral: return Color(.secondarySystemGroupedBackground)
         case .alert:   return .shrunkRedLight
-        case .good:    return Color(hex: "E8F5EE")
-        case .muted:   return .mist
-        }
-    }
-
-    private var borderColor: Color {
-        switch tone {
-        case .neutral: return .border
-        case .alert:   return .shrunkRed.opacity(0.25)
-        case .good:    return .verdictGood.opacity(0.25)
-        case .muted:   return .border
+        case .good:    return .verdictGoodTint
+        case .muted:   return Color(.tertiarySystemFill)
         }
     }
 
     private var labelColor: Color {
         switch tone {
         case .alert: return .shrunkRedDark
-        case .good:  return .verdictGood
-        default:     return .smoke
+        case .good:  return .verdictGoodDeep
+        default:     return Color(.secondaryLabel)
         }
     }
 
     private var valueColor: Color {
         switch tone {
         case .alert: return .shrunkRedDark
-        case .good:  return .verdictGood
-        default:     return .ink
+        case .good:  return .verdictGoodDeep
+        default:     return Color(.label)
         }
     }
 }
@@ -94,5 +82,5 @@ struct StatBox: View {
         StatBox(label: "Cost / oz", value: "6.8¢", subline: "+14.3% more", tone: .alert)
     }
     .padding()
-    .background(Color.mist)
+    .background(Color(.systemGroupedBackground))
 }

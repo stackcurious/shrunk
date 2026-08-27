@@ -18,10 +18,9 @@ struct ProBadge: View {
         case .pill:
             HStack(spacing: 3) {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.caption2.weight(.semibold))
                 Text("PRO")
-                    .font(.system(size: 10, weight: .heavy))
-                    .tracking(0.6)
+                    .font(.caption2.weight(.semibold))
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 7)
@@ -31,7 +30,7 @@ struct ProBadge: View {
 
         case .lock:
             Image(systemName: "lock.fill")
-                .font(.system(size: 12, weight: .bold))
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(.white)
                 .padding(6)
                 .background(Color.shrunkRed)
@@ -40,22 +39,14 @@ struct ProBadge: View {
         case .ribbon:
             HStack(spacing: 6) {
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.subheadline.weight(.semibold))
                 Text("Shrunk Pro")
-                    .font(.system(size: 14, weight: .bold))
-                    .tracking(0.4)
+                    .font(.subheadline.weight(.semibold))
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(
-                LinearGradient(
-                    colors: [Color.shrunkRed, Color.shrunkRedDark],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(Capsule())
+            .background(Color.shrunkRed, in: Capsule())
         }
     }
 }

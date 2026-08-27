@@ -13,8 +13,8 @@ struct ProductThumb: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.sm, style: .continuous)
-                .fill(Color.mist)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(.tertiarySystemFill))
 
             if let imageURL {
                 AsyncImage(url: imageURL) { phase in
@@ -38,17 +38,14 @@ struct ProductThumb: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.sm, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.sm, style: .continuous)
-                .stroke(Color.border, lineWidth: 1)
-        )
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
     }
 
     private var fallback: some View {
         Image(systemName: ProductThumb.icon(for: category))
-            .font(.system(size: size * 0.42, weight: .regular))
-            .foregroundStyle(Color.smoke)
+            .font(.system(size: size * 0.42))
+            .foregroundStyle(.secondary)
     }
 
     static func icon(for category: String) -> String {

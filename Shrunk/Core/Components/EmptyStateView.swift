@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Thin wrapper over `ContentUnavailableView` (spec §3). Kept as a named type
+/// because several screens pass an optional action, which the system view
+/// expresses as an `actions` builder.
 struct EmptyStateView: View {
     let icon: String
     let title: String
@@ -22,37 +25,17 @@ struct EmptyStateView: View {
     }
 
     var body: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            ZStack {
-                Circle()
-                    .fill(Color.mist)
-                    .frame(width: 84, height: 84)
-                Image(systemName: icon)
-                    .font(.system(size: 36, weight: .regular))
-                    .foregroundStyle(Color.smoke)
-            }
-
-            Text(title)
-                .font(.shrunkTitle)
-                .foregroundStyle(Color.ink)
-                .multilineTextAlignment(.center)
-
+        ContentUnavailableView {
+            Label(title, systemImage: icon)
+        } description: {
             Text(message)
-                .font(.shrunkBody)
-                .foregroundStyle(Color.smoke)
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
-
+        } actions: {
             if let actionTitle, let action {
-                ShrunkButton(actionTitle, variant: .ghost, action: action)
-                    .padding(.top, 8)
-                    .padding(.horizontal, ShrunkTheme.Spacing.xl)
+                Button(actionTitle, action: action)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
             }
         }
-        .padding(.horizontal, ShrunkTheme.Spacing.lg)
-        .padding(.vertical, ShrunkTheme.Spacing.xxl)
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -63,4 +46,5 @@ struct EmptyStateView: View {
         message: "Watch products from their result screen — we'll alert you if they shrink.",
         actionTitle: "Scan a product"
     ) { }
+    .tint(.shrunkRed)
 }

@@ -1,11 +1,14 @@
 import SwiftUI
-import UIKit
 
+/// Which of the system button styles this action gets. The names are the app's
+/// old vocabulary, kept so call sites don't churn; the rendering underneath is
+/// now `.borderedProminent` / `.bordered` / `.borderless` at
+/// `.controlSize(.large)`, i.e. an ordinary iOS button.
 enum ShrunkButtonVariant {
-    case primary      // filled red — main CTA
-    case secondary    // gray fill — companion action
-    case ghost        // transparent with red border — tertiary
-    case destructive  // dark red — irreversible action
+    case primary      // filled with the app tint — main CTA
+    case secondary    // neutral bordered — companion action
+    case ghost        // borderless — tertiary
+    case destructive  // filled, destructive role
 }
 
 struct ShrunkButton: View {
@@ -14,6 +17,8 @@ struct ShrunkButton: View {
     let variant: ShrunkButtonVariant
     let isLoading: Bool
     let action: () -> Void
+
+    @State private var tapCount: Int = 0
 
     init(
         _ title: String,
@@ -30,71 +35,48 @@ struct ShrunkButton: View {
     }
 
     var body: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        styled
+            .controlSize(.large)
+            .disabled(isLoading)
+            // Replaces the UIImpactFeedbackGenerator the old custom style fired
+            // by hand on every tap (spec §3, "Motion").
+            .sensoryFeedback(.impact(weight: .light), trigger: tapCount)
+            .accessibilityLabel(Text(title))
+    }
+
+    @ViewBuilder
+    private var styled: some View {
+        switch variant {
+        case .primary:
+            button.buttonStyle(.borderedProminent)
+        case .destructive:
+            button.buttonStyle(.borderedProminent)
+        case .secondary:
+            button.buttonStyle(.bordered).tint(.primary)
+        case .ghost:
+            button.buttonStyle(.borderless)
+        }
+    }
+
+    private var button: some View {
+        Button(role: variant == .destructive ? .destructive : nil) {
+            tapCount += 1
             action()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 if isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(foreground)
+                    ProgressView().controlSize(.small)
                 } else if let icon {
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
                 }
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.8)
             }
-            .foregroundStyle(foreground)
+            .font(.headline)
             .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(background)
-            .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
+            .padding(.vertical, 4)
         }
-        .buttonStyle(ShrunkButtonPressStyle())
-        .disabled(isLoading)
-        .accessibilityLabel(Text(title))
-    }
-
-    private var foreground: Color {
-        switch variant {
-        case .primary, .destructive: return .white
-        case .secondary:             return .ink
-        case .ghost:                 return .shrunkRed
-        }
-    }
-
-    private var background: Color {
-        switch variant {
-        case .primary:     return .shrunkRed
-        case .secondary:   return .mist
-        case .ghost:       return .clear
-        case .destructive: return .shrunkRedDark
-        }
-    }
-
-    private var borderColor: Color {
-        variant == .ghost ? Color.shrunkRed.opacity(0.35) : .clear
-    }
-
-    private var borderWidth: CGFloat {
-        variant == .ghost ? 1.5 : 0
-    }
-}
-
-private struct ShrunkButtonPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.72),
-                       value: configuration.isPressed)
     }
 }
 
@@ -106,4 +88,5 @@ private struct ShrunkButtonPressStyle: ButtonStyle {
         ShrunkButton("Working", isLoading: true) {}
     }
     .padding()
+    .tint(.shrunkRed)
 }

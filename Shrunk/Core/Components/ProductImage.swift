@@ -31,25 +31,19 @@ struct ProductImage: View {
             }
         }
         .frame(width: size, height: size)
-        .background(Color.mist)
+        .background(Color(.tertiarySystemFill))
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(Color.borderSoft, lineWidth: 0.5)
-        )
     }
 
     private func placeholder(loading: Bool) -> some View {
         ZStack {
-            Color.mist
+            Color(.tertiarySystemFill)
             if loading {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Color.smoke)
+                ProgressView().controlSize(.small)
             } else {
                 Image(systemName: fallbackIcon)
-                    .font(.system(size: size * 0.38, weight: .regular))
-                    .foregroundStyle(Color.smokeSoft)
+                    .font(.system(size: size * 0.38))
+                    .foregroundStyle(.tertiary)
             }
         }
     }

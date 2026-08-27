@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Color hex initializer
 
@@ -28,32 +29,54 @@ extension Color {
     }
 }
 
+// MARK: - Trait-resolved colours
+
+extension Color {
+    /// A light/dark pair resolved per trait collection. SwiftUI's `Color(hex:)`
+    /// is a fixed sRGB value, so anything defined that way is frozen in one
+    /// appearance; this routes through `UIColor`'s dynamic provider instead.
+    static func dynamic(light: String, dark: String) -> Color {
+        Color(uiColor: UIColor { traits in
+            UIColor(Color(hex: traits.userInterfaceStyle == .dark ? dark : light))
+        })
+    }
+}
+
 // MARK: - Brand palette
+//
+// Two rules, both from the native-UI spec (§3):
+//   1. Brand red `#E24B4A` is the app tint and does not move between schemes.
+//   2. Verdict colour *meaning* is fixed (red = shrink, amber = minor, green =
+//      unchanged/grew) but the actual values adapt, so a wash that reads as a
+//      pale tint on white becomes a deep tint on black instead of a glare.
+//
+// Every neutral is a semantic system colour. That is what makes dark mode fall
+// out for free on screens that still reference these names.
 
 extension Color {
     static let shrunkRed       = Color(hex: "E24B4A")
-    static let shrunkRedLight  = Color(hex: "FCEBEB")
-    static let shrunkRedDark   = Color(hex: "791F1F")
-    static let shrunkRedDeep   = Color(hex: "B0302F")
+    static let shrunkRedLight  = Color.dynamic(light: "FCEBEB", dark: "3B1E1E")
+    static let shrunkRedDark   = Color.dynamic(light: "9E2725", dark: "FF9E9C")
+    static let shrunkRedDeep   = Color.dynamic(light: "B0302F", dark: "F0706E")
 
-    static let verdictGood     = Color(hex: "1D9E75")
-    static let verdictGoodDeep = Color(hex: "157852")
-    static let verdictGoodTint = Color(hex: "E8F5EE")
-    static let verdictWarn     = Color(hex: "EF9F27")
-    static let verdictWarnDeep = Color(hex: "B2700B")
-    static let verdictWarnTint = Color(hex: "FDF1DE")
+    static let verdictGood     = Color.dynamic(light: "1D9E75", dark: "34C99A")
+    static let verdictGoodDeep = Color.dynamic(light: "157852", dark: "56DCAF")
+    static let verdictGoodTint = Color.dynamic(light: "E8F5EE", dark: "12352A")
+    static let verdictWarn     = Color.dynamic(light: "EF9F27", dark: "FFB43F")
+    static let verdictWarnDeep = Color.dynamic(light: "B2700B", dark: "FFC97A")
+    static let verdictWarnTint = Color.dynamic(light: "FDF1DE", dark: "3A2B10")
     static let verdictBad      = Color(hex: "E24B4A")
 
-    // Neutrals — refined: warmer paper background, more depth in inks
-    static let ink             = Color(hex: "0E0E11")
-    static let inkSubtle       = Color(hex: "32343B")
-    static let smoke           = Color(hex: "6B7280")
-    static let smokeSoft       = Color(hex: "9CA3AF")
-    static let mist            = Color(hex: "F4F4F5")
-    static let paper           = Color(hex: "FAFAF7")    // warm off-white app background
-    static let surface         = Color.white
-    static let border          = Color(hex: "E8E8EA")
-    static let borderSoft      = Color(hex: "F0F0F2")
+    // Neutrals — semantic system colours, so contrast is Apple's problem.
+    static let ink             = Color(.label)
+    static let inkSubtle       = Color(.secondaryLabel)
+    static let smoke           = Color(.secondaryLabel)
+    static let smokeSoft       = Color(.tertiaryLabel)
+    static let mist            = Color(.tertiarySystemFill)
+    static let paper           = Color(.systemGroupedBackground)
+    static let surface         = Color(.secondarySystemGroupedBackground)
+    static let border          = Color(.separator)
+    static let borderSoft      = Color(.separator).opacity(0.6)
 }
 
 // MARK: - Brand gradients
@@ -181,6 +204,18 @@ extension View {
     /// Standard card surface: white fill, soft shadow, subtle border.
     func shrunkCard(radius: CGFloat = ShrunkTheme.Radius.lg, padding: CGFloat? = ShrunkTheme.Spacing.md) -> some View {
         modifier(ShrunkCardModifier(radius: radius, padding: padding))
+    }
+
+    /// The native card: an inset-grouped list cell's surface and geometry, with
+    /// no hand-drawn border and no shadow. This is what `Section`/`GroupBox`
+    /// look like, and it is what every restyled screen uses for a card that
+    /// isn't inside a `List`.
+    func groupedCard(padding: CGFloat = 16, cornerRadius: CGFloat = 12) -> some View {
+        self
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
     /// Section label — uppercase, tracked, smoke-colored. One-liner for consistency.
