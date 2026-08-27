@@ -69,22 +69,10 @@ struct AlternativesEngine {
     }
 
     /// The candidate's price in the same oz-equivalent space `ShrinkDetector`
-    /// uses, so it is directly comparable with `record.costPerUnitNow`.
+    /// uses, so it is directly comparable with `record.costPerUnitNow`
+    /// (shared with `LivePricePanel.costPerOunce` — Phase 3 review T17).
     static func costPerOunce(_ result: StoreSearchResult) -> Double? {
-        guard let price = result.effectivePrice,
-              let quantity = result.quantity, quantity > 0,
-              let kind = result.unitKind else { return nil }
-        let unit: String
-        switch kind {
-        case "mass":   unit = "g"
-        case "volume": unit = "ml"
-        default:       unit = "count"
-        }
-        let normalized = ShrinkDetector.normalize(
-            SizeRecord(date: Date(), quantity: quantity, unit: unit, source: "kroger")
-        ).quantity
-        guard normalized > 0 else { return nil }
-        return price / normalized
+        ShrinkDetector.costPerOunce(price: result.effectivePrice, quantity: result.quantity, unitKind: result.unitKind)
     }
 
     private func makeAlternative(

@@ -107,4 +107,25 @@ struct ShrinkDetector {
             source: record.source
         )
     }
+
+    /// The oz-equivalent unit price for a Kroger-shaped quantity (grams |
+    /// millilitres | count) and price, routed through the same `normalize`
+    /// space `analyze` uses for `costPerUnitNow` — so the live panel, the
+    /// alternatives ranking, and the verdict all agree on one number.
+    /// (Phase 3 review M2/T17 — was duplicated in `LivePricePanel` and
+    /// `AlternativesEngine`; both now delegate here.)
+    static func costPerOunce(price: Double?, quantity: Double?, unitKind: String?) -> Double? {
+        guard let price, let quantity, quantity > 0, let unitKind else { return nil }
+        let unit: String
+        switch unitKind {
+        case "mass":   unit = "g"
+        case "volume": unit = "ml"
+        default:       unit = "count"
+        }
+        let normalized = normalize(
+            SizeRecord(date: Date(), quantity: quantity, unit: unit, source: "kroger")
+        ).quantity
+        guard normalized > 0 else { return nil }
+        return price / normalized
+    }
 }

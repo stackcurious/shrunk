@@ -81,20 +81,10 @@ struct LivePricePanel: View {
         }
     }
 
-    /// Same oz-equivalent space the verdict uses, so the two numbers agree.
+    /// Same oz-equivalent space the verdict uses, so the two numbers agree
+    /// (shared with `AlternativesEngine.costPerOunce` — Phase 3 review T17).
     private func costPerOunce(_ live: LivePrice) -> Double? {
-        guard let price = live.effectivePrice, let quantity = live.quantity, quantity > 0, let kind = live.unitKind else { return nil }
-        let unit: String
-        switch kind {
-        case "mass":   unit = "g"
-        case "volume": unit = "ml"
-        default:       unit = "count"
-        }
-        let normalized = ShrinkDetector.normalize(
-            SizeRecord(date: Date(), quantity: quantity, unit: unit, source: "kroger")
-        ).quantity
-        guard normalized > 0 else { return nil }
-        return price / normalized
+        ShrinkDetector.costPerOunce(price: live.effectivePrice, quantity: live.quantity, unitKind: live.unitKind)
     }
 
     private func detail(label: String, value: String) -> some View {

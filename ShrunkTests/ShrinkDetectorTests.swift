@@ -281,5 +281,36 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
         XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
     }
+
+    // MARK: - Shared cost-per-ounce (Phase 3 review M2/T17 — was duplicated in
+    // LivePricePanel and AlternativesEngine; both now delegate here.)
+
+    func test_costPerOunce_massConvertsGramsToOzEquivalent() {
+        let cost = ShrinkDetector.costPerOunce(price: 3.53, quantity: 100, unitKind: "mass")
+        XCTAssertEqual(cost ?? 0, 3.53 / (100 * 0.035274), accuracy: 0.0001)
+    }
+
+    func test_costPerOunce_volumeConvertsMillilitresToOzEquivalent() {
+        let cost = ShrinkDetector.costPerOunce(price: 1.00, quantity: 828.058, unitKind: "volume")
+        XCTAssertEqual(cost ?? 0, 1.00 / (828.058 * 0.033814), accuracy: 0.0001)
+    }
+
+    func test_costPerOunce_countPassesThroughUnchanged() {
+        let cost = ShrinkDetector.costPerOunce(price: 6.00, quantity: 12, unitKind: "count")
+        XCTAssertEqual(cost ?? 0, 0.5, accuracy: 0.0001)
+    }
+
+    func test_costPerOunce_nilWhenPriceMissing() {
+        XCTAssertNil(ShrinkDetector.costPerOunce(price: nil, quantity: 100, unitKind: "mass"))
+    }
+
+    func test_costPerOunce_nilWhenQuantityZeroOrMissing() {
+        XCTAssertNil(ShrinkDetector.costPerOunce(price: 1.0, quantity: 0, unitKind: "mass"))
+        XCTAssertNil(ShrinkDetector.costPerOunce(price: 1.0, quantity: nil, unitKind: "mass"))
+    }
+
+    func test_costPerOunce_nilWhenUnitKindMissing() {
+        XCTAssertNil(ShrinkDetector.costPerOunce(price: 1.0, quantity: 100, unitKind: nil))
+    }
 }
 
