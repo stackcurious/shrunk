@@ -70,6 +70,35 @@ extension Color {
     static let verdictBad      = Color(hex: "E24B4A")
 }
 
+// MARK: - System appearance
+
+/// The appearance the *user* chose, which is not always the one the current
+/// window is in.
+///
+/// `MainTabsView` puts the window into `.dark` while the Scanner tab is
+/// selected — the camera is full-bleed, so the status bar has to draw light —
+/// and SwiftUI implements that by overriding the window's user interface
+/// style. A sheet presented from that tab inherits the override, which is why
+/// the Result screen used to open dark on a light-mode device while the same
+/// screen opened from Browse or Alerts was light.
+///
+/// A `UIScreen`'s trait collection is the one place that is not affected by a
+/// window's `overrideUserInterfaceStyle` — the scene's is, because SwiftUI
+/// pushes the preference up to it. So the screen still reports what the user
+/// actually picked. `nil` means "nothing to read yet" — treat that as "don't
+/// override".
+enum SystemAppearance {
+    static var current: ColorScheme? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        switch scene?.screen.traitCollection.userInterfaceStyle {
+        case .dark:  return .dark
+        case .light: return .light
+        default:     return nil
+        }
+    }
+}
+
 // MARK: - View modifiers
 
 extension View {

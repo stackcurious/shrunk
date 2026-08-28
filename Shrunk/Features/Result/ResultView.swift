@@ -43,6 +43,11 @@ struct ResultView: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        // Opened from the Scanner tab this sheet inherits that tab's dark
+        // window override, so a light-mode user got a dark Result screen from
+        // a scan and a light one from Browse. Result is a content screen, not
+        // camera chrome: it follows the device.
+        .preferredColorScheme(SystemAppearance.current)
         .sensoryFeedback(.success, trigger: successHaptic)
         .sensoryFeedback(.error, trigger: errorHaptic)
         .task(id: barcode) {

@@ -30,11 +30,22 @@ final class ScreenshotTests: XCTestCase {
     private static let storeLocationId = "01400355"
     private static let storeDisplayName = "Kroger Hyde Park"
 
-    /// The curated verified case behind the hero result screenshot: Maxwell
-    /// House Original Roast, 30.6 oz → 24.5 oz, sourced in `data/trending.json`
-    /// and served with both dated observations by `/v1/product`.
+    /// The curated verified case behind the hero result screenshot: Toblerone,
+    /// 360 g → 150 g, sourced in `data/trending.json` and served with both
+    /// dated observations by `/v1/product`.
+    ///
+    /// It replaced Maxwell House (`0043000094228`) once the curated barcodes
+    /// were corrected. The real Maxwell House GTIN carries a *third*, Kroger-
+    /// sourced observation of 27.5 oz, and `ShrinkDetector` compares the latest
+    /// two, so that product now truthfully reads "Grew 12 %" — which the
+    /// listing's "clear shrink verdict" for shot 1 rules out. Tropicana
+    /// (`0048500205716`, −18.8 %) was the other candidate and is a fine
+    /// fallback, but Kroger lists it at a different size, so its Result screen
+    /// carries the "Size unconfirmed" card and that pushes the live-price panel
+    /// and the size-history chart off the frame. Toblerone has exactly two
+    /// curated observations and no contradicting store row.
     private var featuredBarcode: String {
-        ProcessInfo.processInfo.environment["SHRUNK_FEATURED_GTIN"] ?? "0043000094228"
+        ProcessInfo.processInfo.environment["SHRUNK_FEATURED_GTIN"] ?? "7622210496645"
     }
 
     /// A product Kroger actually prices at the store above, used for the
