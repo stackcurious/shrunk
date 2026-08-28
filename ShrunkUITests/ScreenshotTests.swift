@@ -30,9 +30,13 @@ final class ScreenshotTests: XCTestCase {
     private static let storeLocationId = "01400355"
     private static let storeDisplayName = "Kroger Hyde Park"
 
-    /// The curated verified case behind the hero result screenshot: Toblerone,
-    /// 360 g → 150 g, sourced in `data/trending.json` and served with both
-    /// dated observations by `/v1/product`.
+    /// The verified case behind the hero result screenshot: Toblerone,
+    /// 360 g → 150 g. What this test needs is only that `/v1/product` returns
+    /// two dated observations of the same unit kind whose *latest two* are a
+    /// shrink — the curated catalogue is being re-sourced as of 2026-08-27 and
+    /// this GTIN has already been dropped from `data/trending.json` while its
+    /// D1 observations still stand, so re-verify shot 1 after the next Worker
+    /// seed and re-point this constant if it goes quiet.
     ///
     /// It replaced Maxwell House (`0043000094228`) once the curated barcodes
     /// were corrected. The real Maxwell House GTIN carries a *third*, Kroger-
