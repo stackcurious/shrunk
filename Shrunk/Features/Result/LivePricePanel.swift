@@ -12,22 +12,21 @@ struct LivePricePanel: View {
             EmptyView()
         case .loading:
             card {
-                HStack(spacing: ShrunkTheme.Spacing.sm) {
-                    ProgressView().controlSize(.small).tint(Color.shrunkRed)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
                     Text("Checking \(storeName.isEmpty ? "your store" : storeName)…")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.smoke)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
         case .unavailable:
             card {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Store prices unavailable right now")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.ink)
+                        .font(.subheadline.weight(.semibold))
                     Text("The verdict and size history above don't need them.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smoke)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         case .loaded(let live):
@@ -37,40 +36,40 @@ struct LivePricePanel: View {
 
     @ViewBuilder
     private func loaded(_ live: LivePrice) -> some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let price = live.effectivePrice {
                     Text(price.formattedPrice())
-                        .font(.shrunkMonoBig)
-                        .foregroundStyle(Color.ink)
+                        .font(.title.bold())
+                        .monospacedDigit()
                 } else {
-                    Text("—").font(.shrunkMonoBig).foregroundStyle(Color.smoke)
+                    Text("—")
+                        .font(.title.bold())
+                        .foregroundStyle(.secondary)
                 }
                 if live.isOnPromo, let regular = live.regular {
                     Text(regular.formattedPrice())
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color.smoke)
+                        .font(.subheadline)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                         .strikethrough()
-                    Text("PROMO")
-                        .font(.system(size: 9, weight: .heavy))
-                        .tracking(0.8)
+                    Text("Promo")
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 7)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        .background(Color.shrunkRed)
-                        .clipShape(Capsule())
+                        .background(Color.shrunkRed, in: Capsule())
                 }
                 Spacer(minLength: 0)
                 Text(live.stockLabel)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(live.inStock ? Color.verdictGoodDeep : Color.shrunkRedDark)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(live.inStock ? Color.verdictGoodTint : Color.shrunkRedLight)
-                    .clipShape(Capsule())
+                    .background(live.inStock ? Color.verdictGoodTint : Color.shrunkRedLight, in: Capsule())
             }
 
-            HStack(spacing: ShrunkTheme.Spacing.md) {
+            HStack(spacing: 16) {
                 if let size = live.size, !size.isEmpty {
                     detail(label: "Size", value: size)
                 }
@@ -88,30 +87,29 @@ struct LivePricePanel: View {
     }
 
     private func detail(label: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .heavy))
-                .tracking(0.5)
-                .foregroundStyle(Color.smoke)
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             Text(value)
-                .font(.shrunkMonoSmall)
-                .foregroundStyle(Color.ink)
+                .font(.subheadline.weight(.medium))
+                .monospacedDigit()
         }
     }
 
     private func card<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            HStack {
-                Text(storeName.isEmpty ? "AT YOUR STORE" : storeName.uppercased()).shrunkSectionLabel()
-                Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(storeName.isEmpty ? "At your store" : storeName)
+                    .font(.headline)
+                Spacer(minLength: 8)
                 Text(LivePrice.attribution)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Color.smoke)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             content()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
-        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+        .groupedCard()
+        .padding(.horizontal, 20)
     }
 }

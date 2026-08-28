@@ -26,11 +26,18 @@ enum ShareCardRenderer {
         }
     }
 
+    /// The card is always drawn on white — it is a PNG that leaves the app, so
+    /// it can't adopt the viewer's appearance. Semantic colours are therefore
+    /// resolved against a light trait collection explicitly: `UIColor.label`
+    /// alone follows `UITraitCollection.current`, which renders near-white
+    /// label text on the white card when the device is in dark mode.
+    private static let lightTraits = UITraitCollection(userInterfaceStyle: .light)
+
     private static func draw(record: ShrinkRecord, product: ShrunkProduct, in rect: CGRect) {
-        let red    = UIColor(Color.shrunkRed)
-        let ink    = UIColor(Color.ink)
-        let smoke  = UIColor(Color.smoke)
-        let border = UIColor(Color.border)
+        let red    = UIColor(Color.shrunkRed).resolvedColor(with: lightTraits)
+        let ink    = UIColor.label.resolvedColor(with: lightTraits)
+        let smoke  = UIColor.secondaryLabel.resolvedColor(with: lightTraits)
+        let border = UIColor.separator.resolvedColor(with: lightTraits)
 
         // Background
         UIColor.white.setFill()
@@ -75,7 +82,7 @@ enum ShareCardRenderer {
 
         // Big number block (left)
         let bigNumber = record.shrinkPercent.formattedPercentChange(decimals: 1)
-        let bigFont = UIFont.monospacedSystemFont(ofSize: 44, weight: .heavy)
+        let bigFont = UIFont.monospacedDigitSystemFont(ofSize: 44, weight: .bold)
         bigNumber.draw(
             at: CGPoint(x: topPad, y: 92),
             withAttributes: [
@@ -84,13 +91,12 @@ enum ShareCardRenderer {
             ]
         )
 
-        let leftLabel = labelFor(verdict: record.verdict).uppercased()
+        let leftLabel = labelFor(verdict: record.verdict)
         leftLabel.draw(
-            at: CGPoint(x: topPad, y: 138),
+            at: CGPoint(x: topPad, y: 140),
             withAttributes: [
-                .font: UIFont.systemFont(ofSize: 11, weight: .heavy),
-                .foregroundColor: smoke,
-                .kern: 0.6
+                .font: UIFont.systemFont(ofSize: 13, weight: .medium),
+                .foregroundColor: smoke
             ]
         )
 
@@ -99,16 +105,15 @@ enum ShareCardRenderer {
         let tookString: String = {
             if let prev = record.previousSize, let curr = record.currentSize {
                 let diff = abs(prev.quantity - curr.quantity)
-                return "THEY TOOK: \(Self.compact(diff)) \(curr.unit)"
+                return "They took: \(Self.compact(diff)) \(curr.unit)"
             }
-            return "TRACKED BY SHRUNK"
+            return "Tracked by Shrunk"
         }()
         tookString.draw(
             at: CGPoint(x: rightX, y: 100),
             withAttributes: [
-                .font: UIFont.systemFont(ofSize: 11, weight: .heavy),
-                .foregroundColor: smoke,
-                .kern: 0.6
+                .font: UIFont.systemFont(ofSize: 13, weight: .medium),
+                .foregroundColor: smoke
             ]
         )
 
@@ -119,9 +124,9 @@ enum ShareCardRenderer {
             return "first scan"
         }()
         fromTo.draw(
-            at: CGPoint(x: rightX, y: 118),
+            at: CGPoint(x: rightX, y: 120),
             withAttributes: [
-                .font: UIFont.monospacedSystemFont(ofSize: 18, weight: .bold),
+                .font: UIFont.monospacedDigitSystemFont(ofSize: 18, weight: .semibold),
                 .foregroundColor: ink
             ]
         )
@@ -137,7 +142,7 @@ enum ShareCardRenderer {
             line.draw(
                 at: CGPoint(x: topPad, y: costLineY),
                 withAttributes: [
-                    .font: UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold),
+                    .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold),
                     .foregroundColor: ink
                 ]
             )
@@ -148,7 +153,7 @@ enum ShareCardRenderer {
             "Now: \(now.formattedCostPerUnit()) per ounce".draw(
                 at: CGPoint(x: topPad, y: costLineY),
                 withAttributes: [
-                    .font: UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold),
+                    .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold),
                     .foregroundColor: ink
                 ]
             )
@@ -171,9 +176,8 @@ enum ShareCardRenderer {
         logo.draw(
             at: CGPoint(x: topPad, y: footerY),
             withAttributes: [
-                .font: UIFont.systemFont(ofSize: 13, weight: .heavy),
-                .foregroundColor: red,
-                .kern: 1.4
+                .font: UIFont.systemFont(ofSize: 14, weight: .semibold),
+                .foregroundColor: red
             ]
         )
 
@@ -254,7 +258,7 @@ struct ShareCardView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: ShrunkTheme.Spacing.lg) {
+            VStack(spacing: 24) {
                 Spacer()
                 if let image {
                     Image(uiImage: image)
@@ -262,39 +266,35 @@ struct ShareCardView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity)
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                        .padding(.horizontal, 20)
 
                     ShareLink(
                         item: ShareableShareCard(image: image, caption: caption),
                         preview: SharePreview(caption, image: Image(uiImage: image))
                     ) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 16, weight: .semibold))
-                            Text("Share")
-                                .font(.system(size: 17, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.shrunkRed)
-                        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
+                        Label("Share", systemImage: "square.and.arrow.up")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
                     }
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.horizontal, 20)
                 } else {
                     ProgressView()
                 }
                 Spacer()
             }
-            .background(Color.mist)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Share")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Color.shrunkRed)
-                        .fontWeight(.semibold)
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("Close")
                 }
             }
         }

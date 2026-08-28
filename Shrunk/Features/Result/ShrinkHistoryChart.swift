@@ -33,17 +33,16 @@ struct ShrinkHistoryChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            HStack {
-                Text("SIZE HISTORY")
-                    .font(.system(size: 11, weight: .heavy))
-                    .tracking(0.6)
-                    .foregroundStyle(Color.smoke)
-                Spacer()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Size history")
+                    .font(.headline)
+                Spacer(minLength: 8)
                 if let selected {
                     Text("\(selected.quantity.formattedQuantity(unit: selected.unit)) · \(selected.date, format: .dateTime.year().month(.abbreviated))")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.ink)
+                        .font(.footnote)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -59,14 +58,7 @@ struct ShrinkHistoryChart: View {
                 upgradeRow
             }
         }
-        .padding(ShrunkTheme.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous)
-                .stroke(Color.border, lineWidth: 1)
-        )
+        .groupedCard()
     }
 
     // MARK: - Pro affordance
@@ -75,27 +67,21 @@ struct ShrinkHistoryChart: View {
         Button {
             onUpgrade?()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: "lock.fill")
-                    .font(.system(size: 11, weight: .bold))
                 Text("See full history with Pro")
-                    .font(.system(size: 12, weight: .semibold))
                 Text("\(hiddenCount) more")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
-                    .foregroundStyle(Color.smoke)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(Color.smoke)
+                    .foregroundStyle(.secondary)
             }
-            .foregroundStyle(Color.shrunkRedDark)
-            .padding(.vertical, 8)
-            .padding(.horizontal, 10)
+            .font(.subheadline)
             .frame(maxWidth: .infinity)
-            .background(Color.shrunkRedLight)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
         .disabled(onUpgrade == nil)
         .accessibilityLabel("See full history with Pro, \(hiddenCount) more observations")
     }
@@ -115,22 +101,22 @@ struct ShrinkHistoryChart: View {
                 .cornerRadius(6)
                 .annotation(position: .trailing, alignment: .leading) {
                     Text(record.quantity.formattedQuantity(unit: record.unit))
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color.ink)
+                        .font(.caption.weight(.semibold))
+                        .monospacedDigit()
                         .padding(.leading, 4)
                 }
             }
         }
         .chartXAxis {
             AxisMarks(position: .bottom) { _ in
-                AxisGridLine().foregroundStyle(Color.border)
-                AxisValueLabel().font(.system(size: 10))
+                AxisGridLine()
+                AxisValueLabel().font(.caption2)
             }
         }
         .chartYAxis {
             AxisMarks(values: .automatic) { _ in
                 AxisValueLabel(format: .dateTime.year().month(.abbreviated))
-                    .font(.system(size: 10))
+                    .font(.caption2)
             }
         }
         .frame(height: max(140, CGFloat(history.count) * 38))
@@ -163,32 +149,33 @@ struct ShrinkHistoryChart: View {
     // MARK: - Before/after variant
 
     private var beforeAfter: some View {
-        HStack(spacing: ShrunkTheme.Spacing.md) {
-            sideCell(record: history[0], label: "Before", tone: .good)
+        HStack(spacing: 12) {
+            sideCell(record: history[0], label: "Before", isAlert: false)
             Image(systemName: "arrow.right")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(Color.smoke)
-            sideCell(record: history[1], label: "Now", tone: .alert)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            sideCell(record: history[1], label: "Now", isAlert: true)
         }
     }
 
-    private func sideCell(record: SizeRecord, label: String, tone: StatBoxTone) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(0.5)
-                .foregroundStyle(Color.smoke)
+    private func sideCell(record: SizeRecord, label: String, isAlert: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text(record.quantity.formattedQuantity(unit: record.unit))
-                .font(.shrunkMonoNumber)
-                .foregroundStyle(tone == .alert ? Color.shrunkRedDark : Color.verdictGood)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(isAlert ? Color.shrunkRedDark : Color.verdictGoodDeep)
             Text(record.date, format: .dateTime.year().month(.abbreviated))
-                .font(.system(size: 11))
-                .foregroundStyle(Color.smoke)
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(ShrunkTheme.Spacing.sm)
-        .background(tone == .alert ? Color.shrunkRedLight : Color(hex: "E8F5EE"))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(10)
+        .background(isAlert ? Color.shrunkRedLight : Color.verdictGoodTint,
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -204,6 +191,7 @@ struct ShrinkHistoryChart: View {
         onUpgrade: {}
     )
     .padding()
+    .background(Color(.systemGroupedBackground))
 }
 
 #Preview("Pro — all four") {
@@ -217,4 +205,5 @@ struct ShrinkHistoryChart: View {
         isPro: true
     )
     .padding()
+    .background(Color(.systemGroupedBackground))
 }

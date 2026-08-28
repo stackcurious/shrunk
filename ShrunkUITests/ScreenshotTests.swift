@@ -142,7 +142,7 @@ final class ScreenshotTests: XCTestCase {
         recent.tap()
 
         // The result view is loaded once the Then → Now comparison is up.
-        require(app.staticTexts["THEN"], "the Then/Now comparison", timeout: networkTimeout)
+        require(app.staticTexts["Then"], "the Then/Now comparison", timeout: networkTimeout)
         // Let the live-price panel finish its round trip to Kroger.
         Thread.sleep(forTimeInterval: 6)
         capture("01_result_shrunk")

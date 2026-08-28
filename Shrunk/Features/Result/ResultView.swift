@@ -18,6 +18,10 @@ struct ResultView: View {
     @State private var toastMessage: String?
     /// Rule 4 — a failed action reads as failure, not as a green tick.
     @State private var toastIsError = false
+    /// `sensoryFeedback` triggers, replacing the hand-fired
+    /// `UINotificationFeedbackGenerator` (spec §3, "Motion").
+    @State private var successHaptic = 0
+    @State private var errorHaptic = 0
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     init(barcode: String) {
@@ -37,6 +41,10 @@ struct ResultView: View {
                 .toolbar { toolbar }
                 .overlay(alignment: .bottom) { toastOverlay }
         }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .sensoryFeedback(.success, trigger: successHaptic)
+        .sensoryFeedback(.error, trigger: errorHaptic)
         .task(id: barcode) {
             vm.isPro = storeKit.isProUser
             // Seeded before the first render of a `.loaded` state: `prebake`
@@ -80,7 +88,7 @@ struct ResultView: View {
                 icon: toastIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
                 tint: toastIsError ? Color.shrunkRed : Color.verdictGood
             )
-                .padding(.bottom, ShrunkTheme.Spacing.xl)
+                .padding(.bottom, 32)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task(id: toastMessage) {
                     try? await Task.sleep(nanoseconds: 2_800_000_000)
@@ -91,14 +99,10 @@ struct ResultView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .topBarTrailing) {
             Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .heavy))
-                    .foregroundStyle(Color.ink)
-                    .frame(width: 34, height: 34)
-                    .background(Color.mist)
-                    .clipShape(Circle())
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
             }
             .accessibilityLabel("Close")
         }
@@ -123,12 +127,12 @@ struct ResultView: View {
     @ViewBuilder
     private func loadedView(product: ShrunkProduct, record: ShrinkRecord) -> some View {
         ScrollView {
-            VStack(spacing: ShrunkTheme.Spacing.xl) {
+            VStack(spacing: 24) {
                 heroSection(product: product, record: record)
                 comparisonRow(record: record)
                 if product.needsConfirmation || vm.liveSizeMismatch {
                     confirmationCard
-                        .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                        .padding(.horizontal, 20)
                 }
                 costPerOzSection(record: record)
                 LivePricePanel(state: vm.livePrice, storeName: storeName)
@@ -139,15 +143,15 @@ struct ResultView: View {
                         isPro: storeKit.isProUser,
                         onUpgrade: { showWatchPaywall = true }
                     )
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
+                    .padding(.horizontal, 20)
                 }
                 ctaSection(product: product, record: record)
-                    .padding(.horizontal, ShrunkTheme.Spacing.lg)
-                Spacer(minLength: ShrunkTheme.Spacing.xl)
+                    .padding(.horizontal, 20)
             }
-            .padding(.top, ShrunkTheme.Spacing.sm)
+            .padding(.top, 8)
+            .padding(.bottom, 40)
         }
-        .background(Color.paper.ignoresSafeArea())
+        .background(Color(.systemGroupedBackground))
         .sheet(isPresented: $showWatchPaywall) { ProPaywallView() }
         .sheet(isPresented: $showAlternatives) {
             AlternativesView(product: product, record: record, result: vm.alternativesResult)
@@ -160,13 +164,13 @@ struct ResultView: View {
     // MARK: - Hero (meter + product header)
 
     private func heroSection(product: ShrunkProduct, record: ShrinkRecord) -> some View {
-        VStack(spacing: ShrunkTheme.Spacing.lg) {
+        VStack(spacing: 16) {
             ShrinkMeter(
                 percentChange: record.shrinkPercent,
                 verdict: record.verdict,
                 size: .hero
             )
-            .padding(.top, ShrunkTheme.Spacing.md)
+            .padding(.top, 8)
 
             if product.imageURL != nil {
                 ProductImage(url: product.imageURL, size: 88, cornerRadius: 14)
@@ -175,8 +179,7 @@ struct ResultView: View {
 
             VStack(spacing: 6) {
                 Text(product.name)
-                    .font(.shrunkLargeTitle)
-                    .foregroundStyle(Color.ink)
+                    .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
@@ -192,17 +195,17 @@ struct ResultView: View {
                         Text(product.category)
                     }
                 }
-                .font(.shrunkCallout)
-                .foregroundStyle(Color.smoke)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
                 if let line = bannerSubline(for: record) {
                     Text(line)
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
                         .foregroundStyle(verdictTextColor(record.verdict))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(verdictTintColor(record.verdict))
-                        .clipShape(Capsule())
+                        .background(verdictTintColor(record.verdict), in: Capsule())
                         .padding(.top, 4)
                 }
 
@@ -211,42 +214,27 @@ struct ResultView: View {
                 // fact is the size itself and when we first saw it.
                 if let fact = sizeFactLine(for: record) {
                     Text(fact)
-                        .font(.shrunkCallout)
-                        .foregroundStyle(Color.smoke)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.top, 2)
                 }
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
 
             // Nothing to share in the no-size state: there is no verdict, and
             // ShareCardView's Then→Now block guards on `previousSize`, so the
             // card would render with no sizes on it at all. §2's no-size row
             // lists no Share secondary either.
             if record.currentSize != nil {
-                shareInline(product: product, record: record)
-            }
-        }
-    }
-
-    private func shareInline(product: ShrunkProduct, record: ShrinkRecord) -> some View {
-        HStack(spacing: ShrunkTheme.Spacing.sm) {
-            Button {
-                showShareCard = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 13, weight: .bold))
-                    Text("Share verdict")
-                        .font(.system(size: 13, weight: .semibold))
+                Button {
+                    showShareCard = true
+                } label: {
+                    Label("Share verdict", systemImage: "square.and.arrow.up")
                 }
-                .foregroundStyle(Color.shrunkRed)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.shrunkRedLight)
-                .clipShape(Capsule())
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -255,14 +243,14 @@ struct ResultView: View {
     @ViewBuilder
     private func comparisonRow(record: ShrinkRecord) -> some View {
         if let prev = record.previousSize, let curr = record.currentSize {
-            HStack(spacing: ShrunkTheme.Spacing.sm) {
+            HStack(spacing: 12) {
                 quantityCell(label: "Then",
                              value: prev.quantity.formattedQuantity(unit: prev.unit),
                              date: prev.date,
-                             accent: Color.smoke,
-                             tint: Color.mist)
+                             accent: .primary,
+                             tint: Color(.tertiarySystemFill))
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 16, weight: .heavy))
+                    .font(.headline)
                     .foregroundStyle(verdictTextColor(record.verdict))
                 quantityCell(label: "Now",
                              value: curr.quantity.formattedQuantity(unit: curr.unit),
@@ -270,60 +258,57 @@ struct ResultView: View {
                              accent: verdictTextColor(record.verdict),
                              tint: verdictTintColor(record.verdict))
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
         } else if let curr = record.currentSize {
             VStack(alignment: .leading, spacing: 4) {
-                Text("CURRENT SIZE").shrunkSectionLabel()
+                Text("Current size")
+                    .font(.headline)
                 Text(curr.quantity.formattedQuantity(unit: curr.unit))
-                    .font(.shrunkMonoBig)
-                    .foregroundStyle(Color.ink)
+                    .font(.title.bold())
+                    .monospacedDigit()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .groupedCard()
+            .padding(.horizontal, 20)
         }
     }
 
     private func quantityCell(label: String, value: String, date: Date, accent: Color, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(0.8)
-                .foregroundStyle(accent.opacity(0.85))
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Text(value)
-                .font(.shrunkMonoDisplay)
+                .font(.title2.bold())
+                .monospacedDigit()
                 .foregroundStyle(accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(date, format: .dateTime.year())
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.smoke)
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(ShrunkTheme.Spacing.md)
-        .background(tint)
-        .clipShape(RoundedRectangle(cornerRadius: ShrunkTheme.Radius.md, style: .continuous))
+        .padding(16)
+        .background(tint, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     /// Shown when the live store size disagrees with our latest observation
     /// (spec §4 step 4). Phase 3 sets `needsConfirmation`; the flow is live now.
     private var confirmationCard: some View {
-        VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.sm) {
-            HStack(spacing: 8) {
-                Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Color.verdictWarnDeep)
-                Text("SIZE UNCONFIRMED").shrunkSectionLabel()
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Size unconfirmed", systemImage: "camera.viewfinder")
+                .font(.headline)
+                .foregroundStyle(Color.verdictWarnDeep)
             Text("The size we're showing might be out of date. A photo of the net-weight line settles it.")
-                .font(.shrunkCallout)
-                .foregroundStyle(Color.smoke)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             ShrunkButton("Confirm with a label photo", icon: "camera.fill", variant: .ghost) {
                 showLabelCapture = true
             }
         }
-        .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
+        .groupedCard()
     }
 
     // MARK: - Cost-per-oz
@@ -331,20 +316,21 @@ struct ResultView: View {
     @ViewBuilder
     private func costPerOzSection(record: ShrinkRecord) -> some View {
         if record.costPerUnitNow == nil { EmptyView() } else {
-            VStack(alignment: .leading, spacing: ShrunkTheme.Spacing.md) {
+            VStack(alignment: .leading, spacing: 12) {
                 // When `costPerUnitNow` came from `product.priceHistory`
                 // (`price_snapshots` — Kroger-derived), this card must carry the
                 // same attribution `LivePricePanel` does (spec §9, Phase 3 review
                 // I6). It must NOT show attribution when the price fell back to
                 // `product.currentPrice` with no snapshot history — e.g. curated
                 // Browse cards, whose price is not Kroger data (I6 regression fix).
-                HStack {
-                    Text("REAL COST PER OUNCE").shrunkSectionLabel()
-                    Spacer()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Real cost per ounce")
+                        .font(.headline)
+                    Spacer(minLength: 8)
                     if record.priceIsFromStoreSnapshot {
                         Text(LivePrice.attribution)
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color.smoke)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -355,7 +341,7 @@ struct ResultView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             costBarRow(label: "Then", value: then.formattedCostPerUnit(),
                                        fraction: then / denom, width: geo.size.width,
-                                       fill: Color.smoke.opacity(0.45))
+                                       fill: Color(.systemFill))
                             costBarRow(label: "Now",  value: now.formattedCostPerUnit(),
                                        fraction: now / denom, width: geo.size.width,
                                        fill: Color.shrunkRed)
@@ -364,45 +350,45 @@ struct ResultView: View {
                     .frame(height: 64)
 
                     Text("\(pct.formattedPercentChange(decimals: 1)) more per ounce")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
                         .foregroundStyle(pct > 0 ? Color.shrunkRedDark : Color.verdictGoodDeep)
                 } else if let now = record.costPerUnitNow {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(now.formattedCostPerUnit())
-                            .font(.shrunkMonoBig)
-                            .foregroundStyle(Color.ink)
+                            .font(.title.bold())
+                            .monospacedDigit()
                         Text("per oz")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Color.smoke)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                     Text("We don't have a historical price to compare against — yet.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.smoke)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .groupedCard()
+            .padding(.horizontal, 20)
         }
     }
 
     private func costBarRow(label: String, value: String, fraction: Double, width: CGFloat, fill: Color) -> some View {
-        HStack(spacing: ShrunkTheme.Spacing.sm) {
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .heavy))
-                .tracking(0.6)
-                .foregroundStyle(Color.smoke)
-                .frame(width: 38, alignment: .leading)
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .leading)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.mist)
+                    .fill(Color(.tertiarySystemFill))
                     .frame(height: 22)
                 Capsule()
                     .fill(fill)
                     .frame(width: max(8, width * 0.55 * CGFloat(fraction)), height: 22)
             }
             Text(value)
-                .font(.shrunkMonoSmall)
-                .foregroundStyle(Color.ink)
+                .font(.subheadline.weight(.medium))
+                .monospacedDigit()
         }
     }
 
@@ -416,7 +402,7 @@ struct ResultView: View {
         let outcome = ResultViewModel.watchOutcome(
             record: record, isPro: storeKit.isProUser, isAlreadyWatched: isWatched
         )
-        return VStack(spacing: ShrunkTheme.Spacing.sm) {
+        return VStack(spacing: 8) {
             if outcome == .needsLabel {
                 // "We don't know this size yet": the label photo is the only
                 // thing that unblocks this product, so it is the primary CTA.
@@ -519,69 +505,51 @@ struct ResultView: View {
             withAnimation {
                 toastMessage = "Watching \(product.name) — we'll alert you if it shrinks or its price per oz jumps"
             }
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            successHaptic += 1
         } catch {
             toastIsError = true
             withAnimation {
                 toastMessage = (error as? LocalizedError)?.errorDescription
                     ?? "Couldn't add this to your watchlist."
             }
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            errorHaptic += 1
         }
     }
 
     // MARK: - Loading / not-found / error
 
     private var loadingView: some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
+        VStack(spacing: 16) {
             ProgressView()
                 .controlSize(.large)
-                .tint(Color.shrunkRed)
             Text("Looking up the shrink record…")
-                .font(.shrunkBody)
-                .foregroundStyle(Color.smoke)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.paper)
+        .background(Color(.systemGroupedBackground))
     }
 
     private func notFoundView(barcode: String) -> some View {
-        VStack(spacing: ShrunkTheme.Spacing.md) {
-            Spacer()
-            ZStack {
-                Circle()
-                    .fill(Color.mist)
-                    .frame(width: 96, height: 96)
-                Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 40, weight: .regular))
-                    .foregroundStyle(Color.smoke)
-            }
-            Text("Not in our database yet — snap the label to add it")
-                .font(.shrunkTitle)
-                .foregroundStyle(Color.ink)
-                .multilineTextAlignment(.center)
-                .padding(.top, ShrunkTheme.Spacing.sm)
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
+        ContentUnavailableView {
+            Label("Not in our database yet — snap the label to add it", systemImage: "camera.viewfinder")
+        } description: {
             Text("Barcode \(barcode). One photo of the net-weight line adds it for every Shrunk user.")
-                .font(.shrunkBody)
-                .foregroundStyle(Color.smoke)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
-                .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            VStack(spacing: 10) {
-                ShrunkButton("Snap the label", icon: "camera.fill") {
-                    showLabelCapture = true
-                }
-                Button("Close") { dismiss() }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color.smoke)
+                .monospacedDigit()
+        } actions: {
+            Button {
+                showLabelCapture = true
+            } label: {
+                Label("Snap the label", systemImage: "camera.fill")
             }
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
-            .padding(.top, ShrunkTheme.Spacing.md)
-            Spacer()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+
+            Button("Close") { dismiss() }
+                .buttonStyle(.borderless)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.paper)
+        .background(Color(.systemGroupedBackground))
     }
 
     private func errorView(message: String) -> some View {
@@ -593,7 +561,7 @@ struct ResultView: View {
             action: { Task { await vm.load(barcode: barcode) } }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.paper)
+        .background(Color(.systemGroupedBackground))
     }
 
     // MARK: - Helpers
@@ -657,29 +625,30 @@ struct ResultView: View {
                 showAlternatives = true
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .font(.system(size: 15, weight: .bold))
+                    HStack(spacing: 6) {
+                        Label("Cheapest per oz at your store", systemImage: "arrow.down.circle.fill")
+                            .font(.headline)
                             .foregroundStyle(Color.verdictGoodDeep)
-                        Text("CHEAPEST PER OZ AT YOUR STORE").shrunkSectionLabel()
                         Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
                     Text(best.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.ink)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
                     Text(best.verdict)
-                        .font(.shrunkCallout)
-                        .foregroundStyle(Color.smoke)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .shrunkCard(radius: ShrunkTheme.Radius.lg, padding: ShrunkTheme.Spacing.md)
+                .groupedCard()
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, ShrunkTheme.Spacing.lg)
+            .padding(.horizontal, 20)
         }
     }
 
@@ -688,7 +657,7 @@ struct ResultView: View {
         case .significantShrink: return .shrunkRedDark
         case .moderateShrink, .minorShrink: return .verdictWarnDeep
         case .unchanged, .grew: return .verdictGoodDeep
-        case .insufficientData: return .smoke
+        case .insufficientData: return .secondary
         }
     }
 
@@ -697,7 +666,7 @@ struct ResultView: View {
         case .significantShrink: return .shrunkRedLight
         case .moderateShrink, .minorShrink: return .verdictWarnTint
         case .unchanged, .grew: return .verdictGoodTint
-        case .insufficientData: return .mist
+        case .insufficientData: return Color(.tertiarySystemFill)
         }
     }
 

@@ -130,7 +130,7 @@ struct ShrinkMeter: View {
         case .minorShrink:       return .verdictWarn
         case .unchanged:         return .verdictGood
         case .grew:              return .verdictGood
-        case .insufficientData:  return .smoke
+        case .insufficientData:  return .secondary
         }
     }
 
@@ -178,19 +178,23 @@ struct ShrinkMeter: View {
         }
     }
 
+    /// The ring is a fixed-diameter circle, so the hero numeral keeps a fixed
+    /// point size (the same call the savings hero makes) rather than scaling
+    /// out of its own frame. `compact` and `mini` sit inside list rows and use
+    /// ordinary text styles.
     private var headlineFont: Font {
         switch size {
         case .hero:    return Font.system(size: 56, weight: .bold)
-        case .compact: return Font.system(size: 22, weight: .bold)
-        case .mini:    return Font.system(size: 14, weight: .bold)
+        case .compact: return .title3.bold()
+        case .mini:    return .subheadline.bold()
         }
     }
 
     private var subtitleFont: Font {
         switch size {
-        case .hero:    return Font.system(size: 13, weight: .semibold)
-        case .compact: return Font.system(size: 10, weight: .semibold)
-        case .mini:    return Font.system(size: 9,  weight: .semibold)
+        case .hero:    return .footnote.weight(.semibold)
+        case .compact: return .caption2.weight(.semibold)
+        case .mini:    return .caption2.weight(.semibold)
         }
     }
 }
