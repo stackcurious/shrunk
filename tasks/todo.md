@@ -38,4 +38,4 @@ Context: v2.0.0 (2) is on TestFlight for oakley801@gmail.com. User is testing. M
 ## Review
 - Root causes surfaced by testing the common path: Result screen built for the 1.5 % of products with a recorded size change; Watch silently no-op'd; on-miss lookup dropped sizes; FDC lookup leg ~90 % dead (gtinUpc spelling); normalizer comma/mixed/decimal-pack bugs (25 prod rows corrected); detector compared last two observations instead of size runs; curated catalogue was fabricated (fake barcodes, 404 sources) → re-verified to 25 real cases.
 - UI: full native-HIG restyle (custom theme deleted), Dynamic Type AX5 verified, dark mode verified, 305 unit + 6 UI tests.
-- User-owned decisions still open: Ohio vs Florida governing law; privacy@stackcurious.com mailbox; push of stackcurious/main (blocked by other session's work); Kroger secret rotation; acceptance run on device.
+- Governing law: Florida (decided 2026-08-28). User-owned items still open: privacy@stackcurious.com mailbox; push of stackcurious/main (blocked by other session's work); Kroger secret rotation; acceptance run on device.
