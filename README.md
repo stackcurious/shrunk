@@ -65,7 +65,7 @@ python3 fdc_import.py --zip /tmp/fdc_branded.zip --out out/fdc.sql \
 # Seed the curated catalogue as source='curated' observations:
 python3 seed_curated.py --curated ../data/trending.json --out out/curated.sql
 
-# Coverage of the deployed API over the curated 35:
+# Coverage of the deployed API over the curated catalogue (25 entries):
 python3 hit_rate.py --api https://shrunk-api.<account>.workers.dev
 ```
 

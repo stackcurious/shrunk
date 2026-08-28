@@ -8,6 +8,8 @@
 
 An audit on 2026-08-26 ran the app's only scan-time data source (Open Food Facts) against the 35 curated products that are *known* to have shrunk. Result: 11 UPCs are not in OFF at all, the rest have no before/after quantity, and **0 of 14 clean lookups produced a verdict**. The current Pro tier (watchlist sweeps over OFF, a savings dashboard driven by invented category constants, a quiz-based "$/yr exposure" number) therefore sells outcomes the app cannot observe.
 
+> **Correction, 2026-08-27/28.** "the 35 curated products that are *known* to have shrunk" was not true when this was written. The catalogue had been authored from invented data: 34 of the 35 barcodes were checksum-valid but unissued (fixed in `612cc40`), and all 35 `evidence_url`s 404'd while the size pairs behind them had never been checked against anything (fixed in `1d820a0`). Re-sourcing against the real Mouse Print* downsizing archive kept 17 entries, removed 18 and added 8 — **the catalogue is 25 entries**, and "35" elsewhere in this spec has been generalised. See `.curated-audit-report.md` and `.curated-verify-report.md`.
+
 Research (same day) established the data landscape:
 
 | Source | Size | Price | Storable? | Role |
@@ -166,7 +168,7 @@ On device, Vision `VNRecognizeTextRequest` (accurate, English) runs on the captu
 
 ### 6.4 FDC import (`scripts/fdc_import.py`)
 
-Streams `branded_food.csv` from the latest release zip; for each row with a parseable `package_weight`, emits a product upsert and an observation (`observed_at = available_date`, falling back to `modified_date`). Dedupes consecutive equal sizes per GTIN. Output is a SQL file loaded with `wrangler d1 execute --file`. Also writes a report: rows kept, GTINs with ≥2 distinct normalized sizes, and a cross-check of the 35 curated entries (found / size agrees / disagrees). Re-run on each FDC release (April/October).
+Streams `branded_food.csv` from the latest release zip; for each row with a parseable `package_weight`, emits a product upsert and an observation (`observed_at = available_date`, falling back to `modified_date`). Dedupes consecutive equal sizes per GTIN. Output is a SQL file loaded with `wrangler d1 execute --file`. Also writes a report: rows kept, GTINs with ≥2 distinct normalized sizes, and a cross-check of the curated entries (found / size agrees / disagrees). Re-run on each FDC release (April/October).
 
 ### 6.5 Push
 
@@ -219,7 +221,7 @@ Kroger's Acceptable Use and Terms prohibit "systematically gathering response da
 - **Gate**: each confidence component, boundary at 0.8.
 - **Worker** (Vitest + Miniflare): every endpoint, cron batching, purge, JWS verification with an Apple sandbox transaction, per-device rate limit.
 - **iOS integration**: `ShrunkAPIClient` against a stub Worker; StoreKit configuration file for trial/monthly/yearly.
-- **Acceptance before submission**: scanning all 35 curated products yields a verdict for 35/35; a 30-item kitchen scan yields history for ≥60% of food items; a Kroger store set in Cincinnati shows live prices for ≥25 of those 30.
+- **Acceptance before submission**: scanning every curated product yields a verdict for all of them; a 30-item kitchen scan yields history for ≥60% of food items; a Kroger store set in Cincinnati shows live prices for ≥25 of those 30.
 
 ## 11. Sequencing
 
