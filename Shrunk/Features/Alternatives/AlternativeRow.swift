@@ -1,5 +1,14 @@
 import SwiftUI
 
+/// How a mini stat reads: neutral cell, bad news, good news. Lived in
+/// `StatBox.swift` next to a `StatBox` view nothing referenced; this row is now
+/// its only user (review N6).
+enum StatBoxTone {
+    case neutral
+    case alert
+    case good
+}
+
 struct AlternativeRow: View {
     let alternative: Alternative
     let isBestPick: Bool
@@ -14,7 +23,7 @@ struct AlternativeRow: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Color.verdictGood, in: Capsule())
+                        .background(Color.verdictGoodSolid, in: Capsule())
                 }
 
                 HStack(alignment: .top, spacing: 12) {
@@ -101,8 +110,18 @@ struct AlternativeRow: View {
                 miniStat(label: "Price", value: price.formattedPrice())
             }
             if let stock = alternative.stockLabel {
-                miniStat(label: "Stock", value: stock, tone: stock == "Out of stock" ? .alert : .good)
+                miniStat(label: "Stock", value: stock, tone: Self.tone(forStockLabel: stock))
             }
+        }
+    }
+
+    /// "Stock unknown" is not good news — it is no news, so it gets the neutral
+    /// cell rather than the green one (review S5).
+    private static func tone(forStockLabel label: String) -> StatBoxTone {
+        switch label {
+        case "Out of stock":         return .alert
+        case "In stock", "Low stock": return .good
+        default:                     return .neutral
         }
     }
 

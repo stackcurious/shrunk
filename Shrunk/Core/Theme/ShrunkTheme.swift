@@ -64,39 +64,20 @@ extension Color {
     static let verdictGood     = Color.dynamic(light: "1D9E75", dark: "34C99A")
     static let verdictGoodDeep = Color.dynamic(light: "157852", dark: "56DCAF")
     static let verdictGoodTint = Color.dynamic(light: "E8F5EE", dark: "12352A")
-    static let verdictWarn     = Color.dynamic(light: "EF9F27", dark: "FFB43F")
-    static let verdictWarnDeep = Color.dynamic(light: "B2700B", dark: "FFC97A")
+    /// The one green that does *not* adapt. Anything that paints white text on
+    /// a green capsule has to pin the fill, or the pair adapts on one side only
+    /// and the badge falls to 2.1:1 in dark mode. White on this is 5.5:1 in
+    /// both schemes.
+    static let verdictGoodSolid = Color(hex: "157852")
+    // `EF9F27` was 2.17:1 on a white card — under even the 3:1 non-text floor,
+    // and it is the *sole* signal for a minor/moderate shrink (meter numeral
+    // and ring, alert glyph, history bar). Both amber values are now dark
+    // enough to carry meaning on white: `B2700B` is 4.0:1 (non-text and large
+    // text pass), `8A5600` is 6.2:1 on white and 5.5:1 on `verdictWarnTint`.
+    static let verdictWarn     = Color.dynamic(light: "B2700B", dark: "FFB43F")
+    static let verdictWarnDeep = Color.dynamic(light: "8A5600", dark: "FFC97A")
     static let verdictWarnTint = Color.dynamic(light: "FDF1DE", dark: "3A2B10")
     static let verdictBad      = Color(hex: "E24B4A")
-}
-
-// MARK: - System appearance
-
-/// The appearance the *user* chose, which is not always the one the current
-/// window is in.
-///
-/// `MainTabsView` puts the window into `.dark` while the Scanner tab is
-/// selected — the camera is full-bleed, so the status bar has to draw light —
-/// and SwiftUI implements that by overriding the window's user interface
-/// style. A sheet presented from that tab inherits the override, which is why
-/// the Result screen used to open dark on a light-mode device while the same
-/// screen opened from Browse or Alerts was light.
-///
-/// A `UIScreen`'s trait collection is the one place that is not affected by a
-/// window's `overrideUserInterfaceStyle` — the scene's is, because SwiftUI
-/// pushes the preference up to it. So the screen still reports what the user
-/// actually picked. `nil` means "nothing to read yet" — treat that as "don't
-/// override".
-enum SystemAppearance {
-    static var current: ColorScheme? {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-        switch scene?.screen.traitCollection.userInterfaceStyle {
-        case .dark:  return .dark
-        case .light: return .light
-        default:     return nil
-        }
-    }
 }
 
 // MARK: - View modifiers

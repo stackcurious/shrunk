@@ -16,17 +16,16 @@ struct ProBadge: View {
     var body: some View {
         switch style {
         case .pill:
-            HStack(spacing: 3) {
-                Image(systemName: "lock.fill")
-                    .font(.caption2.weight(.semibold))
-                Text("PRO")
-                    .font(.caption2.weight(.semibold))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Color.shrunkRed)
-            .clipShape(Capsule())
+            // No padlock: the pill marks an entitlement the user *has*
+            // (Settings shows it next to "Shrunk Pro"), and a lock on an
+            // unlocked feature reads backwards (review N5).
+            Text("PRO")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.shrunkRed)
+                .clipShape(Capsule())
 
         case .lock:
             Image(systemName: "lock.fill")
