@@ -142,7 +142,7 @@ struct MainTabsView: View {
         // cross-faded the entire window on every Scan↔other switch, and it is
         // what forced the Result sheet to undo the override by hand. The
         // scanner now darkens only its own view controller
-        // (`ScannerView.darkChrome`), which is also the controller
+        // (`ScannerView.cameraChrome`), which is also the controller
         // `UITabBarController` asks for the status bar style — so the camera
         // still gets a light status bar and nothing else changes appearance.
     }

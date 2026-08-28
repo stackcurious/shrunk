@@ -238,11 +238,12 @@ struct ResultView: View {
             }
             .padding(.horizontal, 20)
 
-            // §2 lists Share only on the shrink and unchanged/grew rows, all of
-            // which have a `previousSize`. It is also the only thing
-            // ShareCardView's Then→Now block can draw, so without one the card
-            // would render with no sizes on it at all (review N4).
-            if record.previousSize != nil {
+            // §2 lists Share only on the shrink and unchanged/grew rows, which
+            // is exactly the set `comparisonRow` above will draw a Then→Now for
+            // — and that pair of sizes is the card's whole payload. One
+            // predicate answers both so the screen and the shared PNG can't
+            // contradict each other (review N4, residual 1).
+            if ShareCardRenderer.canShare(record: record) {
                 Button {
                     showShareCard = true
                 } label: {
@@ -627,6 +628,14 @@ struct ResultView: View {
             let diff = abs(prev.quantity - curr.quantity)
             return "They took \(Self.compact(diff)) \(curr.unit)"
         case .unchanged:
+            // Unreachable from `ShrinkDetector.analyze` since size runs landed
+            // (`ShrinkDetector.swift:163`): adjacent runs differ by more than
+            // the ±1% tolerance by construction, so a held size collapses to
+            // one run and reports `.insufficientData` instead. Kept because
+            // this switch must be exhaustive and `.unchanged` is still what
+            // `WatchedProduct` and the alert models carry — if a size that
+            // held ever reaches this screen, §2's copy is here and correct.
+            //
             // §2: "Same size since 2021" — the year of the *earliest*
             // observation, which is how far back we can actually vouch for it,
             // not the year of the latest one.

@@ -13,6 +13,25 @@ enum ShareCardRenderer {
         CGSize(width: designSize.width * renderScale, height: designSize.height * renderScale)
     }
 
+    /// Whether this record carries a Then→Now claim we stand behind, and so
+    /// whether there is anything to share at all.
+    ///
+    /// Deliberately the same predicate as `ResultView.comparisonRow`'s gate:
+    /// the screen and the shareable PNG must not disagree. `.insufficientData`
+    /// records can *have* a `previousSize` — the zero-quantity guard and the
+    /// cross-source plausibility clamp both keep one — and drawing it would
+    /// put "from 0ml → 946.4ml" into an image that leaves the app under a
+    /// screen that says "No shrink on record" (review residual 1).
+    ///
+    /// `.unchanged` is unreachable from `ShrinkDetector.analyze` today, but
+    /// spec §2 lists Share on the unchanged/grew row, so this asks "is the
+    /// verdict real" rather than hard-coding the reachable cases.
+    static func canShare(record: ShrinkRecord) -> Bool {
+        record.verdict != .insufficientData
+            && record.previousSize != nil
+            && record.currentSize != nil
+    }
+
     static func render(record: ShrinkRecord, product: ShrunkProduct) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -102,8 +121,9 @@ enum ShareCardRenderer {
 
         // "They took: N unit" + "from X → Y" (right column)
         let rightX = rect.width / 2 + 12
+        let comparable = canShare(record: record)
         let tookString: String = {
-            if let prev = record.previousSize, let curr = record.currentSize {
+            if comparable, let prev = record.previousSize, let curr = record.currentSize {
                 let diff = abs(prev.quantity - curr.quantity)
                 return "They took: \(Self.compact(diff)) \(curr.unit)"
             }
@@ -118,7 +138,7 @@ enum ShareCardRenderer {
         )
 
         let fromTo: String = {
-            if let prev = record.previousSize, let curr = record.currentSize {
+            if comparable, let prev = record.previousSize, let curr = record.currentSize {
                 return "from \(Self.compact(prev.quantity))\(prev.unit) → \(Self.compact(curr.quantity))\(curr.unit)"
             }
             return "first scan"

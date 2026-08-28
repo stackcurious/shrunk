@@ -29,6 +29,8 @@ Root cause of the Watch bug: `ResultView.addToWatchlist` and `WatchlistService.a
 | **No size at all** | "We don't know this size yet" | name/brand; live price if any (no per-oz) | **Snap the label to start tracking** (opens `LabelCaptureView`) | Alternatives (category search) |
 | Not found | "Not in our database yet" (existing) | — | Snap the label | — |
 
+Since size runs landed (`ShrinkDetector` compares the last two *runs*, not the last two observations), the "Unchanged" half of row 2 is unreachable — a size that held collapses into one run and reports the single-snapshot state instead; the branch is kept in `ResultView.bannerSubline` for switch exhaustiveness and because the alert models still carry `.unchanged`. Share is gated by `ShareCardRenderer.canShare(record:)`, the same predicate `comparisonRow` uses, so the shared PNG can never draw a Then→Now the screen refused to.
+
 Watch button semantics (`ResultViewModel.watchOutcome(record:isPro:) -> WatchOutcome` — pure, unit-tested):
 - `.needsLabel` when there is no current size (button title "Snap the label to start tracking") — checked **before** the paywall: label capture is free and is the only action that can unblock watching, so a size-less product must never paywall (ruling 2026-08-27, wave 1)
 - `.paywall` when `!isPro`
