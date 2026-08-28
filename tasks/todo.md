@@ -18,7 +18,7 @@ Context: v2.0.0 (2) is on TestFlight for oakley801@gmail.com. User is testing. M
 - [x] Attach build bb3c0b75 (2.0.0/2)
 - [x] Subscriptions: review note + review screenshot → READY_TO_SUBMIT; group localization
 - [x] Six 6.9" screenshots uploaded to en-US (set f6a5cec3)
-- [ ] Final state check: every "missing" item enumerated (after build 4 attaches)
+- [x] Final state check clean; SUBMITTED for App Review 2026-08-28 (submission bdce0306…: version + group + both subs, all WAITING_FOR_REVIEW)
 
 ## C. Screenshots (1320×2868) — subagent
 - [x] ShrunkUITests target + `-ui-testing` overrides (Pro on, store preselected, fixture alerts)
@@ -31,7 +31,7 @@ Context: v2.0.0 (2) is on TestFlight for oakley801@gmail.com. User is testing. M
 - [x] iOS wave 2: native HIG restyle (§3) — after wave 1 + screenshot agent land
 - [x] Retake screenshots on the restyled UI
 - [x] Whole-app review (Opus) → fixes → re-review PASS; build 2.0.0 (3) uploaded
-- [ ] Build 2.0.0 (4) with detector fix → TestFlight (oakley801) — in progress
+- [x] Build 2.0.0 (4) with detector fix → TestFlight (oakley801) — VALID, IN_BETA_TESTING
 - [x] Upload six 6.9" shots + paywall shot to ASC — all COMPLETE; both subscriptions READY_TO_SUBMIT
 - [x] Curated catalogue re-verified from real sources → 25 cases, hit-rate 25/25; marketing cases.ts regenerated; detector run-collapse fix; prod orphan rows cleaned (user-approved)
 
