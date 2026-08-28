@@ -136,10 +136,13 @@ final class ContributeViewModel: ObservableObject {
         }
     }
 
-    /// Up to three decimals with the trailing zeros trimmed, so an unedited
-    /// 340.194 g submits at full precision but 500 mL reads as "500".
+    /// One decimal with the trailing zeros trimmed: "340.2", "500". The sheet
+    /// asks the shopper to check this against the label, and nobody can verify
+    /// "354.369" against "NET WT 12.5 OZ (354g)" — three decimals of a
+    /// converted value is false precision (review S14). A tenth of a gram or
+    /// millilitre is well inside what a label prints.
     static func format(_ quantity: Double) -> String {
-        var text = String(format: "%.3f", quantity)
+        var text = String(format: "%.1f", quantity)
         while text.contains("."), text.hasSuffix("0") || text.hasSuffix(".") {
             text.removeLast()
         }

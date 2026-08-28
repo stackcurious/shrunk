@@ -30,6 +30,12 @@ struct WatchlistRow: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
+            // A tap gesture is invisible to assistive technology: without
+            // these VoiceOver never announces the row as a button and Switch
+            // Control / Full Keyboard Access cannot activate it (review S16).
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(.default, onTap)
 
             Toggle("Alerts for \(watched.productName)", isOn: Binding(
                 get: { watched.alertEnabled },

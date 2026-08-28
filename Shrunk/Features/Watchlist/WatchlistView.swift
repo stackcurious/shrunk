@@ -13,6 +13,7 @@ struct WatchlistView: View {
     @State private var showDashboard: Bool = false
     @State private var pendingRemoval: WatchedProduct?
     @State private var toastMessage: String?
+    @State private var toastIsError = false
 
     var body: some View {
         NavigationStack {
@@ -30,7 +31,11 @@ struct WatchlistView: View {
         }
         .overlay(alignment: .bottom) {
             if let toastMessage {
-                Toast(message: toastMessage)
+                Toast(
+                    message: toastMessage,
+                    icon: toastIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                    tint: toastIsError ? Color.shrunkRed : Color.verdictGood
+                )
                     .padding(.bottom, 110)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -63,8 +68,13 @@ struct WatchlistView: View {
         ) {
             Button("Stop watching", role: .destructive) {
                 if let item = pendingRemoval {
-                    vm?.remove(item)
-                    showToast("Removed from watchlist")
+                    // Only the success path gets the success toast; a failed
+                    // delete says so (review S11).
+                    if vm?.remove(item) == true {
+                        showToast("Removed from watchlist")
+                    } else {
+                        showToast(vm?.errorMessage ?? "Couldn't remove this product.", isError: true)
+                    }
                 }
                 pendingRemoval = nil
             }
@@ -76,7 +86,8 @@ struct WatchlistView: View {
         }
     }
 
-    private func showToast(_ message: String) {
+    private func showToast(_ message: String, isError: Bool = false) {
+        toastIsError = isError
         toastMessage = message
         Task {
             try? await Task.sleep(nanoseconds: 2_800_000_000)
@@ -121,7 +132,11 @@ struct WatchlistView: View {
                     WatchlistRow(
                         watched: item,
                         onTap: { vm?.presentedBarcode = item.barcode },
-                        onToggleAlert: { vm?.toggleAlert(for: item) }
+                        onToggleAlert: {
+                            if vm?.toggleAlert(for: item) == false {
+                                showToast(vm?.errorMessage ?? "Couldn't change this alert.", isError: true)
+                            }
+                        }
                     )
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {

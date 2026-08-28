@@ -105,6 +105,9 @@ struct ProPaywallView: View {
         NavigationStack {
             ProPaywallContent()
                 .background(Color(.systemGroupedBackground))
+                // The inline bar was empty, so the hero and the trial banner
+                // faded under it with nothing to replace them (review S1).
+                .navigationTitle("Shrunk Pro")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -272,7 +275,7 @@ struct ProPaywallContent: View {
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
-                                .background(Color.verdictGood, in: Capsule())
+                                .background(Color.verdictGoodSolid, in: Capsule())
                         }
                     }
                     Text(caption)

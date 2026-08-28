@@ -12,6 +12,7 @@ struct SavingsDashboardView: View {
     private var watchlist: [WatchedProduct]
 
     @AppStorage("shrunk.onboarding_profile") private var rawProfile: String = "{}"
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     @State private var showPaywall: Bool = false
 
@@ -149,19 +150,28 @@ struct SavingsDashboardView: View {
                     .multilineTextAlignment(.center)
             }
 
+            // A checklist that tells you to do what you have already done is a
+            // dead end (review S4). Satisfied steps tick off instead.
             VStack(spacing: 12) {
                 howItWorksRow(
-                    icon: "1.circle.fill",
-                    title: "Set your store",
-                    subtitle: "Settings → Store. Without a price we can't cost a shrink."
+                    step: 1,
+                    done: !storeName.isEmpty,
+                    title: storeName.isEmpty ? "Set your store" : "Store set — \(storeName)",
+                    subtitle: storeName.isEmpty
+                        ? "Settings → Store. Without a price we can't cost a shrink."
+                        : "Live prices come from here."
                 )
                 howItWorksRow(
-                    icon: "2.circle.fill",
-                    title: "Scan or watch what you buy",
+                    step: 2,
+                    done: !watchlist.isEmpty,
+                    title: watchlist.isEmpty
+                        ? "Scan or watch what you buy"
+                        : "Watching \(watchlist.count) product\(watchlist.count == 1 ? "" : "s")",
                     subtitle: "Anything with a size history gets a verdict."
                 )
                 howItWorksRow(
-                    icon: "3.circle.fill",
+                    step: 3,
+                    done: false,
                     title: "We do the multiplication",
                     subtitle: "Size drop × price × how often you shop."
                 )
@@ -172,15 +182,16 @@ struct SavingsDashboardView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func howItWorksRow(icon: String, title: String, subtitle: String) -> some View {
+    private func howItWorksRow(step: Int, done: Bool, title: String, subtitle: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
+            Image(systemName: done ? "checkmark.circle.fill" : "\(step).circle.fill")
                 .font(.title3)
-                .foregroundStyle(Color.shrunkRed)
+                .foregroundStyle(done ? Color.verdictGood : Color.shrunkRed)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(subtitle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -188,6 +199,8 @@ struct SavingsDashboardView: View {
             }
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(done ? "Done" : "Not done yet")
     }
 }
 

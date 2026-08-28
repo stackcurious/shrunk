@@ -8,6 +8,9 @@ struct SettingsView: View {
     @State private var showDashboard: Bool = false
     @State private var showNotificationPrefs: Bool = false
     @State private var showStorePicker: Bool = false
+    @State private var showClearHistoryConfirmation: Bool = false
+    @State private var toastMessage: String?
+    @State private var toastIsError: Bool = false
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     var body: some View {
@@ -46,8 +49,12 @@ struct SettingsView: View {
                     SettingsRow(icon: "leaf.fill", iconTint: .verdictGood, label: "Open Food Facts (ODbL)", isLink: true) {
                         if let url = URL(string: "https://world.openfoodfacts.org") { openURL(url) }
                     }
-                    SettingsRow(icon: "trash.fill", iconTint: .secondary, label: "Clear scan history") {
-                        UserDefaults.standard.removeObject(forKey: "shrunk.recent_barcodes")
+                    // Destructive, irreversible, and it used to fire on the
+                    // first tap with no confirmation and no feedback — and
+                    // carried a `>` it doesn't earn (review S12).
+                    SettingsRow(icon: "trash.fill", iconTint: .secondary,
+                                label: "Clear scan history", showsDisclosure: false) {
+                        showClearHistoryConfirmation = true
                     }
                 } header: {
                     Text("Data sources")
@@ -87,6 +94,20 @@ struct SettingsView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Settings")
+            .overlay(alignment: .bottom) { toastOverlay }
+            .confirmationDialog(
+                "Clear scan history?",
+                isPresented: $showClearHistoryConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear scan history", role: .destructive) {
+                    UserDefaults.standard.removeObject(forKey: "shrunk.recent_barcodes")
+                    showToast("Scan history cleared")
+                }
+                Button("Keep it", role: .cancel) {}
+            } message: {
+                Text("The Recent row on the Scan tab empties. Your watchlist and alerts are untouched.")
+            }
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView()
@@ -132,9 +153,7 @@ struct SettingsView: View {
                 SettingsRow(icon: "chart.line.uptrend.xyaxis", iconTint: .shrunkRed, label: "Savings") {
                     showDashboard = true
                 }
-                Button("Restore purchases") {
-                    Task { await storeKit.restore() }
-                }
+                restoreButton
             } else {
                 Button {
                     showPaywall = true
@@ -148,11 +167,49 @@ struct SettingsView: View {
                 .controlSize(.large)
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
 
-                Button("Restore purchases") {
-                    Task { await storeKit.restore() }
-                }
+                restoreButton
             }
         }
+    }
+
+    /// Settings' restore fired and said nothing, unlike the paywall's — which
+    /// already has the copy for every outcome (review S12).
+    private var restoreButton: some View {
+        Button("Restore purchases") {
+            Task {
+                await storeKit.restore()
+                let failure = ProPaywallViewModel.restoreOutcomeMessage(
+                    isPro: storeKit.isProUser,
+                    error: storeKit.loadError
+                )
+                showToast(failure ?? "Shrunk Pro restored.", isError: failure != nil)
+            }
+        }
+        .disabled(storeKit.purchaseInProgress)
+    }
+
+    // MARK: - Toast
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if let toastMessage {
+            Toast(
+                message: toastMessage,
+                icon: toastIsError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill",
+                tint: toastIsError ? Color.shrunkRed : Color.verdictGood
+            )
+            .padding(.bottom, 24)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .task(id: toastMessage) {
+                try? await Task.sleep(nanoseconds: 2_800_000_000)
+                withAnimation { self.toastMessage = nil }
+            }
+        }
+    }
+
+    private func showToast(_ message: String, isError: Bool = false) {
+        toastIsError = isError
+        withAnimation { toastMessage = message }
     }
 
     // MARK: - Positioning footer
@@ -194,13 +251,22 @@ private struct SettingsRow: View {
     let iconTint: Color
     let label: String
     let isLink: Bool
+    let showsDisclosure: Bool
     let action: () -> Void
 
-    init(icon: String, iconTint: Color, label: String, isLink: Bool = false, action: @escaping () -> Void) {
+    init(
+        icon: String,
+        iconTint: Color,
+        label: String,
+        isLink: Bool = false,
+        showsDisclosure: Bool = true,
+        action: @escaping () -> Void
+    ) {
         self.icon = icon
         self.iconTint = iconTint
         self.label = label
         self.isLink = isLink
+        self.showsDisclosure = showsDisclosure
         self.action = action
     }
 
@@ -213,9 +279,11 @@ private struct SettingsRow: View {
                     Image(systemName: icon).foregroundStyle(iconTint)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: isLink ? "arrow.up.right" : "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                if showsDisclosure {
+                    Image(systemName: isLink ? "arrow.up.right" : "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .contentShape(Rectangle())
         }

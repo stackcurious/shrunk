@@ -3,6 +3,7 @@ import SwiftUI
 struct StorePickerView: View {
     @StateObject private var vm = StorePickerViewModel()
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     /// Onboarding embeds the picker without navigation chrome.
     let embedded: Bool
@@ -67,6 +68,21 @@ struct StorePickerView: View {
     private var storeSections: some View {
         switch vm.state {
         case .idle:
+            // The screen used to give no sign a store was already chosen
+            // (review S10) — so it read as unconfigured every time it opened.
+            if !storeName.isEmpty {
+                Section("Your store") {
+                    HStack(spacing: 12) {
+                        Text(storeName)
+                            .font(.body)
+                        Spacer(minLength: 8)
+                        Image(systemName: "checkmark")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.shrunkRed)
+                            .accessibilityLabel("Selected")
+                    }
+                }
+            }
             Section {
                 Text("Pick a Kroger store to see live prices and cost per ounce on every scan.")
                     .font(.subheadline)

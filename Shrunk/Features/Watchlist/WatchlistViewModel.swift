@@ -15,19 +15,31 @@ final class WatchlistViewModel {
         self.service = service
     }
 
-    func toggleAlert(for watched: WatchedProduct) {
+    /// Both mutators report whether they actually did the thing. `errorMessage`
+    /// used to be written and never read anywhere in the tree, and the view
+    /// toasted "Removed from watchlist" whether or not the delete threw
+    /// (spec rule 4, review S11).
+    @discardableResult
+    func toggleAlert(for watched: WatchedProduct) -> Bool {
         do {
             try service.setAlertEnabled(!watched.alertEnabled, for: watched)
+            errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
-    func remove(_ watched: WatchedProduct) {
+    @discardableResult
+    func remove(_ watched: WatchedProduct) -> Bool {
         do {
             try service.remove(watched)
+            errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 

@@ -112,7 +112,7 @@ final class ContributeViewModelTests: XCTestCase {
         await vm.handleCapture(image: try pixel(), jpegData: jpeg)
 
         XCTAssertEqual(vm.step, .confirm)
-        XCTAssertEqual(vm.quantityText, "340.194")
+        XCTAssertEqual(vm.quantityText, "340.2")
         XCTAssertEqual(vm.unitKind, .mass)
         XCTAssertEqual(vm.sourceLine, "NET WT 12 OZ (340g)")
         XCTAssertTrue(vm.canSubmit)
@@ -151,8 +151,10 @@ final class ContributeViewModelTests: XCTestCase {
         await vm.handleCapture(image: try pixel(), jpegData: jpeg)
         await vm.submit()
 
+        // The submitted value is what the shopper confirmed, which is now the
+        // rounded figure the sheet showed them (review S14).
         XCTAssertEqual(api.calls, [StubSubmitter.Call(
-            gtin: "0028400642255", quantity: 340.194, unitKind: .mass,
+            gtin: "0028400642255", quantity: 340.2, unitKind: .mass,
             rawText: "NET WT 12 OZ (340g)", ocrConfidence: 0.94,
             deviceId: "device-1", photoBytes: 4
         )])
@@ -254,12 +256,15 @@ final class ContributeViewModelTests: XCTestCase {
         )
     }
 
-    func test_format_trimsTrailingZerosWithoutLosingPrecision() {
-        XCTAssertEqual(ContributeViewModel.format(340.194), "340.194")
+    /// One decimal, trailing zeros trimmed — a figure a shopper can actually
+    /// check against the label they are holding (review S14).
+    func test_format_roundsToOneDecimalAndTrimsTrailingZeros() {
+        XCTAssertEqual(ContributeViewModel.format(340.194), "340.2")
         XCTAssertEqual(ContributeViewModel.format(500), "500")
-        XCTAssertEqual(ContributeViewModel.format(4258.584), "4258.584")
-        XCTAssertEqual(ContributeViewModel.format(73.709), "73.709")
+        XCTAssertEqual(ContributeViewModel.format(4258.584), "4258.6")
+        XCTAssertEqual(ContributeViewModel.format(73.709), "73.7")
         XCTAssertEqual(ContributeViewModel.format(1360), "1360")
+        XCTAssertEqual(ContributeViewModel.format(354.369), "354.4")
     }
 
     // MARK: - Photo preparation

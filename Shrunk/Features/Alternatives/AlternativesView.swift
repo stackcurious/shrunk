@@ -4,6 +4,7 @@ struct AlternativesView: View {
     @StateObject private var vm: AlternativesViewModel
     @EnvironmentObject private var storeKit: StoreKitService
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
     init(product: ShrunkProduct, record: ShrinkRecord, result: AlternativesResult) {
         _vm = StateObject(wrappedValue: AlternativesViewModel(product: product, record: record, result: result))
@@ -21,7 +22,7 @@ struct AlternativesView: View {
                         EmptyStateView(
                             icon: "magnifyingglass",
                             title: "Nothing to compare yet",
-                            message: "Set your store in Settings to see in-stock alternatives ranked by cost per ounce."
+                            message: emptyMessage
                         )
                     } else {
                         if vm.isCurated {
@@ -77,6 +78,15 @@ struct AlternativesView: View {
         )) { wrapper in
             ResultView(barcode: wrapper.id)
         }
+    }
+
+    /// Rule 1: never send someone off to do something they have already done.
+    /// With a store set, an empty list means the shelf had nothing better —
+    /// not that the app is unconfigured (review S3).
+    private var emptyMessage: String {
+        storeName.isEmpty
+            ? "Set your store in Settings to see in-stock alternatives ranked by cost per ounce."
+            : "No cheaper option at \(storeName) right now. We'll keep checking."
     }
 
     // MARK: - Header strip

@@ -27,10 +27,17 @@ final class StorePickerViewModel: ObservableObject {
         self.selectedId = defaults.string(forKey: Self.locationIdKey)
     }
 
+    /// Shown when a submit can't run, so a 4-digit ZIP says why instead of
+    /// doing nothing (spec rule 4, review S10).
+    static let zipValidationMessage = "Enter a 5-digit ZIP code."
+
     var canSearch: Bool { zip.filter(\.isNumber).count == 5 }
 
     func search() async {
-        guard canSearch else { return }
+        guard canSearch else {
+            state = zip.isEmpty ? .idle : .failed(Self.zipValidationMessage)
+            return
+        }
         state = .loading
         do {
             let stores = try await store.locations(zip: zip.filter(\.isNumber))
