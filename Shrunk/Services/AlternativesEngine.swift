@@ -58,7 +58,9 @@ struct AlternativesEngine {
 
         return results
             .filter { $0.gtin != product.id }
-            .filter { $0.inStock }
+            // Only drop what Kroger said is *out*. A row with no stock field is
+            // an unknown, and unknowns are still worth ranking.
+            .filter { !$0.isOutOfStock }
             .filter { $0.unitKind == scannedKind }
             .compactMap { result -> (StoreSearchResult, Double)? in
                 guard let cost = Self.costPerOunce(result) else { return nil }

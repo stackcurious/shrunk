@@ -20,16 +20,45 @@ extension StorePriced {
         return regular > promo
     }
 
-    var inStock: Bool { (stockLevel ?? "").uppercased() != "TEMPORARILY_OUT_OF_STOCK" }
-
-    var stockLabel: String {
+    /// What the store actually told us about availability. `unknown` is its own
+    /// state: a missing or unrecognised `stockLevel` is an absence of an answer,
+    /// not a "yes".
+    var stockState: StockState {
         switch (stockLevel ?? "").uppercased() {
-        case "HIGH":                     return "In stock"
-        case "LOW":                      return "Low stock"
-        case "TEMPORARILY_OUT_OF_STOCK": return "Out of stock"
-        default:                         return "Stock unknown"
+        case "HIGH":                     return .inStock
+        case "LOW":                      return .low
+        case "TEMPORARILY_OUT_OF_STOCK": return .outOfStock
+        default:                         return .unknown
         }
     }
+
+    /// Only true when the store said the product is on the shelf. Surfaces that
+    /// paint a green "it's there" capsule must use this, never the negation of
+    /// `isOutOfStock`.
+    var inStock: Bool { stockState == .inStock || stockState == .low }
+
+    /// Only true when the store said it is *out*. This is the filter
+    /// `AlternativesEngine` wants — dropping every row with no stock field
+    /// would empty the list on a store that simply doesn't report it.
+    var isOutOfStock: Bool { stockState == .outOfStock }
+
+    var stockLabel: String {
+        switch stockState {
+        case .inStock:    return "In stock"
+        case .low:        return "Low stock"
+        case .outOfStock: return "Out of stock"
+        case .unknown:    return "Stock unknown"
+        }
+    }
+}
+
+/// Availability as reported by the store, with "we weren't told" kept distinct
+/// from "yes" and "no".
+enum StockState: Hashable {
+    case inStock
+    case low
+    case outOfStock
+    case unknown
 }
 
 /// Live price for the scanned product at the user's store. Every surface that
