@@ -182,6 +182,9 @@ final class ScreenshotTests: XCTestCase {
         require(attribution, "the live-price panel", timeout: networkTimeout)
         Thread.sleep(forTimeInterval: 5)
         scroll(app, to: attribution)
+        // No `nudgeDown` here, unlike shot 6: at dy 0.3 this screen has the
+        // "Share verdict" button, and a press-drag there opens the share sheet
+        // instead of easing the scroll back.
         capture("03_live_price")
     }
 
