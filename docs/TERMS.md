@@ -49,7 +49,7 @@ We may update these terms; the date above changes when we do, and material chang
 
 ## 10. Governing law
 
-These terms are governed by the laws of the State of Ohio, United States, without regard to conflict-of-law rules.
+These terms are governed by the laws of the State of Florida, United States, without regard to conflict-of-law rules.
 
 ## 11. Contact
 
