@@ -5,13 +5,45 @@ struct ScannerView: View {
     @StateObject private var processor = BarcodeProcessor()
     @StateObject private var vm = ScannerViewModel()
 
-    @State private var pulseOuter: CGFloat = 1.0
     @State private var pulseInner: CGFloat = 0.96
     @State private var scanLineY: CGFloat = -1
 
     private let reticleSize: CGFloat = 260
 
     var body: some View {
+        cameraChrome
+            // Applied here, *inside* the presentation modifiers below, so it
+            // covers the camera chrome and nothing else. As the outermost
+            // modifier it also flowed into the Result sheet, which is a content
+            // screen and has to follow the device (spec §3).
+            .environment(\.colorScheme, .dark)
+            .onAppear { processor.bootstrap() }
+        .onDisappear { processor.stop() }
+        .onChange(of: processor.detectedBarcode) { _, new in
+            if let new { vm.handle(barcode: new) }
+        }
+        .sheet(item: Binding<ScannedBarcode?>(
+            get: { vm.presentedBarcode.map { ScannedBarcode(id: $0) } },
+            set: { vm.presentedBarcode = $0?.id }
+        )) { wrapper in
+            ResultView(barcode: wrapper.id)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert("Couldn't start camera",
+               isPresented: Binding(
+                   get: { processor.error != nil && processor.isAuthorized },
+                   set: { if !$0 { processor.error = nil } }
+               ),
+               actions: { Button("OK", role: .cancel) {} },
+               message: { Text(processor.error ?? "") })
+    }
+
+    /// Everything that draws over the camera. Dark by construction — the feed
+    /// is full-bleed black — and dark *only here*: `MainTabsView` no longer
+    /// flips the window's scheme when this tab is selected, which used to
+    /// cross-fade the whole app on every tab switch (review S2).
+    private var cameraChrome: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -34,32 +66,6 @@ struct ScannerView: View {
                 }
             }
         }
-        .onAppear { processor.bootstrap() }
-        .onDisappear { processor.stop() }
-        .onChange(of: processor.detectedBarcode) { _, new in
-            if let new { vm.handle(barcode: new) }
-        }
-        .sheet(item: Binding<ScannedBarcode?>(
-            get: { vm.presentedBarcode.map { ScannedBarcode(id: $0) } },
-            set: { vm.presentedBarcode = $0?.id }
-        )) { wrapper in
-            ResultView(barcode: wrapper.id)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
-        .alert("Couldn't start camera",
-               isPresented: Binding(
-                   get: { processor.error != nil && processor.isAuthorized },
-                   set: { if !$0 { processor.error = nil } }
-               ),
-               actions: { Button("OK", role: .cancel) {} },
-               message: { Text(processor.error ?? "") })
-        // Scoped to this subtree, not the window: `.preferredColorScheme` here
-        // is a preference that propagates out of the TabView and forced the
-        // *whole app* dark, which left the status bar drawing white-on-cream
-        // (unreadable) on Browse, Watchlist, Alerts and Settings. The window's
-        // scheme is now chosen per selected tab in `MainTabsView`.
-        .environment(\.colorScheme, .dark)
     }
 
     // MARK: - Camera overlays
@@ -77,13 +83,9 @@ struct ScannerView: View {
 
     private var reticle: some View {
         ZStack {
-            // Outer breathing ring
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .stroke(Color.shrunkRed.opacity(0.55), lineWidth: 1.5)
-                .scaleEffect(pulseOuter)
-                .opacity(2 - Double(pulseOuter))
-
-            // Static frame
+            // One stroke, plus the brackets. There used to be three concentric
+            // rounded rects here — the breathing ring, this frame and the dim
+            // mask's cutout edge — which read as a stack of boxes (review N3).
             RoundedRectangle(cornerRadius: 32, style: .continuous)
                 .stroke(Color.shrunkRed.opacity(0.85), lineWidth: 2)
                 .scaleEffect(pulseInner)
@@ -111,9 +113,6 @@ struct ScannerView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
-                pulseOuter = 1.18
-            }
             withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
                 pulseInner = 1.0
             }
@@ -186,7 +185,11 @@ struct ScannerView: View {
             Label("Recent", systemImage: "clock.arrow.circlepath")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
 
+            // The chips used to be hard-clipped at the card's padding edge, so
+            // the third one read as truncated text rather than a scrollable
+            // row. Content margins give it a gutter it can scroll under (N3).
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(vm.recentBarcodes, id: \.self) { code in
@@ -203,8 +206,18 @@ struct ScannerView: View {
                     }
                 }
             }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .mask(
+                LinearGradient(
+                    stops: [.init(color: .black, location: 0),
+                            .init(color: .black, location: 0.88),
+                            .init(color: .clear, location: 1)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
         }
-        .padding(16)
+        .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.ultraThinMaterial,
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous))

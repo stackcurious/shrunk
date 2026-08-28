@@ -138,10 +138,12 @@ struct MainTabsView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(4)
         }
-        // The scanner is a full-bleed camera screen, so the window goes dark
-        // there or the status bar draws black-on-black. Every other tab
-        // follows the system appearance — `nil` is "don't override" — which is
-        // what makes dark mode work app-wide (spec §3).
-        .preferredColorScheme(selectedTab == 0 ? .dark : nil)
+        // No window-level `preferredColorScheme` here. Flipping it per tab
+        // cross-faded the entire window on every Scan↔other switch, and it is
+        // what forced the Result sheet to undo the override by hand. The
+        // scanner now darkens only its own view controller
+        // (`ScannerView.darkChrome`), which is also the controller
+        // `UITabBarController` asks for the status bar style — so the camera
+        // still gets a light status bar and nothing else changes appearance.
     }
 }
