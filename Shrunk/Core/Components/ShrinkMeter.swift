@@ -60,11 +60,22 @@ struct ShrinkMeter: View {
                     Text(sub)
                         .font(subtitleFont)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             .padding(.horizontal, dimension * 0.12)
+            // The ring is a fixed-diameter graphic, so its two labels can't
+            // grow past `.accessibility1` without spilling out of it — at AX5
+            // the compact meter's subtitle truncated to "S…" (review B3).
+            // Everything the meter says is also in the accessibility label
+            // below, which is not capped.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         }
         .frame(width: dimension, height: dimension)
+        // Two loose `Text`s with no label for the ring itself; now one element
+        // that says what it means (review S16).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
         .onAppear {
             // Tiny delay then animate the ring fill — gives the screen entrance a beat.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
@@ -112,14 +123,16 @@ struct ShrinkMeter: View {
 
     // MARK: - Style mapping
 
+    /// The arc *is* the percentage: a full circle is 100 %, so a 12 % shrink
+    /// draws a 12 % arc. It used to run on a 25 % (shrink) / 30 % (grew) full
+    /// scale, which drew a half-full ring around the numeral "12%" — a gauge
+    /// contradicting the number inside it (review N1).
     private var targetFillFraction: CGFloat {
         switch verdict {
         case .insufficientData, .unchanged:
             return 0.04   // tiny stub — shows the ring is alive but not registering a delta
-        case .grew:
-            return min(1.0, CGFloat(abs(percentChange) / 30))
-        case .significantShrink, .moderateShrink, .minorShrink:
-            return min(1.0, CGFloat(abs(percentChange) / 25))
+        case .grew, .significantShrink, .moderateShrink, .minorShrink:
+            return min(1.0, max(0.04, CGFloat(abs(percentChange) / 100)))
         }
     }
 
@@ -187,6 +200,21 @@ struct ShrinkMeter: View {
         case .hero:    return Font.system(size: 56, weight: .bold)
         case .compact: return .title3.bold()
         case .mini:    return .subheadline.bold()
+        }
+    }
+
+    /// What the ring, the numeral and the caption add up to, in one sentence.
+    private var accessibilityDescription: String {
+        let magnitude = String(format: "%.1f", abs(percentChange))
+        switch verdict {
+        case .significantShrink, .moderateShrink, .minorShrink:
+            return "Shrunk \(magnitude) percent"
+        case .grew:
+            return "Grew \(magnitude) percent"
+        case .unchanged:
+            return "Held its size"
+        case .insufficientData:
+            return "No shrink on record — first scan"
         }
     }
 

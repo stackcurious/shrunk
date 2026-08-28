@@ -23,6 +23,9 @@ struct ResultView: View {
     @State private var successHaptic = 0
     @State private var errorHaptic = 0
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
+    /// Side-by-side cells and label-beside-bar rows stop fitting somewhere
+    /// around the first accessibility size; past that everything stacks.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(barcode: String) {
         self.barcode = barcode
@@ -37,17 +40,15 @@ struct ResultView: View {
     var body: some View {
         NavigationStack {
             content
+                // Without a title the inline bar is empty, so scrolled content
+                // fades under it with nothing to replace it (review S1).
+                .navigationTitle(navigationTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbar }
                 .overlay(alignment: .bottom) { toastOverlay }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        // Opened from the Scanner tab this sheet inherits that tab's dark
-        // window override, so a light-mode user got a dark Result screen from
-        // a scan and a light one from Browse. Result is a content screen, not
-        // camera chrome: it follows the device.
-        .preferredColorScheme(SystemAppearance.current)
         .sensoryFeedback(.success, trigger: successHaptic)
         .sensoryFeedback(.error, trigger: errorHaptic)
         .task(id: barcode) {
@@ -83,6 +84,16 @@ struct ResultView: View {
             // Pro status changes, rather than waiting for a reload.
             Task { await vm.refreshAlternatives(isPro: isPro) }
         }
+    }
+
+    /// The bar condenses to whatever the screen is about; `.inline` keeps it a
+    /// single line, and the hero below repeats it at full size the way any
+    /// iOS detail sheet does.
+    private var navigationTitle: String {
+        if case .loaded(let product, _) = vm.state, !product.name.isEmpty {
+            return product.name
+        }
+        return "Scan result"
     }
 
     @ViewBuilder
@@ -189,19 +200,19 @@ struct ResultView: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.7)
 
-                HStack(spacing: 6) {
-                    if !product.brand.isEmpty {
-                        Text(product.brand)
-                    }
-                    if !product.brand.isEmpty && !product.category.isEmpty {
-                        Text("·")
-                    }
-                    if !product.category.isEmpty {
-                        Text(product.category)
-                    }
+                // One `Text`, not three in an `HStack`: separate cells each
+                // wrapped on their own at AX5 and read as "Gatorad e · Bever-
+                // ages" (review B3).
+                let provenance = [product.brand, product.category]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · ")
+                if !provenance.isEmpty {
+                    Text(provenance)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
 
                 if let line = bannerSubline(for: record) {
                     Text(line)
@@ -227,11 +238,11 @@ struct ResultView: View {
             }
             .padding(.horizontal, 20)
 
-            // Nothing to share in the no-size state: there is no verdict, and
-            // ShareCardView's Then→Now block guards on `previousSize`, so the
-            // card would render with no sizes on it at all. §2's no-size row
-            // lists no Share secondary either.
-            if record.currentSize != nil {
+            // §2 lists Share only on the shrink and unchanged/grew rows, all of
+            // which have a `previousSize`. It is also the only thing
+            // ShareCardView's Then→Now block can draw, so without one the card
+            // would render with no sizes on it at all (review N4).
+            if record.previousSize != nil {
                 Button {
                     showShareCard = true
                 } label: {
@@ -245,16 +256,30 @@ struct ResultView: View {
 
     // MARK: - Then → Now comparison row
 
+    /// A Then→Now row is a claim that the two sizes are comparable.
+    /// `ShrinkDetector` also emits `.insufficientData` from the zero-quantity
+    /// guard and the cross-source plausibility clamp, and both keep a
+    /// `previousSize` we have just decided not to trust — drawing it beside
+    /// "No shrink on record" contradicts the headline, and in the zero case
+    /// prints "0 ml → 946.4 ml" (review S13). Those states fall through to the
+    /// single "Current size" card instead.
     @ViewBuilder
     private func comparisonRow(record: ShrinkRecord) -> some View {
-        if let prev = record.previousSize, let curr = record.currentSize {
-            HStack(spacing: 12) {
+        if record.verdict != .insufficientData,
+           let prev = record.previousSize, let curr = record.currentSize {
+            // Two cells side by side cannot hold "946.4 ml" at AX5 without
+            // truncating the one number the screen exists for, so past the
+            // first accessibility size the arrow turns downward and they stack.
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 8))
+                : AnyLayout(HStackLayout(spacing: 12))
+            layout {
                 quantityCell(label: "Then",
                              value: prev.quantity.formattedQuantity(unit: prev.unit),
                              date: prev.date,
                              accent: .primary,
                              tint: Color(.tertiarySystemFill))
-                Image(systemName: "arrow.right")
+                Image(systemName: dynamicTypeSize.isAccessibilitySize ? "arrow.down" : "arrow.right")
                     .font(.headline)
                     .foregroundStyle(verdictTextColor(record.verdict))
                 quantityCell(label: "Now",
@@ -271,6 +296,7 @@ struct ResultView: View {
                 Text(curr.quantity.formattedQuantity(unit: curr.unit))
                     .font(.title.bold())
                     .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .groupedCard()
             .padding(.horizontal, 20)
@@ -286,8 +312,11 @@ struct ResultView: View {
                 .font(.title2.bold())
                 .monospacedDigit()
                 .foregroundStyle(accent)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                // Wraps instead of shrinking away: "946.4 ml" at AX5 used to
+                // truncate to "946.4…", which is the payload of the screen.
+                .lineLimit(2)
+                .minimumScaleFactor(0.5)
+                .fixedSize(horizontal: false, vertical: true)
             Text(date, format: .dateTime.year())
                 .font(.caption)
                 .monospacedDigit()
@@ -332,7 +361,9 @@ struct ResultView: View {
                     Text("Real cost per ounce")
                         .font(.headline)
                     Spacer(minLength: 8)
-                    if record.priceIsFromStoreSnapshot {
+                    // One attribution per screen: when the store card below is
+                    // already carrying it, this card doesn't repeat it (N7).
+                    if record.priceIsFromStoreSnapshot, !livePricePanelCarriesAttribution {
                         Text(LivePrice.attribution)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -342,22 +373,22 @@ struct ResultView: View {
                 if let then = record.costPerUnitThen, let now = record.costPerUnitNow, then > 0 {
                     let pct = ((now - then) / then) * 100
                     let denom = max(then, now)
-                    GeometryReader { geo in
-                        VStack(alignment: .leading, spacing: 8) {
-                            costBarRow(label: "Then", value: then.formattedCostPerUnit(),
-                                       fraction: then / denom, width: geo.size.width,
-                                       fill: Color(.systemFill))
-                            costBarRow(label: "Now",  value: now.formattedCostPerUnit(),
-                                       fraction: now / denom, width: geo.size.width,
-                                       fill: Color.shrunkRed)
-                        }
+                    // The rows used to live inside a `GeometryReader` pinned to
+                    // 64 pt: at an accessibility size the content grew past it
+                    // and the "% more per ounce" line was drawn on top of the
+                    // bars. Each row now measures itself (review B3).
+                    VStack(alignment: .leading, spacing: 8) {
+                        costBarRow(label: "Then", value: then.formattedCostPerUnit(),
+                                   fraction: then / denom, fill: Color(.systemFill))
+                        costBarRow(label: "Now",  value: now.formattedCostPerUnit(),
+                                   fraction: now / denom, fill: Color.shrunkRed)
                     }
-                    .frame(height: 64)
 
                     Text("\(pct.formattedPercentChange(decimals: 1)) more per ounce")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(pct > 0 ? Color.shrunkRedDark : Color.verdictGoodDeep)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if let now = record.costPerUnitNow {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(now.formattedCostPerUnit())
@@ -377,24 +408,34 @@ struct ResultView: View {
         }
     }
 
-    private func costBarRow(label: String, value: String, fraction: Double, width: CGFloat, fill: Color) -> some View {
-        HStack(spacing: 10) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(width: 40, alignment: .leading)
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color(.tertiarySystemFill))
-                    .frame(height: 22)
-                Capsule()
-                    .fill(fill)
-                    .frame(width: max(8, width * 0.55 * CGFloat(fraction)), height: 22)
+    /// Label and figure sit on their own line above the bar, so neither is
+    /// boxed into a fixed width ("Then" used to truncate to "…" inside a 40 pt
+    /// frame). The bar itself is a graphic and keeps its 22 pt height at every
+    /// text size — only the `GeometryReader` that measures its width is fixed.
+    private func costBarRow(label: String, value: String, fraction: Double, fill: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text(value)
+                    .font(.subheadline.weight(.medium))
+                    .monospacedDigit()
             }
-            Text(value)
-                .font(.subheadline.weight(.medium))
-                .monospacedDigit()
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color(.tertiarySystemFill))
+                    Capsule()
+                        .fill(fill)
+                        .frame(width: max(8, geo.size.width * CGFloat(fraction)))
+                }
+            }
+            .frame(height: 22)
+            .accessibilityHidden(true)
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - CTAs
@@ -537,7 +578,10 @@ struct ResultView: View {
 
     private func notFoundView(barcode: String) -> some View {
         ContentUnavailableView {
-            Label("Not in our database yet — snap the label to add it", systemImage: "camera.viewfinder")
+            // §2's headline, verbatim. The call to action it used to carry is
+            // the button directly below it, and the toolbar ✕ is the Close
+            // this used to duplicate (review N2).
+            Label("Not in our database yet", systemImage: "camera.viewfinder")
         } description: {
             Text("Barcode \(barcode). One photo of the net-weight line adds it for every Shrunk user.")
                 .monospacedDigit()
@@ -549,9 +593,6 @@ struct ResultView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-
-            Button("Close") { dismiss() }
-                .buttonStyle(.borderless)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground))
@@ -570,6 +611,14 @@ struct ResultView: View {
     }
 
     // MARK: - Helpers
+
+    /// `LivePricePanel` prints "Prices from Kroger" only when it has a loaded
+    /// row to attribute, so that is exactly when the per-ounce card above it
+    /// can stay quiet.
+    private var livePricePanelCarriesAttribution: Bool {
+        if case .loaded = vm.livePrice { return true }
+        return false
+    }
 
     private func bannerSubline(for record: ShrinkRecord) -> String? {
         switch record.verdict {
@@ -597,7 +646,11 @@ struct ResultView: View {
     /// single-snapshot state needs it; the shrink states already draw a
     /// Then→Now row.
     private func sizeFactLine(for record: ShrinkRecord) -> String? {
-        guard record.verdict == .insufficientData, let size = record.currentSize else { return nil }
+        // Gated on the *shape of the data*, not the verdict: `.insufficientData`
+        // also covers records that do have a previous size we chose not to
+        // trust, and "first seen …" alongside a rejected earlier observation is
+        // a claim we can't make (review S13).
+        guard record.previousSize == nil, let size = record.currentSize else { return nil }
         let quantity = size.quantity.formattedQuantity(unit: size.unit)
         if vm.adoptedLiveSize {
             let store = storeName.isEmpty ? "Kroger" : storeName
@@ -662,7 +715,10 @@ struct ResultView: View {
         case .significantShrink: return .shrunkRedDark
         case .moderateShrink, .minorShrink: return .verdictWarnDeep
         case .unchanged, .grew: return .verdictGoodDeep
-        case .insufficientData: return .secondary
+        // `.secondary` on `tertiarySystemFill` is 3.11:1 — under AA for the
+        // `.subheadline.semibold` verdict pill that ~98.5 % of scans land on
+        // (review S7). The full label colour on the same fill clears it.
+        case .insufficientData: return Color(.label)
         }
     }
 

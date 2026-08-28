@@ -175,6 +175,11 @@ struct BrowseView: View {
 private struct TrendingCard: View {
     let record: ShrinkRecord
 
+    /// Grows with the text it holds instead of clipping it. Capped so one card
+    /// never fills the whole row — the point of the strip is that there is
+    /// another card to the right.
+    @ScaledMetric(relativeTo: .subheadline) private var cardWidth: CGFloat = 320
+
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             ShrinkMeter(
@@ -196,6 +201,7 @@ private struct TrendingCard: View {
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -203,7 +209,11 @@ private struct TrendingCard: View {
             ProductImage(url: record.product.imageURL, size: 56, cornerRadius: 10)
         }
         .padding(14)
-        .frame(width: 320, height: 132)
+        // Was a hard 320 × 132: at an accessibility size the name clipped to
+        // "Tropi can…" and the meter caption to "S…" (review B3). Height is
+        // now intrinsic and the width scales with the text.
+        .frame(width: min(cardWidth, 460), alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color(.secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }

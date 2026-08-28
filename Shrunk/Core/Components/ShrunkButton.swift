@@ -69,9 +69,13 @@ struct ShrunkButton: View {
                 } else if let icon {
                     Image(systemName: icon)
                 }
+                // "Watch — we'll alert you if it shrinks" cannot survive an
+                // accessibility size on one line at 0.8, so it wraps instead of
+                // truncating (review S9).
                 Text(title)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+                    .multilineTextAlignment(.center)
             }
             .font(.headline)
             .frame(maxWidth: .infinity)

@@ -41,7 +41,11 @@ struct LabelCaptureView: View {
         .onDisappear { camera.stop() }
         .sheet(isPresented: .constant(showsConfirmSheet)) {
             ContributeConfirmSheet(vm: vm) { vm.retake() }
-                .presentationDetents([.height(420)])
+                // A fixed 420 pt sheet clipped the Submit button at
+                // accessibility sizes (review S15). `.medium` is the same
+                // reading height on a phone and `.large` is there when the
+                // content needs it.
+                .presentationDetents([.medium, .large])
                 .interactiveDismissDisabled()
         }
         .onChange(of: vm.step) { _, step in

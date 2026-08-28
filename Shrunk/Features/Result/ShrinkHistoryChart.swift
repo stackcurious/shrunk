@@ -9,6 +9,7 @@ struct ShrinkHistoryChart: View {
     let onUpgrade: (() -> Void)?
 
     @State private var selected: SizeRecord?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Spec §3.4: Pro sees every observation, free sees the latest two.
     /// Always oldest-first, so the chart reads left to right in time.
@@ -105,6 +106,12 @@ struct ShrinkHistoryChart: View {
                         .monospacedDigit()
                         .padding(.leading, 4)
                 }
+                // Shrank / held / grew was encoded in the bar colour alone
+                // (review S16). Colour is now one of two channels.
+                .accessibilityLabel("\(record.date.formatted(.dateTime.year().month(.abbreviated)))")
+                .accessibilityValue(
+                    "\(record.quantity.formattedQuantity(unit: record.unit)), \(Self.changeDescription(at: idx, in: history))"
+                )
             }
         }
         .chartXAxis {
@@ -138,20 +145,46 @@ struct ShrinkHistoryChart: View {
     }
 
     private func barColor(at index: Int) -> Color {
-        guard index > 0 else { return .verdictGood }
+        switch Self.change(at: index, in: history) {
+        case .baseline, .grew: return .verdictGood
+        case .shrank:          return .verdictBad
+        case .held:            return .verdictWarn
+        }
+    }
+
+    enum BarChange { case baseline, shrank, held, grew }
+
+    /// One place decides what a bar means; the colour and the spoken value both
+    /// read from it, so they can never disagree.
+    static func change(at index: Int, in history: [SizeRecord]) -> BarChange {
+        guard index > 0 else { return .baseline }
         let prev = ShrinkDetector.normalize(history[index - 1]).quantity
         let curr = ShrinkDetector.normalize(history[index]).quantity
-        if curr < prev * 0.99 { return .verdictBad }
-        if curr > prev * 1.01 { return .verdictGood }
-        return .verdictWarn
+        if curr < prev * 0.99 { return .shrank }
+        if curr > prev * 1.01 { return .grew }
+        return .held
+    }
+
+    static func changeDescription(at index: Int, in history: [SizeRecord]) -> String {
+        switch change(at: index, in: history) {
+        case .baseline: return "first observation"
+        case .shrank:   return "shrank"
+        case .held:     return "held its size"
+        case .grew:     return "grew"
+        }
     }
 
     // MARK: - Before/after variant
 
     private var beforeAfter: some View {
-        HStack(spacing: 12) {
+        // Same rule as the Result screen's Then→Now row: two cells side by
+        // side can't hold "946.4 ml" at an accessibility size (review B3).
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
             sideCell(record: history[0], label: "Before", isAlert: false)
-            Image(systemName: "arrow.right")
+            Image(systemName: dynamicTypeSize.isAccessibilitySize ? "arrow.down" : "arrow.right")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             sideCell(record: history[1], label: "Now", isAlert: true)
@@ -167,6 +200,7 @@ struct ShrinkHistoryChart: View {
                 .font(.subheadline.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(isAlert ? Color.shrunkRedDark : Color.verdictGoodDeep)
+                .fixedSize(horizontal: false, vertical: true)
             Text(record.date, format: .dateTime.year().month(.abbreviated))
                 .font(.caption)
                 .monospacedDigit()

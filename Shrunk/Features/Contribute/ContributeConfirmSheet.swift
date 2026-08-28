@@ -8,6 +8,17 @@ struct ContributeConfirmSheet: View {
     @FocusState private var quantityFocused: Bool
 
     var body: some View {
+        ScrollView {
+            content
+        }
+        // Only scrolls when it has to, so at ordinary text sizes the sheet
+        // still reads as a fixed card.
+        .scrollBounceBehavior(.basedOnSize)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .onAppear { quantityFocused = vm.quantityText.isEmpty }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Check the size")
@@ -48,8 +59,6 @@ struct ContributeConfirmSheet: View {
                 .pickerStyle(.segmented)
             }
 
-            Spacer(minLength: 0)
-
             VStack(spacing: 8) {
                 ShrunkButton(
                     "Submit",
@@ -64,7 +73,6 @@ struct ContributeConfirmSheet: View {
             }
         }
         .padding(20)
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .onAppear { quantityFocused = vm.quantityText.isEmpty }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
