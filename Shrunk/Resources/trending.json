@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "updated": "2026-08-27T00:00:00Z",
+  "updated": "2026-08-27T18:00:00Z",
   "source_repo": "https://github.com/stackcurious/shrunk",
   "license": "CC-BY-4.0 — data fields are facts; the curation/commentary is licensed Creative Commons Attribution.",
-  "notes": "2026-08-27 audit: every `barcode` in this file is now a real GTIN, confirmed against the Kroger Products API (product-by-id at a Cincinnati store) and, where the product is a food, Open Food Facts and/or USDA FoodData Central. The previous barcodes were fabricated — checksum-valid but not issued to these products. WARNING: the `evidence_url` of every entry currently 404s and no `history` point has been re-verified against a primary source; the size figures are unsourced pending re-curation. See .curated-audit-report.md. Dates are 'first observed shipping at reduced size' per the original (unverified) reporting — approximate to the month.",
+  "notes": "2026-08-27 re-verification. Every entry cites a page that was fetched and returned HTTP 200 and that states BOTH the before and the after net contents for that product; the `source` field names it. The previous 35 entries were authored from invented data - all 35 evidence_url values 404'd and the size pairs were unsourced - so 18 were removed outright, 17 were corrected against the real Mouse Print* downsizing archive, and 8 documented cases were added. Date convention: `history[1].date` is the publication date of the cited article - the month the smaller package was documented on shelf. `history[0].date` is twelve months earlier, an approximation for 'the size the source says it used to be'. No date here is more precise than that. Every `barcode` is a real GTIN confirmed against the Kroger Products API, USDA FoodData Central and/or Open Food Facts, and identifies the product line the source describes. Where a package has shrunk again since the cited article, the entry still records the documented step; the app's live Kroger and USDA observations show the rest. `current_price` is the shelf price at Kroger Hyde Park, Cincinnati (locationId 01400355) on 2026-08-27.",
   "trending": [
     {
       "barcode": "0052000135138",
@@ -12,12 +12,21 @@
       "category": "Beverages",
       "image_url": "https://images.openfoodfacts.org/images/products/005/200/013/5138/front_en.6.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 32, "unit": "fl oz" },
-        { "date": "2021-09-01", "quantity": 28, "unit": "fl oz" }
+        {
+          "date": "2021-03-07",
+          "quantity": 32,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2022-03-07",
+          "quantity": 28,
+          "unit": "fl oz"
+        }
       ],
-      "current_price": 1.89,
+      "current_price": 1.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/02/14/gatorade-shrinks-32-oz-bottles/",
+      "evidence_url": "https://www.mouseprint.org/2022/03/07/shrink-mar22/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -27,42 +36,45 @@
       "category": "Snacks",
       "image_url": "https://images.openfoodfacts.org/images/products/002/840/051/6464/front_en.62.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 9.75, "unit": "oz" },
-        { "date": "2022-01-01", "quantity": 9.25, "unit": "oz" }
+        {
+          "date": "2020-05-10",
+          "quantity": 9.75,
+          "unit": "oz"
+        },
+        {
+          "date": "2021-05-10",
+          "quantity": 9.25,
+          "unit": "oz"
+        }
       ],
-      "current_price": 4.99,
+      "current_price": 5.49,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/01/24/doritos-bags-quietly-shrunk/",
+      "evidence_url": "https://www.mouseprint.org/2021/05/10/here-we-downsize-and-up-size-again-spring-2021/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0025500304182",
-      "name": "Folgers Classic Roast",
+      "barcode": "0025500304403",
+      "name": "Folgers Breakfast Blend Coffee",
       "brand": "Folgers",
       "category": "Beverages",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/550/030/4182/front_en.8.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/550/030/4403/front_en.5.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 51, "unit": "oz" },
-        { "date": "2022-06-01", "quantity": 43.5, "unit": "oz" }
+        {
+          "date": "2022-12-18",
+          "quantity": 25.4,
+          "unit": "oz"
+        },
+        {
+          "date": "2023-12-18",
+          "quantity": 22.6,
+          "unit": "oz"
+        }
       ],
-      "current_price": 12.99,
+      "current_price": 16.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/08/01/folgers-coffee-cans-quietly-shrunk/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0043000094228",
-      "name": "Maxwell House Original Roast",
-      "brand": "Maxwell House",
-      "category": "Beverages",
-      "image_url": "https://images.openfoodfacts.org/images/products/004/300/009/4228/front_en.11.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 30.6, "unit": "oz" },
-        { "date": "2022-09-01", "quantity": 24.5, "unit": "oz" }
-      ],
-      "current_price": 9.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/10/03/maxwell-house-coffee-cans-shrink/",
+      "evidence_url": "https://www.mouseprint.org/2023/12/18/here-we-shrink-again-year-end-2023/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -72,12 +84,21 @@
       "category": "Paper products",
       "image_url": null,
       "history": [
-        { "date": "2020-01-01", "quantity": 264, "unit": "count" },
-        { "date": "2022-08-01", "quantity": 244, "unit": "count" }
+        {
+          "date": "2017-12-24",
+          "quantity": 308,
+          "unit": "count"
+        },
+        {
+          "date": "2018-12-24",
+          "quantity": 286,
+          "unit": "count"
+        }
       ],
-      "current_price": 24.99,
+      "current_price": 16.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/03/14/charmin-mega-rolls-shrink-again/",
+      "evidence_url": "https://www.mouseprint.org/2018/12/24/here-we-downsize-again-dec-2018/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -87,12 +108,21 @@
       "category": "Paper products",
       "image_url": null,
       "history": [
-        { "date": "2020-01-01", "quantity": 312, "unit": "count" },
-        { "date": "2022-05-01", "quantity": 268, "unit": "count" }
+        {
+          "date": "2021-03-14",
+          "quantity": 340,
+          "unit": "count"
+        },
+        {
+          "date": "2022-03-14",
+          "quantity": 312,
+          "unit": "count"
+        }
       ],
-      "current_price": 18.99,
+      "current_price": 13.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/05/23/cottonelle-mega-roll-sheet-shrinkflation/",
+      "evidence_url": "https://www.mouseprint.org/2022/03/14/here-we-downsize-again-winter-22-part-2/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -102,42 +132,21 @@
       "category": "Paper products",
       "image_url": null,
       "history": [
-        { "date": "2019-01-01", "quantity": 117, "unit": "count" },
-        { "date": "2022-08-01", "quantity": 105, "unit": "count" }
+        {
+          "date": "2022-05-01",
+          "quantity": 98,
+          "unit": "count"
+        },
+        {
+          "date": "2023-05-01",
+          "quantity": 90,
+          "unit": "count"
+        }
       ],
-      "current_price": 22.99,
+      "current_price": 14.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/07/04/bounty-paper-towel-rolls-shrink-sheets/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0036000542813",
-      "name": "Kleenex Ultra Soft Facial Tissues",
-      "brand": "Kleenex",
-      "category": "Paper products",
-      "image_url": null,
-      "history": [
-        { "date": "2020-01-01", "quantity": 100, "unit": "count" },
-        { "date": "2022-03-01", "quantity": 80,  "unit": "count" }
-      ],
-      "current_price": 3.49,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/03/28/kleenex-tissue-counts-quietly-shrunk/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0049200045503",
-      "name": "Domino Pure Cane Sugar",
-      "brand": "Domino",
-      "category": "Sugar",
-      "image_url": "https://images.openfoodfacts.org/images/products/004/920/004/5503/front_en.22.400.jpg",
-      "history": [
-        { "date": "2019-01-01", "quantity": 4,    "unit": "lb" },
-        { "date": "2022-09-01", "quantity": 3.75, "unit": "lb" }
-      ],
-      "current_price": 3.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/11/14/domino-sugar-bags-shrink/",
+      "evidence_url": "https://www.mouseprint.org/2023/05/01/may23/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -147,12 +156,21 @@
       "category": "Personal care",
       "image_url": null,
       "history": [
-        { "date": "2020-01-01", "quantity": 4.1, "unit": "oz" },
-        { "date": "2022-01-01", "quantity": 3.8, "unit": "oz" }
+        {
+          "date": "2020-12-27",
+          "quantity": 4.1,
+          "unit": "oz"
+        },
+        {
+          "date": "2021-12-27",
+          "quantity": 3.8,
+          "unit": "oz"
+        }
       ],
-      "current_price": 4.99,
+      "current_price": 5.49,
       "currency": "USD",
-      "evidence_url": "https://www.consumerreports.org/money/shrinkflation/",
+      "evidence_url": "https://www.mouseprint.org/2021/12/27/here-we-downsize-again-year-end-2021/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -162,162 +180,117 @@
       "category": "Snacks",
       "image_url": "https://images.openfoodfacts.org/images/products/004/400/006/9216/front_en.37.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 14,   "unit": "oz" },
-        { "date": "2022-01-01", "quantity": 13.5, "unit": "oz" }
+        {
+          "date": "2020-05-10",
+          "quantity": 16,
+          "unit": "oz"
+        },
+        {
+          "date": "2021-05-10",
+          "quantity": 14,
+          "unit": "oz"
+        }
       ],
-      "current_price": 4.49,
+      "current_price": 6.29,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/02/07/wheat-thins-box-shrinks/",
+      "evidence_url": "https://www.mouseprint.org/2021/05/10/here-we-downsize-and-up-size-again-spring-2021/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0044000060237",
-      "name": "Oreos Family Size",
+      "barcode": "0044000060169",
+      "name": "Oreo Thins Family Size",
       "brand": "Nabisco",
       "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/004/400/006/0237/front_en.51.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/004/400/006/0169/front_en.48.400.jpg",
       "history": [
-        { "date": "2019-01-01", "quantity": 19.1,  "unit": "oz" },
-        { "date": "2021-06-01", "quantity": 18.71, "unit": "oz" }
+        {
+          "date": "2023-04-15",
+          "quantity": 13.1,
+          "unit": "oz"
+        },
+        {
+          "date": "2024-04-15",
+          "quantity": 11.78,
+          "unit": "oz"
+        }
       ],
-      "current_price": 5.49,
+      "current_price": 5.29,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2021/07/12/oreo-family-size-shrinks/",
+      "evidence_url": "https://www.mouseprint.org/2024/04/15/here-we-shrink-again-spring-2024/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0024100440702",
-      "name": "Cheez-It Original Family Size",
-      "brand": "Cheez-It",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/410/044/0702/front_en.63.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 21, "unit": "oz" },
-        { "date": "2022-08-01", "quantity": 19, "unit": "oz" }
-      ],
-      "current_price": 5.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/09/12/cheez-it-family-size-shrinks/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0038000199066",
-      "name": "Frosted Flakes Family Size",
-      "brand": "Kellogg's",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/003/800/019/9066/front_en.12.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 24,   "unit": "oz" },
-        { "date": "2022-06-01", "quantity": 19.7, "unit": "oz" }
-      ],
-      "current_price": 6.49,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/06/27/kelloggs-family-size-cereal-shrinks/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0030000311820",
-      "name": "Quaker Chewy Granola Bars (8 ct)",
-      "brand": "Quaker",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/003/000/031/1820/front_en.6.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 9.84, "unit": "oz" },
-        { "date": "2022-06-01", "quantity": 8.4,  "unit": "oz" }
-      ],
-      "current_price": 3.69,
-      "currency": "USD",
-      "evidence_url": "https://www.consumerreports.org/money/shrinkflation/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0028400199148",
-      "name": "Lay's Classic Family Size",
+      "barcode": "0028400310413",
+      "name": "Lay's Classic Party Size",
       "brand": "Lay's",
       "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/840/019/9148/front_en.82.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/840/031/0413/front_en.39.400.jpg",
       "history": [
-        { "date": "2019-01-01", "quantity": 10,  "unit": "oz" },
-        { "date": "2022-03-01", "quantity": 9.5, "unit": "oz" }
+        {
+          "date": "2019-08-03",
+          "quantity": 15.25,
+          "unit": "oz"
+        },
+        {
+          "date": "2020-08-03",
+          "quantity": 13,
+          "unit": "oz"
+        }
       ],
-      "current_price": 4.99,
+      "current_price": 5.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/04/04/lays-potato-chips-bags-shrink/",
+      "evidence_url": "https://www.mouseprint.org/2020/08/03/here-we-downsize-again-summer-2020/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0028400064088",
-      "name": "Tostitos Scoops Tortilla Chips",
+      "barcode": "0028400517942",
+      "name": "Tostitos Hint of Lime",
       "brand": "Tostitos",
       "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/840/006/4088/front_en.17.400.jpg",
+      "image_url": "https://images.openfoodfacts.org/images/products/002/840/051/7942/front_en.60.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 10,  "unit": "oz" },
-        { "date": "2022-05-01", "quantity": 9.25, "unit": "oz" }
-      ],
-      "current_price": 4.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/05/16/tostitos-scoops-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0014100052951",
-      "name": "Pepperidge Farm Goldfish Family Size",
-      "brand": "Pepperidge Farm",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/001/410/005/2951/front_en.18.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 8,   "unit": "oz" },
-        { "date": "2022-08-01", "quantity": 7.2, "unit": "oz" }
-      ],
-      "current_price": 4.49,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/09/05/pepperidge-farm-goldfish-shrinkflation/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0016000125063",
-      "name": "Honey Nut Cheerios Family Size",
-      "brand": "General Mills",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/001/600/012/5063/front_en.63.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 19.5, "unit": "oz" },
-        { "date": "2022-04-01", "quantity": 18.8, "unit": "oz" }
+        {
+          "date": "2020-08-09",
+          "quantity": 13,
+          "unit": "oz"
+        },
+        {
+          "date": "2021-08-09",
+          "quantity": 11,
+          "unit": "oz"
+        }
       ],
       "current_price": 5.49,
       "currency": "USD",
-      "evidence_url": "https://www.consumerreports.org/money/shrinkflation/",
+      "evidence_url": "https://www.mouseprint.org/2021/08/09/here-we-downsize-again-summer-2021-part-2/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0072830081092",
-      "name": "Tillamook Ice Cream Vanilla",
-      "brand": "Tillamook",
-      "category": "Dairy",
-      "image_url": "https://images.openfoodfacts.org/images/products/007/283/008/1092/front_en.24.400.jpg",
+      "barcode": "0014100054672",
+      "name": "Goldfish Cheddar Carton",
+      "brand": "Pepperidge Farm",
+      "category": "Snacks",
+      "image_url": "https://images.openfoodfacts.org/images/products/001/410/005/4672/front_en.30.400.jpg",
       "history": [
-        { "date": "2019-01-01", "quantity": 56, "unit": "fl oz" },
-        { "date": "2021-06-01", "quantity": 48, "unit": "fl oz" }
+        {
+          "date": "2022-12-18",
+          "quantity": 30,
+          "unit": "oz"
+        },
+        {
+          "date": "2023-12-18",
+          "quantity": 27.3,
+          "unit": "oz"
+        }
       ],
-      "current_price": 5.99,
+      "current_price": 10.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2021/08/16/tillamook-ice-cream-cartons-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0074570004003",
-      "name": "Häagen-Dazs Vanilla Ice Cream",
-      "brand": "Häagen-Dazs",
-      "category": "Dairy",
-      "image_url": "https://images.openfoodfacts.org/images/products/007/457/000/4003/front_en.4.400.jpg",
-      "history": [
-        { "date": "2008-01-01", "quantity": 16, "unit": "fl oz" },
-        { "date": "2009-03-01", "quantity": 14, "unit": "fl oz" }
-      ],
-      "current_price": 5.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2009/03/02/haagen-dazs-pints-no-longer-pints/",
+      "evidence_url": "https://www.mouseprint.org/2023/12/18/here-we-shrink-again-year-end-2023/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -327,12 +300,21 @@
       "category": "Dairy",
       "image_url": "https://images.openfoodfacts.org/images/products/007/756/725/4238/front_en.8.400.jpg",
       "history": [
-        { "date": "2014-01-01", "quantity": 48, "unit": "fl oz" },
-        { "date": "2017-01-01", "quantity": 32, "unit": "fl oz" }
+        {
+          "date": "2007-05-12",
+          "quantity": 56,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2008-05-12",
+          "quantity": 48,
+          "unit": "fl oz"
+        }
       ],
-      "current_price": 4.99,
+      "current_price": 5.49,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2017/01/16/breyers-half-gallon-now-only-32-ounces/",
+      "evidence_url": "https://www.mouseprint.org/2008/05/12/ice-cream-scoop-major-brands-downsize-again/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -342,12 +324,21 @@
       "category": "Dairy",
       "image_url": "https://images.openfoodfacts.org/images/products/004/154/800/1869/front_en.11.400.jpg",
       "history": [
-        { "date": "2018-01-01", "quantity": 48, "unit": "fl oz" },
-        { "date": "2020-06-01", "quantity": 42, "unit": "fl oz" }
+        {
+          "date": "2007-05-12",
+          "quantity": 56,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2008-05-12",
+          "quantity": 48,
+          "unit": "fl oz"
+        }
       ],
-      "current_price": 4.49,
+      "current_price": 3.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2020/07/27/edys-dreyers-ice-cream-shrinks/",
+      "evidence_url": "https://www.mouseprint.org/2008/05/12/ice-cream-scoop-major-brands-downsize-again/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -357,12 +348,21 @@
       "category": "Beverages",
       "image_url": "https://images.openfoodfacts.org/images/products/004/850/020/5716/front_en.58.400.jpg",
       "history": [
-        { "date": "2019-01-01", "quantity": 64, "unit": "fl oz" },
-        { "date": "2021-01-01", "quantity": 52, "unit": "fl oz" }
+        {
+          "date": "2017-08-13",
+          "quantity": 59,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2018-08-13",
+          "quantity": 52,
+          "unit": "fl oz"
+        }
       ],
-      "current_price": 5.99,
+      "current_price": 4.79,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2021/02/01/tropicana-pure-premium-shrinks/",
+      "evidence_url": "https://www.mouseprint.org/2018/08/13/tropicana-orange-juice-downsizes-again/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -372,42 +372,21 @@
       "category": "Condiments",
       "image_url": "https://images.openfoodfacts.org/images/products/004/800/121/3487/front_en.105.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 30, "unit": "oz" },
-        { "date": "2023-03-01", "quantity": 27, "unit": "oz" }
+        {
+          "date": "2005-08-28",
+          "quantity": 32,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2006-08-28",
+          "quantity": 30,
+          "unit": "fl oz"
+        }
       ],
-      "current_price": 6.49,
+      "current_price": 7.29,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2023/04/24/hellmanns-mayo-jars-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0030772164686",
-      "name": "Dawn Ultra Dishwashing Liquid",
-      "brand": "Dawn",
-      "category": "Cleaning",
-      "image_url": "https://images.openfoodfacts.org/images/products/003/077/216/4686/front_en.5.400.jpg",
-      "history": [
-        { "date": "2020-01-01", "quantity": 28, "unit": "fl oz" },
-        { "date": "2022-08-01", "quantity": 24, "unit": "fl oz" }
-      ],
-      "current_price": 5.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/08/29/dawn-dish-soap-bottles-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0030772091654",
-      "name": "Tide Pods (Original Scent)",
-      "brand": "Tide",
-      "category": "Cleaning",
-      "image_url": null,
-      "history": [
-        { "date": "2020-01-01", "quantity": 81, "unit": "count" },
-        { "date": "2022-09-01", "quantity": 76, "unit": "count" }
-      ],
-      "current_price": 24.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/10/10/tide-pods-pack-count-shrinks/",
+      "evidence_url": "https://www.mouseprint.org/2006/08/28/hellmans-mayo-introduces-the-30-oz-quart/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
@@ -417,118 +396,214 @@
       "category": "Cleaning",
       "image_url": null,
       "history": [
-        { "date": "2020-01-01", "quantity": 80, "unit": "count" },
-        { "date": "2022-04-01", "quantity": 70, "unit": "count" }
+        {
+          "date": "2017-03-05",
+          "quantity": 19.7,
+          "unit": "oz"
+        },
+        {
+          "date": "2018-03-05",
+          "quantity": 17.7,
+          "unit": "oz"
+        }
       ],
-      "current_price": 5.99,
+      "current_price": 5.79,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/05/02/lysol-wipes-canisters-shrink/",
+      "evidence_url": "https://www.mouseprint.org/2018/03/05/a-different-kind-of-downsizing/",
+      "source": "Mouse Print*",
       "added_at": "2025-09-15"
     },
     {
-      "barcode": "0080878194575",
-      "name": "Pantene Pro-V Classic Clean Shampoo",
-      "brand": "Pantene",
-      "category": "Personal care",
-      "image_url": null,
-      "history": [
-        { "date": "2019-01-01", "quantity": 25.4, "unit": "fl oz" },
-        { "date": "2022-01-01", "quantity": 22.4, "unit": "fl oz" }
-      ],
-      "current_price": 6.49,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/02/21/pantene-shampoo-bottles-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0312547427555",
-      "name": "Listerine Cool Mint Antiseptic",
-      "brand": "Listerine",
-      "category": "Personal care",
-      "image_url": null,
-      "history": [
-        { "date": "2020-01-01", "quantity": 1500, "unit": "ml" },
-        { "date": "2022-06-01", "quantity": 1300, "unit": "ml" }
-      ],
-      "current_price": 6.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/07/11/listerine-bottles-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0037000862246",
-      "name": "Pampers Baby Dry Diapers (Size 4)",
-      "brand": "Pampers",
-      "category": "Personal care",
-      "image_url": null,
-      "history": [
-        { "date": "2020-01-01", "quantity": 92, "unit": "count" },
-        { "date": "2022-04-01", "quantity": 86, "unit": "count" }
-      ],
-      "current_price": 27.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/05/09/pampers-diaper-counts-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0036000504675",
-      "name": "Huggies Natural Care Baby Wipes",
-      "brand": "Huggies",
-      "category": "Personal care",
-      "image_url": null,
-      "history": [
-        { "date": "2020-01-01", "quantity": 184, "unit": "count" },
-        { "date": "2022-02-01", "quantity": 168, "unit": "count" }
-      ],
-      "current_price": 4.49,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/03/07/huggies-wipes-pack-counts-shrink/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "0037000073123",
-      "name": "Bounce Dryer Sheets Outdoor Fresh",
-      "brand": "Bounce",
+      "barcode": "0030772222300",
+      "name": "Dawn Platinum Dish Soap",
+      "brand": "Dawn",
       "category": "Cleaning",
       "image_url": null,
       "history": [
-        { "date": "2020-01-01", "quantity": 240, "unit": "count" },
-        { "date": "2022-09-01", "quantity": 200, "unit": "count" }
+        {
+          "date": "2025-06-08",
+          "quantity": 32,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2026-06-08",
+          "quantity": 30,
+          "unit": "fl oz"
+        }
       ],
-      "current_price": 8.99,
+      "current_price": 5.99,
       "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/09/26/bounce-dryer-sheets-shrink/",
-      "added_at": "2025-09-15"
+      "evidence_url": "https://www.mouseprint.org/2026/06/08/here-we-shrink-again-spring-2026-part-2/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
     },
     {
-      "barcode": "0028000215804",
-      "name": "Nestlé Toll House Chocolate Chips",
-      "brand": "Nestlé Toll House",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/002/800/021/5804/front_en.33.400.jpg",
+      "barcode": "0051500442951",
+      "name": "Smucker's Strawberry Jam",
+      "brand": "Smucker's",
+      "category": "Condiments",
+      "image_url": "https://images.openfoodfacts.org/images/products/005/150/044/2951/front_en.3.400.jpg",
       "history": [
-        { "date": "2020-01-01", "quantity": 12, "unit": "oz" },
-        { "date": "2022-04-01", "quantity": 11, "unit": "oz" }
-      ],
-      "current_price": 3.99,
-      "currency": "USD",
-      "evidence_url": "https://www.mouseprint.org/2022/04/18/nestle-tollhouse-morsels-bag-shrinks/",
-      "added_at": "2025-09-15"
-    },
-    {
-      "barcode": "7622210496645",
-      "name": "Toblerone Milk Chocolate Bar",
-      "brand": "Toblerone",
-      "category": "Snacks",
-      "image_url": "https://images.openfoodfacts.org/images/products/762/221/049/6645/front_en.27.400.jpg",
-      "history": [
-        { "date": "2014-01-01", "quantity": 360, "unit": "g" },
-        { "date": "2016-11-01", "quantity": 150, "unit": "g" }
+        {
+          "date": "2025-06-08",
+          "quantity": 32,
+          "unit": "oz"
+        },
+        {
+          "date": "2026-06-08",
+          "quantity": 30,
+          "unit": "oz"
+        }
       ],
       "current_price": 4.99,
       "currency": "USD",
-      "evidence_url": "https://www.bbc.com/news/business-37911118",
-      "added_at": "2025-09-15"
+      "evidence_url": "https://www.mouseprint.org/2026/06/08/here-we-shrink-again-spring-2026-part-2/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
+    },
+    {
+      "barcode": "0048121959517",
+      "name": "Thomas' Plain Bagels (6 ct)",
+      "brand": "Thomas'",
+      "category": "Snacks",
+      "image_url": "https://images.openfoodfacts.org/images/products/004/812/195/9517/front_en.131.400.jpg",
+      "history": [
+        {
+          "date": "2025-06-01",
+          "quantity": 20,
+          "unit": "oz"
+        },
+        {
+          "date": "2026-06-01",
+          "quantity": 18,
+          "unit": "oz"
+        }
+      ],
+      "current_price": 4.49,
+      "currency": "USD",
+      "evidence_url": "https://www.mouseprint.org/2026/06/01/here-we-shrink-again-spring-2026-part-1/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
+    },
+    {
+      "barcode": "0013300009611",
+      "name": "Hungry Jack Original Syrup",
+      "brand": "Hungry Jack",
+      "category": "Condiments",
+      "image_url": "https://images.openfoodfacts.org/images/products/001/330/000/9611/front_en.9.400.jpg",
+      "history": [
+        {
+          "date": "2025-01-26",
+          "quantity": 27.6,
+          "unit": "fl oz"
+        },
+        {
+          "date": "2026-01-26",
+          "quantity": 24,
+          "unit": "fl oz"
+        }
+      ],
+      "current_price": 4.79,
+      "currency": "USD",
+      "evidence_url": "https://www.mouseprint.org/2026/01/26/here-we-shrink-again-winter-2026-part-2/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
+    },
+    {
+      "barcode": "0689544083016",
+      "name": "Fage Total 0% Greek Yogurt",
+      "brand": "Fage",
+      "category": "Dairy",
+      "image_url": "https://images.openfoodfacts.org/images/products/068/954/408/3016/front_en.450.400.jpg",
+      "history": [
+        {
+          "date": "2022-05-01",
+          "quantity": 35.3,
+          "unit": "oz"
+        },
+        {
+          "date": "2023-05-01",
+          "quantity": 32,
+          "unit": "oz"
+        }
+      ],
+      "current_price": 7.29,
+      "currency": "USD",
+      "evidence_url": "https://www.mouseprint.org/2023/05/01/may23/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
+    },
+    {
+      "barcode": "0041192100413",
+      "name": "Kellogg's Froot Loops",
+      "brand": "Kellogg's",
+      "category": "Snacks",
+      "image_url": "https://images.openfoodfacts.org/images/products/004/119/210/0413/front_en.23.400.jpg",
+      "history": [
+        {
+          "date": "2023-04-15",
+          "quantity": 10.1,
+          "unit": "oz"
+        },
+        {
+          "date": "2024-04-15",
+          "quantity": 8.9,
+          "unit": "oz"
+        }
+      ],
+      "current_price": 4.49,
+      "currency": "USD",
+      "evidence_url": "https://www.mouseprint.org/2024/04/15/here-we-shrink-again-spring-2024/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
+    },
+    {
+      "barcode": "0035000510853",
+      "name": "Colgate Cavity Protection",
+      "brand": "Colgate",
+      "category": "Personal care",
+      "image_url": null,
+      "history": [
+        {
+          "date": "2015-05-16",
+          "quantity": 8.2,
+          "unit": "oz"
+        },
+        {
+          "date": "2016-05-16",
+          "quantity": 8,
+          "unit": "oz"
+        }
+      ],
+      "current_price": 2.69,
+      "currency": "USD",
+      "evidence_url": "https://www.mouseprint.org/2016/05/16/here-we-downsize-again-2016-part-2/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
+    },
+    {
+      "barcode": "0047400097728",
+      "name": "Gillette Antiperspirant",
+      "brand": "Gillette",
+      "category": "Personal care",
+      "image_url": null,
+      "history": [
+        {
+          "date": "2014-12-21",
+          "quantity": 4,
+          "unit": "oz"
+        },
+        {
+          "date": "2015-12-21",
+          "quantity": 3.8,
+          "unit": "oz"
+        }
+      ],
+      "current_price": 7.49,
+      "currency": "USD",
+      "evidence_url": "https://www.mouseprint.org/2015/12/21/here-we-downsize-again-2015-part-4/",
+      "source": "Mouse Print*",
+      "added_at": "2026-08-27"
     }
   ]
 }

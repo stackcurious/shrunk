@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from check_repo_data import check  # noqa: E402
+from check_repo_data import MIN_CURATED, check  # noqa: E402
 
 FIXTURES = [
     {"input": f"{n} g", "quantity": float(n), "unit_kind": "mass", "note": "generated"}
@@ -11,7 +11,7 @@ FIXTURES = [
 ]
 FEED = {
     "version": 1,
-    "trending": [{"barcode": f"{i:013d}", "name": f"Product {i}"} for i in range(35)],
+    "trending": [{"barcode": f"{i:013d}", "name": f"Product {i}"} for i in range(MIN_CURATED)],
 }
 
 
@@ -44,7 +44,7 @@ def test_an_absent_copy_is_not_a_problem(tmp_path):
 
 
 def test_a_drifted_copy_is_reported(tmp_path):
-    drifted = {"version": 1, "trending": FEED["trending"][:34]}
+    drifted = {"version": 1, "trending": FEED["trending"][:-1]}
     root = build(tmp_path, copies={
         "Shrunk/Resources/trending.json": drifted,
         "backend/src/data/trending.json": FEED,
@@ -61,8 +61,8 @@ def test_unparseable_fixtures_are_reported(tmp_path):
 
 
 def test_a_short_curated_catalogue_is_reported(tmp_path):
-    root = build(tmp_path, feed={"version": 1, "trending": FEED["trending"][:34]})
-    assert any("34" in p and "35" in p for p in check(root))
+    root = build(tmp_path, feed={"version": 1, "trending": FEED["trending"][:-1]})
+    assert any(str(MIN_CURATED - 1) in p and str(MIN_CURATED) in p for p in check(root))
 
 
 def test_an_unknown_unit_kind_is_reported(tmp_path):

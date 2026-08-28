@@ -18,7 +18,11 @@ import json
 from pathlib import Path
 
 MIN_FIXTURES = 28
-MIN_CURATED = 35
+# 2026-08-27: the catalogue was cut from 35 to 25 when every entry was
+# re-sourced — 18 had no real published source and were removed, 8 documented
+# cases were added. This floor is the honest size, not an aspiration: raise it
+# only by adding entries that clear the bar in `data/README.md`.
+MIN_CURATED = 25
 UNIT_KINDS = {"mass", "volume", "count", None}
 FEED_COPIES = ("Shrunk/Resources/trending.json", "backend/src/data/trending.json")
 

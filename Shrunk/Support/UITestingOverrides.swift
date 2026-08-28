@@ -104,38 +104,38 @@ enum UITestingOverrides {
                 productName: "Bounty Select-A-Size Paper Towels",
                 brand: "Bounty",
                 kind: .sizeDrop,
-                previousQuantity: 117,
+                previousQuantity: 98,
                 previousUnit: "count",
-                currentQuantity: 105,
+                currentQuantity: 90,
                 currentUnit: "count",
-                shrinkPercent: -10.3,
+                shrinkPercent: -8.2,
                 createdAt: now.addingTimeInterval(-3 * 3600),
                 isRead: false,
-                message: "Bounty Select-A-Size just shrank — 117 → 105 sheets a roll."
+                message: "Bounty Select-A-Size just shrank — 98 → 90 sheets a roll."
             ),
             ShrinkAlert(
-                barcode: "0024100440702",
-                productName: "Cheez-It Original Family Size",
-                brand: "Cheez-It",
+                barcode: "0044000069216",
+                productName: "Wheat Thins Original",
+                brand: "Nabisco",
                 kind: .priceHike,
                 shrinkPercent: 0,
                 createdAt: now.addingTimeInterval(-27 * 3600),
                 isRead: false,
-                message: "Cheez-It Original costs more per ounce at your store this week."
+                message: "Wheat Thins Original costs more per ounce at your store this week."
             ),
             ShrinkAlert(
-                barcode: "7622210496645",
-                productName: "Toblerone Milk Chocolate Bar",
-                brand: "Toblerone",
+                barcode: "0014100054672",
+                productName: "Goldfish Cheddar Carton",
+                brand: "Pepperidge Farm",
                 kind: .verifiedCase,
-                previousQuantity: 360,
-                previousUnit: "g",
-                currentQuantity: 150,
-                currentUnit: "g",
-                shrinkPercent: -58.3,
+                previousQuantity: 30,
+                previousUnit: "oz",
+                currentQuantity: 27.3,
+                currentUnit: "oz",
+                shrinkPercent: -9.0,
                 createdAt: now.addingTimeInterval(-4 * 24 * 3600),
                 isRead: true,
-                message: "We published a verified case: Toblerone went 360 g → 150 g."
+                message: "We published a verified case: Goldfish went 30 oz → 27.3 oz."
             )
         ]
         for alert in fixtures { context.insert(alert) }

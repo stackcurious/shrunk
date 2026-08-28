@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import app from "../src/index";
 import { curatedItems } from "../src/feed";
 
-const GATORADE = "0052000135138";   // curated: 32 fl oz -> 28 fl oz
+// curated: 32 fl oz -> 28 fl oz, sourced to Mouse Print* 2022-03-07
+// ("32 ounces bottles forever … new bottles hold less — four ounces less").
+const GATORADE = "0052000135138";
 const SNACK = "0028400642262";
 
 const NOW = Math.floor(Date.now() / 1000);
@@ -34,7 +36,9 @@ beforeEach(async () => {
 describe("curatedItems", () => {
   it("turns the bundled catalogue into shrink items", () => {
     const items = curatedItems();
-    expect(items.length).toBeGreaterThanOrEqual(30);
+    // The catalogue was cut from 35 to 25 on 2026-08-27 when every entry was
+    // re-sourced; `MIN_CURATED` in scripts/check_repo_data.py is the same floor.
+    expect(items.length).toBeGreaterThanOrEqual(25);
 
     const gatorade = items.find((i) => i.gtin === GATORADE)!;
     expect(gatorade).toMatchObject({
@@ -44,7 +48,7 @@ describe("curatedItems", () => {
       unit_kind: "volume",
       source: "curated",
       shrink_percent: -12.5,
-      observed_at: 1630454400,   // 2021-09-01T00:00:00Z
+      observed_at: 1646611200,   // 2022-03-07T00:00:00Z — the Mouse Print* article date
     });
     expect(gatorade.previous_quantity).toBeCloseTo(946.353, 2);
     expect(gatorade.current_quantity).toBeCloseTo(828.058, 2);
