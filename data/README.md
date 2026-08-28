@@ -47,9 +47,10 @@ So publishing an edit is: edit `data/trending.json` → re-sync both copies → 
         { "date": "2018-01-01", "quantity": 32, "unit": "fl oz" },
         { "date": "2021-06-01", "quantity": 28, "unit": "fl oz" }
       ],
-      "current_price": 1.89,                // null when unknown
+      "current_price": 1.89,                // null when unknown; real shelf price only
       "currency": "USD",
-      "evidence_url": "https://...",        // source documenting the shrink
+      "evidence_url": "https://...",        // source documenting the shrink; must return 200
+      "source": "Mouse Print*",             // human-readable name of that source
       "added_at": "2025-09-15"              // when we added this entry
     }
   ]
@@ -87,18 +88,31 @@ If OFF doesn't have an image for this product, set `image_url: null` — the UI 
 
 ## Evidence standard
 
-Every entry MUST have an `evidence_url` pointing to a public, verifiable source confirming the shrink. Preferred sources, in order:
+Every entry MUST have an `evidence_url` pointing to a public, reachable page that
+states **both** the before and the after net contents for **that** product.
+Preferred sources, in order:
 
-1. **Consumer Reports** investigations
-2. **BBB** / Better Business Bureau alerts
-3. **NYT / WaPo / WSJ / CNN / Reuters / Bloomberg** with specific size figures
-4. **Edmunds-style independent investigations**
-5. **Reddit r/shrinkflation** — accept only if there's a clear photo + timestamp
+1. **Mouse Print\*** (`mouseprint.org`) — Edgar Dworsky's running "Here We Shrink
+   Again" series is the most complete documented archive of US downsizing.
+2. **Consumer World** (`consumerworld.org`) — same author, longer-form.
+3. **NYT / WaPo / WSJ / CNN / NPR / BBC / Reuters / Guardian** with specific size figures.
+4. **Reddit r/shrinkflation** — accept only if there's a clear photo of both packages.
 
 Do **not** accept:
 - Brand press releases (biased)
 - Aggregator articles without primary citation
 - Unverified social posts
+- A page that merely says a brand "shrank some products" without the two sizes
+
+**A URL is not evidence until it has been fetched.** Before an entry ships:
+
+```
+curl -s -o /dev/null -w "%{http_code}\n" -A "Mozilla/5.0" "<evidence_url>"   # must be 200
+```
+
+and the page must actually contain the sentence naming both sizes. In August 2026
+all 35 `evidence_url`s in this file 404'd — every article path had been invented —
+which is what the `source` field and this check exist to prevent recurring.
 
 ## Adding a new entry
 
