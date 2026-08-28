@@ -30,7 +30,8 @@ Read `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md` first. It is the bi
 
 ## Where things live
 
-- Spec: `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md`
+- **Where we stopped / handoff: `docs/STATUS.md`** (read first in a new session)
+- Spec: `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md`; post-TestFlight fixes + native UI: `docs/superpowers/specs/2026-08-27-scan-value-and-native-ui.md`
 - Phase plans (1 = week1-data-backbone, then phase2…phase6): `docs/superpowers/plans/`
 - Execution ledgers from subagent-driven runs: `.superpowers/sdd/<plan-name>/progress.md` (git-ignored, scratch)
 - Corrections worth not repeating: `tasks/lessons.md`
