@@ -30,26 +30,26 @@ final class ScreenshotTests: XCTestCase {
     private static let storeLocationId = "01400355"
     private static let storeDisplayName = "Kroger Hyde Park"
 
-    /// The verified case behind the hero result screenshot: Toblerone,
-    /// 360 g → 150 g. What this test needs is only that `/v1/product` returns
-    /// two dated observations of the same unit kind whose *latest two* are a
-    /// shrink — the curated catalogue is being re-sourced as of 2026-08-27 and
-    /// this GTIN has already been dropped from `data/trending.json` while its
-    /// D1 observations still stand, so re-verify shot 1 after the next Worker
-    /// seed and re-point this constant if it goes quiet.
+    /// The verified case behind the hero result screenshot: Gatorade,
+    /// 32 fl oz → 28 fl oz, sourced to Mouse Print* (2022-03-07) in
+    /// `data/trending.json` and served with both dated observations by
+    /// `/v1/product`.
     ///
-    /// It replaced Maxwell House (`0043000094228`) once the curated barcodes
-    /// were corrected. The real Maxwell House GTIN carries a *third*, Kroger-
-    /// sourced observation of 27.5 oz, and `ShrinkDetector` compares the latest
-    /// two, so that product now truthfully reads "Grew 12 %" — which the
-    /// listing's "clear shrink verdict" for shot 1 rules out. Tropicana
-    /// (`0048500205716`, −18.8 %) was the other candidate and is a fine
-    /// fallback, but Kroger lists it at a different size, so its Result screen
-    /// carries the "Size unconfirmed" card and that pushes the live-price panel
-    /// and the size-history chart off the frame. Toblerone has exactly two
-    /// curated observations and no contradicting store row.
+    /// It replaced Toblerone (`7622210496645`), which replaced Maxwell House
+    /// (`0043000094228`). Both were dropped from the catalogue on 2026-08-27
+    /// when every entry was re-sourced: no 24.5 oz Maxwell House can exists in
+    /// any product database, and Mondelez reverted the 2016 Toblerone
+    /// gap-widening in 2018, so today's bar is not the shrunk one.
+    ///
+    /// Gatorade is the right hero for three reasons: it is a clean −12.5 %; it
+    /// is one of the few curated GTINs with *no* competing FDC or Kroger row in
+    /// D1, so `ShrinkDetector` compares the two curated points and cannot read
+    /// "Grew" the way Maxwell House did; and Kroger lists it at 28 fl oz —
+    /// matching the curated after-size — so the Result screen shows no "Size
+    /// unconfirmed" card and the live-price panel and size-history chart both
+    /// stay in frame. (Tropicana, `0048500205716`, fails that last test.)
     private var featuredBarcode: String {
-        ProcessInfo.processInfo.environment["SHRUNK_FEATURED_GTIN"] ?? "7622210496645"
+        ProcessInfo.processInfo.environment["SHRUNK_FEATURED_GTIN"] ?? "0052000135138"
     }
 
     /// A product Kroger actually prices at the store above, used for the

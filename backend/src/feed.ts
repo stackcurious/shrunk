@@ -9,6 +9,26 @@ import catalogue from "./data/trending.json";
 export const FEED_WINDOW_SECONDS = 30 * 24 * 60 * 60;
 /** Spec §5.1 — inside 1% is the same size, so it is not a shrink. */
 const SHRINK_TOLERANCE = 0.01;
+/**
+ * C2 parity with `ShrinkDetector.analyze` (Shrunk/Services/ShrinkDetector.swift):
+ * a single-step drop to under a quarter of the previous size is far more likely
+ * a unit-parsing mismatch between two sources — a per-unit size read against a
+ * multipack total, or a garbled vendor size string — than a real shrink.
+ *
+ * The app already refuses to render a verdict for such a pair. `/v1/feed` did
+ * not, and it is the more consequential of the two: it is what publishes a
+ * "verified" shrink card to every Browse tab. Found on 2026-08-27, when the
+ * feed was advertising `0044000060251` (OREO Double Stuf Family Size) as
+ * "530 g → 31.5 g, −94.1 %" because Kroger's own product record gives that
+ * pack's size as "1.11 oz". Nothing shrinks by 94 % — publishing it as a
+ * verified case is exactly the kind of unearned claim the curated audit was
+ * about.
+ *
+ * Curated entries are deliberately exempt (see `curatedItems`): they are
+ * same-source, hand-checked pairs with a citation, and a real documented
+ * collapse should still be publishable.
+ */
+const IMPLAUSIBLE_SHRINK_RATIO = 0.25;
 const OBSERVATION_LIMIT = 200;
 
 export interface FeedItem {
@@ -111,6 +131,7 @@ export async function buildFeed(env: Env, category: string | null, now: number):
     const previous = await previousAcceptedQuantity(env.DB, row.gtin, row.unit_kind, row.observed_at, row.id);
     if (previous === null || previous <= 0) continue;
     if ((previous - row.quantity) / previous <= SHRINK_TOLERANCE) continue;
+    if (row.quantity / previous < IMPLAUSIBLE_SHRINK_RATIO) continue;
 
     byGtin.set(row.gtin, {
       gtin: row.gtin,

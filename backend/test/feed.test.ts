@@ -96,6 +96,20 @@ describe("GET /v1/feed", () => {
     expect((await feed()).items.some((i) => i.gtin === SNACK)).toBe(false);
   });
 
+  it("refuses to publish an implausible cross-source drop as a verified shrink", async () => {
+    // Real case, 2026-08-27: Kroger's record for OREO Double Stuf Family Size
+    // gives the pack size as "1.11 oz", so a kroger observation of 31.5 g
+    // landed against the 530 g FDC row and /v1/feed advertised "-94.1%".
+    await seedShrink(SNACK, "Snacks", 530, 31.468, NOW - DAY);
+    expect((await feed()).items.some((i) => i.gtin === SNACK)).toBe(false);
+  });
+
+  it("still publishes a large but plausible shrink", async () => {
+    await seedShrink(SNACK, "Snacks", 340.194, 170, NOW - DAY);
+    const item = (await feed()).items.find((i) => i.gtin === SNACK)!;
+    expect(item.shrink_percent).toBeCloseTo(-50.0, 1);
+  });
+
   it("lets a database observation win over the curated row for the same gtin", async () => {
     await seedShrink(GATORADE, "Beverages", 828.058, 700, NOW - DAY);
     const item = (await feed()).items.find((i) => i.gtin === GATORADE)!;
