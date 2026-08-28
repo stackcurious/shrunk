@@ -118,6 +118,31 @@ describe("GET /v1/feed", () => {
     expect((await feed()).items.filter((i) => i.gtin === GATORADE)).toHaveLength(1);
   });
 
+  it("keeps publishing a shrink after a second source confirms the new size", async () => {
+    // Spec §5.1 size runs. Before this, a confirming observation paired
+    // 300 g against 300 g, read +0.0%, and silently dropped the card off
+    // Browse — the same defect that scored eight verified curated cases as
+    // "no shrink" (.curated-verify-report.md §5).
+    await seedShrink(SNACK, "Snacks", 340.194, 300, NOW - 5 * DAY);
+    await env.DB.prepare(
+      "INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 300, 'mass', '10.5 oz', ?, 'crowd', 'sub-confirm', 0.9, 'accepted', ?)"
+    ).bind(SNACK, NOW - DAY, NOW - DAY).run();
+
+    const item = (await feed()).items.find((i) => i.gtin === SNACK)!;
+    expect(item.previous_quantity).toBeCloseTo(340.194, 2);
+    expect(item.current_quantity).toBe(300);
+    expect(item.shrink_percent).toBeCloseTo(-11.8, 1);
+    expect(item.observed_at).toBe(NOW - 5 * DAY);   // when the smaller size was first seen, not the confirmation
+  });
+
+  it("still refuses an implausible run pair once it has been confirmed", async () => {
+    await seedShrink(SNACK, "Snacks", 530, 31.468, NOW - 5 * DAY);
+    await env.DB.prepare(
+      "INSERT INTO observations (gtin, quantity, unit_kind, raw_text, observed_at, source, source_ref, confidence, status, created_at) VALUES (?, 31.468, 'mass', '1.11 oz', ?, 'kroger', '01400943', 0.8, 'accepted', ?)"
+    ).bind(SNACK, NOW - DAY, NOW - DAY).run();
+    expect((await feed()).items.some((i) => i.gtin === SNACK)).toBe(false);
+  });
+
   it("filters by category, canonicalising the query", async () => {
     const drinks = await feed("?category=Drinks");
     expect(drinks.items.length).toBeGreaterThan(0);

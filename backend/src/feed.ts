@@ -1,5 +1,5 @@
 import { canonicalCategory } from "./categories";
-import { previousAcceptedQuantity } from "./db";
+import { runPairEndingAt } from "./db";
 import type { Env } from "./env";
 import { normalizeGTIN } from "./gtin";
 import { parsePackageWeight } from "./normalize";
@@ -128,21 +128,25 @@ export async function buildFeed(env: Env, category: string | null, now: number):
 
   for (const row of results) {
     if (byGtin.has(row.gtin)) continue;   // newest row per product wins
-    const previous = await previousAcceptedQuantity(env.DB, row.gtin, row.unit_kind, row.observed_at, row.id);
-    if (previous === null || previous <= 0) continue;
-    if ((previous - row.quantity) / previous <= SHRINK_TOLERANCE) continue;
-    if (row.quantity / previous < IMPLAUSIBLE_SHRINK_RATIO) continue;
+    // Spec §5.1 — the last two size *runs*, so a second source confirming the
+    // new size cannot flatten the pair to +0.0% and unpublish a real shrink.
+    const pair = await runPairEndingAt(env.DB, row.gtin, row.unit_kind, row.observed_at, row.id);
+    if (pair === null || pair.previous <= 0) continue;
+    if ((pair.previous - pair.current) / pair.previous <= SHRINK_TOLERANCE) continue;
+    if (pair.current / pair.previous < IMPLAUSIBLE_SHRINK_RATIO) continue;
 
     byGtin.set(row.gtin, {
       gtin: row.gtin,
       name: row.name,
       brand: row.brand,
       category: canonicalCategory(row.category) ?? "",
-      previous_quantity: previous,
-      current_quantity: row.quantity,
+      previous_quantity: pair.previous,
+      current_quantity: pair.current,
       unit_kind: row.unit_kind,
-      shrink_percent: round1(((row.quantity - previous) / previous) * 100),
-      observed_at: row.observed_at,
+      shrink_percent: round1(((pair.current - pair.previous) / pair.previous) * 100),
+      // When the smaller size was first seen, not when it was last confirmed —
+      // a re-read of an unchanged package must not re-date the card to today.
+      observed_at: pair.currentOpenedAt,
       source: row.source,
     });
   }

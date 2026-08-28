@@ -58,14 +58,30 @@ struct ShrinkDetector {
         // editorial and must never be labelled Kroger.
         let priceIsFromStoreSnapshot = prices.last != nil || adoptedPrice != nil
 
-        // Fewer than two comparable observations — no verdict is possible, but
+        // Spec §5.1 — the verdict compares the last two *size runs*, not the
+        // last two observations.
+        let runs = Self.collapseRuns(sameKind)
+
+        // Fewer than two comparable runs — no verdict is possible, but
         // the record still has to carry what we *do* know (spec §2): the one
         // size on file and what it costs per ounce. `previousSize` is
         // deliberately nil rather than a copy of the current record: there is
         // no "then", and reporting one made the Result screen draw a Then→Now
         // row comparing a size with itself.
-        guard sameKind.count >= 2 else {
-            let current = sorted.last
+        guard runs.count >= 2 else {
+            // The size we know, dated from when we *first* saw it. `ResultView`
+            // renders this state as "946 ml, first seen Feb 2018" — and a
+            // second source confirming that same 946 ml in 2024 must not move
+            // that year forward. (The Then→Now row, which wants each run's
+            // latest date, only draws when there are two runs.)
+            let current = sorted.last.map { latest in
+                SizeRecord(
+                    date: runs.first?.opened.date ?? latest.date,
+                    quantity: latest.quantity,
+                    unit: latest.unit,
+                    source: latest.source
+                )
+            }
             return ShrinkRecord(
                 product: product,
                 previousSize: nil,
@@ -80,16 +96,23 @@ struct ShrinkDetector {
             )
         }
 
-        let normalized = sameKind.map(Self.normalize)
-        let current  = normalized.last!
-        let previous = normalized.dropLast().last!
+        let currentRun  = runs[runs.count - 1]
+        let previousRun = runs[runs.count - 2]
+        // Reported ends of the comparison: the run's quantity/unit/source (its
+        // first observation, per spec §5.1) carrying the run's *latest* date,
+        // so a "Then 2019 → Now 2022" row still names the years the shopper
+        // would recognise rather than the first day each size was recorded.
+        let previousSize = previousRun.reported
+        let currentSize  = currentRun.reported
+        let current  = Self.normalize(currentSize)
+        let previous = Self.normalize(previousSize)
 
         // Guard against zero-quantity records that would explode the percentage math.
         guard previous.quantity > 0 else {
             return ShrinkRecord(
                 product: product,
-                previousSize: sameKind[sameKind.count - 2],
-                currentSize: sameKind.last!,
+                previousSize: previousSize,
+                currentSize: currentSize,
                 shrinkPercent: 0,
                 priceThen: priceThen,
                 priceNow: priceNow,
@@ -107,14 +130,16 @@ struct ShrinkDetector {
         // shrink/growth — render `.insufficientData` rather than a confident,
         // wrong verdict. Same-source pairs are never clamped: a real shrink
         // reported twice by one source is exactly the case this app exists to
-        // catch, however large.
+        // catch, however large. Now applied to the *run* pair: each run's
+        // source is the one that opened it, the same observation its quantity
+        // comes from.
         if previous.source != current.source {
             let ratio = current.quantity / previous.quantity
             guard ratio <= 4 && ratio >= 0.25 else {
                 return ShrinkRecord(
                     product: product,
-                    previousSize: sameKind[sameKind.count - 2],
-                    currentSize: sameKind.last!,
+                    previousSize: previousSize,
+                    currentSize: currentSize,
                     shrinkPercent: 0,
                     priceThen: priceThen,
                     priceNow: priceNow,
@@ -135,6 +160,11 @@ struct ShrinkDetector {
         let costPerUnitNow: Double? = current.quantity > 0 ? priceNow.map { $0 / current.quantity } : nil
         let costPerUnitThen: Double? = priceThen.map { $0 / previous.quantity }
 
+        // `.unchanged` is unreachable from here since size runs landed:
+        // adjacent runs differ by more than `sameSizeTolerance` by
+        // construction, so `percentChange` is always outside ±1%. The band is
+        // kept as the boundary it always was — the enum case is still what
+        // `WatchedProduct` and the alert models carry for a size that held.
         let verdict: ShrinkRecord.ShrinkVerdict = {
             switch percentChange {
             case ..<(-10):    return .significantShrink
@@ -147,8 +177,8 @@ struct ShrinkDetector {
 
         return ShrinkRecord(
             product: product,
-            previousSize: sameKind[sameKind.count - 2],
-            currentSize: sameKind.last!,
+            previousSize: previousSize,
+            currentSize: currentSize,
             shrinkPercent: percentChange,
             priceThen: priceThen,
             priceNow: priceNow,
@@ -157,6 +187,63 @@ struct ShrinkDetector {
             priceIsFromStoreSnapshot: priceIsFromStoreSnapshot,
             verdict: verdict
         )
+    }
+
+    // MARK: - Size runs (spec §5.1)
+
+    /// Spec §5.1 — two observations that normalize within 1% are the same size.
+    static let sameSizeTolerance = 0.01
+
+    /// A stretch of consecutive same-kind observations that all report the same
+    /// size. The run's *quantity* is the value that opened it; its `sources` is
+    /// the union of every source that reported it.
+    struct SizeRun {
+        /// The observation that opened the run — quantity, unit and source.
+        let opened: SizeRecord
+        /// The run's most recent observation. Only its `date` is reported.
+        fileprivate(set) var latest: SizeRecord
+        fileprivate(set) var sources: [String]
+        /// `opened`'s size carrying `latest`'s date (spec §5.1).
+        var reported: SizeRecord {
+            SizeRecord(date: latest.date, quantity: opened.quantity, unit: opened.unit, source: opened.source)
+        }
+    }
+
+    /// Collapses same-kind observations, oldest first, into size runs.
+    ///
+    /// Without this a *confirmation* read as a *change of nothing*: when a
+    /// second source reports exactly the size the last observation already
+    /// recorded, the last-two-observations pair is `450 → 450`, `+0.0 %`,
+    /// "Unchanged" — erasing the documented `500 → 450` behind it. Eight of the
+    /// 25 verified curated cases scored "no shrink" that way, Fage most
+    /// starkly: USDA confirms *both* of its endpoints and the product still
+    /// read as never having shrunk.
+    ///
+    /// Each observation is compared against the quantity that *opened* the
+    /// current run rather than against its immediate predecessor, so a slow
+    /// drift of within-tolerance steps can never accumulate into one run that
+    /// spans a real change.
+    static func collapseRuns(_ records: [SizeRecord]) -> [SizeRun] {
+        var runs: [SizeRun] = []
+        for record in records {
+            let quantity = normalize(record).quantity
+            if var run = runs.last, isSameSize(normalize(run.opened).quantity, quantity) {
+                run.latest = record
+                if !run.sources.contains(record.source) { run.sources.append(record.source) }
+                runs[runs.count - 1] = run
+            } else {
+                runs.append(SizeRun(opened: record, latest: record, sources: [record.source]))
+            }
+        }
+        return runs
+    }
+
+    /// Within `sameSizeTolerance` of `reference`. A zero (or negative)
+    /// reference has no meaningful percentage, so only an exact match counts —
+    /// which keeps a `0 → 28` history two runs rather than one.
+    private static func isSameSize(_ reference: Double, _ quantity: Double) -> Bool {
+        guard reference > 0 else { return quantity == reference }
+        return abs(quantity - reference) / reference <= sameSizeTolerance
     }
 
     /// `price ÷ normalized quantity` for one size record — the per-ounce number

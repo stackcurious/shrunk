@@ -1,3 +1,5 @@
+import { collapseRuns } from "./runs";
+
 export interface ProductRow {
   gtin: string;
   name: string;
@@ -436,8 +438,14 @@ export async function listWatches(db: D1Database, deviceId: string): Promise<Wat
 
 /**
  * The newest accepted observation of the same kind strictly *before* the one
- * identified by (observedAt, id). Used by the feed and the digest to decide
- * whether an observation is a shrink (spec §5.1).
+ * identified by (observedAt, id) — "did anything change since the last time we
+ * looked", which is what the weekly digest asks. Deliberately *not* size-run
+ * aware (`runPairEndingAt`): a re-confirmation of a size that already shrank
+ * is not a new shrink this week, and collapsing runs here would re-report the
+ * same shrink in every digest for as long as the sweep keeps observing it.
+ *
+ * The single-row reference definition for `previousAcceptedQuantities`, which
+ * is the batched form the digest actually calls.
  */
 export async function previousAcceptedQuantity(
   db: D1Database,
@@ -505,6 +513,49 @@ export async function previousAcceptedQuantities(
   }
 
   return result;
+}
+
+export interface RunPair {
+  /** The previous run's size. */
+  previous: number;
+  /** The current run's size — the value that opened it, not the newest read. */
+  current: number;
+  /** When the current size was *first* seen: the run's opening observation. */
+  currentOpenedAt: number;
+}
+
+/**
+ * The last two size runs (spec §5.1, `runs.ts`) of this product's accepted
+ * same-kind history, read as of the observation identified by (observedAt,
+ * id) — anything recorded after it is ignored, so the answer for a given row
+ * never changes as new observations arrive.
+ *
+ * `null` when the history has fewer than two runs, i.e. there is no earlier
+ * size to compare against. This is the "is it smaller than it used to be"
+ * question — the verdict one — so unlike `previousAcceptedQuantity` it looks
+ * *past* a confirming observation to the size before it.
+ */
+export async function runPairEndingAt(
+  db: D1Database,
+  gtin: string,
+  unitKind: string,
+  observedAt: number,
+  id: number
+): Promise<RunPair | null> {
+  const { results } = await db
+    .prepare(
+      `SELECT quantity, observed_at, source FROM observations
+       WHERE gtin = ? AND unit_kind = ? AND status = 'accepted'
+         AND (observed_at < ? OR (observed_at = ? AND id <= ?))
+       ORDER BY observed_at ASC, id ASC`
+    )
+    .bind(gtin, unitKind, observedAt, observedAt, id)
+    .all<{ quantity: number; observed_at: number; source: string }>();
+
+  const runs = collapseRuns(results);
+  if (runs.length < 2) return null;
+  const current = runs[runs.length - 1];
+  return { previous: runs[runs.length - 2].quantity, current: current.quantity, currentOpenedAt: current.opened_at };
 }
 
 // ---------------------------------------------------------------------------

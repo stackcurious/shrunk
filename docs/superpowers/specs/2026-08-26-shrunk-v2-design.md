@@ -126,9 +126,17 @@ All quantities are normalized to a base unit per kind before storage or comparis
 
 Rules:
 - FDC `package_weight` of the form `"16 oz/1 lbs/454 g"` is split on `/`; the first parseable mass or volume segment wins; segments must agree within 2% or the row is discarded as malformed.
-- Observations of different kinds are never compared. `ShrinkDetector` selects the two most recent accepted observations whose kind matches the product's dominant kind.
+- Observations of different kinds are never compared. `ShrinkDetector` selects accepted observations whose kind matches the product's dominant kind.
 - Two observations that normalize within 1% are the same size; consecutive duplicates are dropped at import.
-- Verdict thresholds are unchanged: ≤ −10% significant, −10..−5 moderate, −5..−1 minor, ±1 unchanged, >1 grew.
+- **Size runs.** Same-kind observations, sorted by `observed_at`, are collapsed into *runs* before any verdict is taken: consecutive observations that agree within the 1% tolerance form one run, whose quantity is the value that **opened** it, whose `sources` is the union of every source that reported it, and whose span is from its first observation to its latest. Each observation is tested against the run's opening value, not its immediate predecessor, so within-tolerance drift cannot accumulate into a run spanning a real change.
+  - The verdict compares the **last two runs** (previous run → current run), never the last two observations. Without this, a second source reporting exactly the size the previous observation already recorded reads `+0.0%` / "unchanged" and erases the documented shrink behind it — eight of the 25 verified curated entries scored "no shrink" that way, Fage most starkly, with USDA confirming *both* of its endpoints.
+  - A product with a single run is `insufficientData`, with `currentSize` = the run's latest observation.
+  - `previousSize` and `currentSize` report their run's quantity/unit/source carrying that run's **latest** observation date, so a "Then 2019 → Now 2022" row still names years the shopper recognises.
+  - Existing safeguards are unchanged and apply to the run pair: kinds are never crossed, and the cross-source plausibility clamp (ratio outside 0.25–4×) still refuses a verdict. Same-source pairs are never clamped in the app; `/v1/feed` applies the 0.25 floor to every database pair regardless of source, which is strictly more conservative.
+  - The history chart still plots every observation; only the verdict pair changes.
+  - Three implementations must agree: `Shrunk/Services/ShrinkDetector.swift` (`collapseRuns`), `backend/src/runs.ts` (`collapseRuns`), `scripts/hit_rate.py` (`collapse_runs`).
+  - Runs are a **verdict** rule, not an event rule. Change notifications — the weekly digest (`previousAcceptedQuantities`) and the Kroger sweep's `size_drop` (previous price snapshot vs live) — deliberately keep comparing consecutive observations, because a re-confirmation of an already-reported shrink is not a new event and would otherwise re-fire on every sweep.
+- Verdict thresholds are unchanged: ≤ −10% significant, −10..−5 moderate, −5..−1 minor, ±1 unchanged, >1 grew. (`unchanged` is now unreachable from `ShrinkDetector.analyze`: adjacent runs differ by more than the tolerance by construction.)
 
 ### 5.2 Sources and trust
 

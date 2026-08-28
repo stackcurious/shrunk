@@ -35,13 +35,20 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.verdict, .minorShrink)
     }
 
-    func test_unchanged_withinOnePercent() {
+    func test_withinOnePercent_isOneRunAndSoInsufficientData() {
+        // Spec §5.1: two observations that normalize within 1% are the *same
+        // size*, so they collapse into a single run — and a single run has no
+        // "then" to compare against. This used to report `.unchanged`, which
+        // claimed a tracked-over-time verdict from what is really one
+        // measurement seen twice.
         let product = makeProduct(history: [
             .init(quantity: 1000, unit: "ml"),
             .init(quantity: 999, unit: "ml")  // -0.1%
         ])
         let record = detector.analyze(product: product)
-        XCTAssertEqual(record.verdict, .unchanged)
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertNil(record.previousSize)
+        XCTAssertEqual(record.currentSize?.quantity, 999, "the run's latest observation is the current size")
     }
 
     func test_grew_whenSizeIncreasedAboveOnePercent() {
@@ -574,6 +581,150 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.verdict, .significantShrink)
         XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
         XCTAssertNil(record.costPerUnitThen, "one live price is not a history")
+    }
+
+    // MARK: - Size runs (spec §5.1)
+    //
+    // The verdict compares the last two *runs*, not the last two observations.
+    // Consecutive observations that agree within 1% are one run — so a second
+    // source confirming today's size can no longer erase a documented shrink
+    // by pairing "450 g (curated)" against "450 g (USDA)" and reporting
+    // +0.0 % / Unchanged. Eight of the 25 verified curated cases scored "no
+    // shrink" for exactly that reason (.curated-verify-report.md §5).
+
+    /// (quantity, unit, source), one day apart, oldest first.
+    fileprivate func makeRunHistory(_ points: [(Double, String, String)]) -> ShrunkProduct {
+        let base = Date(timeIntervalSince1970: 1_600_000_000)
+        let records = points.enumerated().map { idx, point in
+            SizeRecord(
+                date: base.addingTimeInterval(TimeInterval(idx) * 86_400),
+                quantity: point.0,
+                unit: point.1,
+                source: point.2
+            )
+        }
+        return ShrunkProduct(
+            id: "test", name: "Test", brand: "Brand", category: "Dairy", imageURL: nil,
+            sizeHistory: records, currentPrice: nil, currency: "USD"
+        )
+    }
+
+    func test_aConfirmingObservationDoesNotEraseTheShrink() {
+        // Fage-shaped: the curated pair documents 500 g -> 450 g, then USDA
+        // FDC independently reports the same 450 g. The last two observations
+        // are 450/450, but the last two *runs* are 500 -> 450.
+        let product = makeRunHistory([
+            (500, "g", "curated"),
+            (450, "g", "curated"),
+            (450, "g", "fdc")
+        ])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.verdict, .moderateShrink)
+        XCTAssertEqual(record.shrinkPercent, -10, accuracy: 0.0001)
+        XCTAssertEqual(record.previousSize?.quantity, 500)
+        XCTAssertEqual(record.currentSize?.quantity, 450)
+    }
+
+    func test_previousAndCurrentDatesAreTheRunsLatestObservations() {
+        // "Then 2019 -> Now 2022" has to stay meaningful: the previous run's
+        // date is its *last* observation, the current run's its latest.
+        let product = makeRunHistory([
+            (500, "g", "curated"),   // day 0
+            (500, "g", "fdc"),       // day 1  <- previousSize.date
+            (450, "g", "curated"),   // day 2
+            (450, "g", "fdc")        // day 3  <- currentSize.date
+        ])
+        let record = detector.analyze(product: product)
+        let base = Date(timeIntervalSince1970: 1_600_000_000)
+
+        XCTAssertEqual(record.previousSize?.date, base.addingTimeInterval(86_400))
+        XCTAssertEqual(record.currentSize?.date, base.addingTimeInterval(3 * 86_400))
+    }
+
+    func test_threeRunsCompareTheLastTwo() {
+        // 500 / 450 / 450 / 400 -> runs [500] [450 450] [400]; the verdict is
+        // 450 -> 400, not 500 -> 400 and not 450 -> 450.
+        let product = makeRunHistory([
+            (500, "g", "curated"),
+            (450, "g", "curated"),
+            (450, "g", "fdc"),
+            (400, "g", "kroger")
+        ])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.previousSize?.quantity, 450)
+        XCTAssertEqual(record.currentSize?.quantity, 400)
+        XCTAssertEqual(record.shrinkPercent, -100.0 / 9.0, accuracy: 0.0001)  // -11.1%
+        XCTAssertEqual(record.verdict, .significantShrink)
+    }
+
+    func test_measurementNoiseWithinToleranceStaysOneRun() {
+        // 450 -> 452 (+0.44%) -> 450: three observations, one run, no verdict.
+        let product = makeRunHistory([
+            (450, "g", "curated"),
+            (452, "g", "fdc"),
+            (450, "g", "kroger")
+        ])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertNil(record.previousSize, "one run has no 'then'")
+        XCTAssertEqual(record.currentSize?.quantity, 450)
+        XCTAssertEqual(record.currentSize?.date, Date(timeIntervalSince1970: 1_600_000_000),
+                       "ResultView dates this state 'first seen …' — a later confirmation of the same size is not a first sighting")
+    }
+
+    func test_runsAreBuiltOnlyFromTheLatestKind() {
+        // A volume observation can never join or precede a mass run, however
+        // close the numbers look after normalization.
+        let product = makeRunHistory([
+            (450, "ml", "fdc"),      // volume — ignored entirely
+            (500, "g", "curated"),
+            (450, "g", "curated"),
+            (450, "g", "fdc")
+        ])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.verdict, .moderateShrink)
+        XCTAssertEqual(record.previousSize?.quantity, 500)
+        XCTAssertEqual(record.previousSize?.unit, "g")
+        XCTAssertEqual(record.currentSize?.unit, "g")
+    }
+
+    func test_crossKindOnlyAfterTheLatestKindStillGivesNoVerdict() {
+        // The mass history is real, but the newest observation is volume, so
+        // there is exactly one same-kind run and nothing to compare.
+        let product = makeRunHistory([
+            (500, "g", "curated"),
+            (450, "g", "curated"),
+            (450, "ml", "fdc")
+        ])
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.verdict, .insufficientData)
+        XCTAssertNil(record.previousSize)
+        XCTAssertEqual(record.currentSize?.unit, "ml")
+    }
+
+    func test_theClampStillAppliesToTheRunPair() {
+        // The OREO case, with a confirming row appended: the run pair is still
+        // fdc 530 g -> kroger 31.5 g, a ratio of 0.06, so it is refused.
+        let product = makeRunHistory([
+            (530, "g", "fdc"),
+            (31.468, "g", "kroger"),
+            (31.468, "g", "kroger")
+        ])
+        XCTAssertEqual(detector.analyze(product: product).verdict, .insufficientData)
+    }
+
+    func test_aSameSourceRunPairIsNeverClamped() {
+        let product = makeRunHistory([
+            (1000, "g", "fdc"),
+            (100, "g", "fdc"),
+            (100, "g", "fdc")
+        ])
+        XCTAssertEqual(detector.analyze(product: product).verdict, .significantShrink)
     }
 }
 
