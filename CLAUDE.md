@@ -50,7 +50,7 @@ Vercel project (`shrunk`, production domain `https://shrunk-alpha.vercel.app`).
 It was moved out of the shared hub `~/Projects/stackcurious/app/shrunk/`.
 
 - Build: `cd site && npm run build`
-- Deploy: `cd site && vercel --prod --yes`
+- Deploy: `cd site && npm run deploy`
 
 Public URLs are unchanged: the pages are served at
 `https://stackcurious.com/shrunk` and `/shrunk/*` through multi-zone rewrites in

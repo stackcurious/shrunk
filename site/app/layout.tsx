@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { APP_STORE_ID, SHRUNK_URL } from "./_lib/constants";
 import "./globals.css";
 
@@ -81,6 +82,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         {/* Page views. Custom funnel events go through lib/analytics.ts. */}
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
