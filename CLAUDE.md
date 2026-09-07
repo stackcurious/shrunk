@@ -42,3 +42,34 @@ Read `docs/superpowers/specs/2026-08-26-shrunk-v2-design.md` first. It is the bi
 `OpenFoodFactsService` and `UPCItemDBService` are actually gone (Phase 3, commit `29f986a`). Do not reintroduce them.
 
 The spec (§1, §3) also marks `SavingsForecast`, the 10-screen quiz onboarding and its "$/yr exposure" reveal, and the `com.shrunk.pro.lifetime` non-consumable **Removed**. `SavingsForecast` and the quiz onboarding are gone as of Task 9 — `Shrunk/Services/SavingsForecast.swift` is deleted and `Shrunk/Features/Onboarding/{OnboardingContainerView,OnboardingViewModel}.swift` now implement the four-step welcome/categories/store/paywall flow — and `com.shrunk.pro.lifetime` is gone from both `Shrunk/Services/StoreKitService.swift` (replaced by `ShrunkProProduct.monthly`/`.yearly`) and `Shrunk/Resources/Shrunk.storekit` as of Task 7. Phase 5 (`docs/superpowers/plans/2026-08-26-shrunk-v2-phase5-subscription-onboarding-dashboard.md`) is what replaces them with `pro.monthly` / `pro.yearly` and the new onboarding.
+
+## Site
+
+The marketing mini-site lives in `site/` — its own Next.js app and its own
+Vercel project (`shrunk`, production domain `https://shrunk-alpha.vercel.app`).
+It was moved out of the shared hub `~/Projects/stackcurious/app/shrunk/`.
+
+- Build: `cd site && npm run build`
+- Deploy: `cd site && vercel --prod --yes`
+
+Public URLs are unchanged: the pages are served at
+`https://stackcurious.com/shrunk` and `/shrunk/*` through multi-zone rewrites in
+`~/Projects/stackcurious/next.config.ts`, which forward the whole prefix — pages,
+static chunks and the OG image — to the deployment above. Never link to the
+`*.vercel.app` domain in the app, App Store Connect or docs.
+
+`next.config.ts` sets `basePath: "/shrunk"`, which is what makes the two halves
+line up. Consequences when editing pages:
+
+- `next/link` hrefs are auto-prefixed → write them basePath-relative (`/privacy`,
+  `/shrinkflation/<slug>`).
+- `next/image` `src` and `metadata.icons` are **not** prefixed → write those out
+  as `/shrunk/...` with the file at `site/public/<name>`.
+- Plain `<a href>` is never prefixed, so a link leaving the zone (the "Stack
+  Curious, LLC" attribution) is written absolute.
+- `metadataBase` is `https://stackcurious.com/shrunk`, basePath included: Next
+  joins that pathname onto relative metadata URLs, so an OG image override is
+  written `/opengraph-image`, not `/shrunk/opengraph-image`.
+
+`site/app/_lib/cases.ts` still carries the copy of `data/trending.json` — the
+same "curated catalogue lives in three places" sync rule applies, by hand.
