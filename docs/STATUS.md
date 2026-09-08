@@ -4,11 +4,11 @@ Read this first in a new session. Memory/ledgers may lag; this file and `git log
 
 ## Headline
 
-**Shrunk 2.0.0 build 5 is prepared locally for the evidence-first scan update.** App Store Connect version `5f72dc64-9424-49a8-80b9-b18eeca085ba` is `DEVELOPER_REJECTED`; its former review submission `bdce0306-43d6-4ee5-a243-ef81193a575d` is complete with every item removed. There is no active review submission, so build 5 is safe to finish and upload when approved.
+**Shrunk 2.0.0 build 5 is prepared for the evidence-first scan update, with its matching production services deployed.** App Store Connect version `5f72dc64-9424-49a8-80b9-b18eeca085ba` is `DEVELOPER_REJECTED`; its former review submission `bdce0306-43d6-4ee5-a243-ef81193a575d` is complete with every item removed. There is no active review submission, so build 5 is safe to finish and upload when approved.
 
 Build 5 changes the common scan path: Result identifies documented package downsizing separately from price evidence, shows the evidence source and current unit price above the fold, uses correct mass/volume/count units, and pins the next useful action. Scanner adds prominent manual entry and validates the GS1 check digit for camera and typed barcodes. Onboarding reaches value before purchase, Watch intent survives the Pro sheet, and notification permission is requested only after a successful Watch action. Every crowd observation remains pending for human label review before it can publish or alert. Build 5 also adds the Scanned Delta app icon and a matching static launch screen.
 
-Validated 2026-09-08: generic iOS Simulator build passed; all **326 non-StoreKit iOS unit tests** passed; focused Result and Scan screenshot UI tests passed; Worker TypeScript passed; all **391 Worker tests** passed. The command-line StoreKit service hung during the full scheme run, matching the known local daemon fault, so purchase acceptance remains an on-device requirement. Screenshot result bundle: `/tmp/shrunk-build5-evidence-2.xcresult`. Backend integrity changes are local and are **not deployed**. Build 5 is **not uploaded** to TestFlight or App Store Connect.
+Validated 2026-09-08: generic iOS Simulator build passed; all **326 non-StoreKit iOS unit tests** passed; all **6 App Store screenshot UI tests** passed against production; Worker TypeScript passed; all **391 Worker tests** passed; repository data and curated copies are consistent. The command-line StoreKit service hung during the full scheme run, matching the known local daemon fault, so purchase acceptance remains an on-device requirement. Screenshot result bundle: `/tmp/shrunk-build5-shots-final.xcresult`. The always-pending evidence gate is live in Worker version `349b6385-683f-4aa6-a6ce-6def22286e33`; the September 8 privacy policy is live in Vercel deployment `dpl_8skMj5GBm198pXDaKJyuHA9UuD7h`. Build 5 is **not uploaded** to TestFlight or App Store Connect yet.
 
 ## What shipped since the first TestFlight build (2.0.0 / 2)
 
@@ -28,24 +28,22 @@ Spec for all of it: `docs/superpowers/specs/2026-08-27-scan-value-and-native-ui.
 
 Previous release baseline: 305 iOS unit + 6 UI (StoreKit daemon tests skipped — machine bug FB22237318), 387 Worker, 93 Python. Build 5 adds focused iOS coverage and brings the Worker suite to 391 tests.
 
-Worker: `https://shrunk-api.stackcurious.workers.dev` (last deploy `c03ffc3f-7780-40b2-8dae-1ea1436a8af3`). Secrets/keys: `~/.config/shrunk/`, `~/.appstoreconnect/private_keys/AuthKey_Q32YKM5PDY.p8`.
+Worker: `https://shrunk-api.stackcurious.workers.dev` (last deploy `349b6385-683f-4aa6-a6ce-6def22286e33`). Secrets/keys: `~/.config/shrunk/`, `~/.appstoreconnect/private_keys/AuthKey_Q32YKM5PDY.p8`.
 
-## Marketing site (separate repo `~/Projects/stackcurious`, Next.js on Vercel)
+## Marketing site (`site/`, its own Vercel project)
 
-Rebuilt `/shrunk` as a conversion page + `/shrunk/shrinkflation` index + one page per verified case (25), Smart App Banner, JSON-LD, OG image, sitemap; privacy/terms/support match `docs/`. Commits `f887e45`, `6bd1fe3`, `e116224`, `a71bf63`, `72af365` on `main` — **NOT pushed**: another session has unpushed shiftcheck commits on the same branch and Vercel deploys on push. Push when that work is ready. App Store link used: `https://apps.apple.com/us/app/shrunk-shrinkflation-scanner/id6805856154` (404 until approved).
+`/shrunk` is a conversion page with a `/shrunk/shrinkflation` index and one page per verified case (25), Smart App Banner, JSON-LD, OG image, and sitemap. Privacy, terms, and support are served by the guarded `shrunk` Vercel project through the public `stackcurious.com/shrunk/*` rewrites. The September 8 policy is deployed and verified. App Store link used: `https://apps.apple.com/us/app/shrunk-shrinkflation-scanner/id6805856154` (404 until approved).
 
 ## Open items
 
 User-only:
 1. `privacy@stackcurious.com` must exist (published contact in privacy policy, terms, and ASC).
 2. Rotate the Kroger client secret (it was pasted in chat) → `cd backend && npx wrangler secret put KROGER_CLIENT_SECRET`.
-3. Push `stackcurious/main` (see above).
-4. On-device acceptance run per `scripts/acceptance.md` (scans, first production push, sandbox purchase of yearly w/ trial) — not done; App Review may surface what it would have.
-5. Kroger written-permission reply (Gmail thread `1a043dfa17862f3c`, sent 2026-08-27) — none yet; `KROGER_PERSIST=on` until then, `POST /v1/admin/purge-kroger` is the retraction.
+3. On-device acceptance run per `scripts/acceptance.md` (scans, first production push, sandbox purchase of yearly w/ trial) — not done; App Review may surface what it would have.
+4. Kroger written-permission reply (Gmail thread `1a043dfa17862f3c`, sent 2026-08-27) — none yet; `KROGER_PERSIST=on` until then, `POST /v1/admin/purge-kroger` is the retraction.
 
 Engineering, next:
-- Complete an on-device acceptance run for build 5, then archive/upload from a clean worktree (`.build3-report.md` has the commands). Attach the new build to version `5f72dc64-…` and resubmit it with both subscriptions.
-- Deploy the evidence-gate Worker change before releasing build 5 so typed crowd submissions cannot publish without label evidence.
+- Archive/upload build 5 from the committed release head, attach it to version `5f72dc64-…`, complete the on-device TestFlight acceptance run, and resubmit it with both subscriptions.
 - Optional value work: import archived FDC releases (2019–2025) for more "before" points; the digest/sweep run-collapse question in spec §5.1.
 - Hygiene: `ProductThumb.swift`/`StatBox` were deleted; the `.claude/worktrees/agent-a13336e8bb2ff43b9` worktree is merged and harness-locked — safe to remove.
 

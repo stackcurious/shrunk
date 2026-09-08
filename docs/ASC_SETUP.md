@@ -149,7 +149,9 @@ No HealthKit, no location, no contacts, no photo library, no microphone. The lab
 ## 7. Reviewer Note (paste into "App Review Information → Notes")
 
 ```
-Shrunk has no account or login — open the app and start scanning immediately. Shrunk Pro is an auto-renewable subscription in the "Shrunk Pro" group: com.shrunk.pro.yearly ($14.99/year, with a 7-day free trial) and com.shrunk.pro.monthly ($2.99/month). Either one unlocks watchlist alerts, the weekly digest, unlimited ranked alternatives, full size and price history, and the savings dashboard; scanning, verdicts, size history and three alternatives are free forever. Use a StoreKit sandbox account to test. Product size history comes from the public USDA FoodData Central dataset and from shoppers' own label photos; live prices come from Kroger's official Products API and are shown with "Prices from Kroger" attribution.
+Shrunk has no account or login. Complete the short onboarding, then scan a supported grocery barcode or tap Enter barcode. For a reliable review path, enter 0052000135138 to see a documented package-size reduction. Size history and alternatives appear when supporting data is available. Shopper label contributions remain private until a human verifies the photo; they cannot enter public history or trigger alerts before review. Current store price, promotion, stock, and comparable alternatives are available for a selected Kroger store and display "Prices from Kroger" attribution.
+
+Shrunk Pro is an auto-renewable subscription in the "Shrunk Pro" group: com.shrunk.pro.yearly ($14.99/year, with a 7-day free trial for new subscribers) and com.shrunk.pro.monthly ($2.99/month). Either plan unlocks periodically checked watchlist alerts, the weekly digest, all available ranked alternatives, full available size and price history charts, and the savings dashboard. Barcode scanning and available evidence results remain free. Use a StoreKit sandbox account to test purchase and restore.
 ```
 
 ---

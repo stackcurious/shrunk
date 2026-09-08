@@ -75,14 +75,11 @@ const STORED: {
   {
     what: "A label photo you choose to contribute",
     when: "Uploaded to our server with every contribution",
-    where:
-      "Held only in memory unless the reading needs a human check, in which case it is written to Cloudflare R2",
+    where: "Written to Cloudflare R2 in a private human-review queue",
     howLong: (
       <>
-        <strong className="text-foreground">Discarded immediately</strong> (never stored) if
-        accepted automatically; otherwise{" "}
-        <strong className="text-foreground">deleted the moment it is reviewed</strong>, accepted
-        or rejected
+        <strong className="text-foreground">Deleted the moment it is reviewed</strong>, whether
+        accepted or rejected
       </>
     ),
   },
@@ -140,7 +137,7 @@ export default function ShrunkPrivacy() {
         <h1 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl">
           Privacy Policy
         </h1>
-        <p className="mt-3 text-sm text-muted">Last updated: August 26, 2026</p>
+        <p className="mt-3 text-sm text-muted">Last updated: September 8, 2026</p>
       </header>
 
       <div className="space-y-10 text-[15px] leading-relaxed">
@@ -181,14 +178,11 @@ export default function ShrunkPrivacy() {
             with Apple&apos;s on-device Vision framework to make an initial read. When you
             submit, the photo is uploaded to our server along with that reading,{" "}
             <strong className="text-foreground">every time</strong> — not only when the reading
-            is unclear. If the reading is confident (a clear net-weight line that agrees with
-            what we already know about the product), the submission is accepted automatically
-            and the photo is{" "}
-            <strong className="text-foreground">discarded immediately and never stored</strong>.
-            If it is not confident, the photo is written to storage so a human can check it, and
-            it is deleted as soon as that check happens, whether the submission is accepted or
-            rejected. The number that survives review becomes part of the product&apos;s public
-            size history and is not attributed to you.
+            is unclear. Every contribution is written to a private review queue so a human can
+            compare the submitted reading with the label. The photo is deleted as soon as that
+            review is accepted or rejected. No crowd reading becomes public and no alert is sent
+            before this review. The number that survives review becomes part of the
+            product&apos;s public size history and is not attributed to you.
           </p>
           <p className="mt-3">
             Barcode scanning is separate, and no image ever leaves your phone: camera frames are

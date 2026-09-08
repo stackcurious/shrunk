@@ -7,7 +7,7 @@ compatibility_flags = ["nodejs_compat"]
 crons = ["*/5 * * * *", "0 */6 * * *", "0 13 * * 1"]
 
 [vars]
-ENV = "dev"
+ENV = "production"
 KROGER_PERSIST = "on"
 PUSH_PROVIDER = "apns"
 APNS_ENV = "production"   # TestFlight and App Store builds carry production APNs tokens; use "sandbox" only for Xcode debug builds
