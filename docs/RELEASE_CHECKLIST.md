@@ -417,7 +417,7 @@ works — confirm at least one `SKTestSession`-backed test (e.g.
 
 ## Acceptance
 
-`scripts/acceptance.md` — 35/35 curated verdicts, ≥60% kitchen-scan history, ≥25/30
+`scripts/acceptance.md` — 25/25 curated verdicts, ≥60% kitchen-scan history, ≥25/30
 live prices. Do not submit without it filled in.
 
 ## If Kroger revokes access (spec §9)

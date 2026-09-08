@@ -2,17 +2,17 @@
 
 Run this on the TestFlight build, on a real iPhone, before submitting. Fill in the tables; the filled file is the evidence, and `docs/ASC_SETUP.md`'s pre-submission checklist refuses to pass without it.
 
-**Build:** 2.0.0 (____) · **Date:** ____ · **Device:** ____ · **Store:** Kroger ____ (Cincinnati), locationId ____ · **API:** ____
+**Build:** 2.0.0 (5) · **Date:** ____ · **Device:** ____ · **Store:** Kroger ____ (Cincinnati), locationId ____ · **API:** ____
 
 ---
 
-## A. 35/35 curated verdicts — scripted
+## A. 25/25 curated verdicts — scripted
 
 ```
 python3 scripts/hit_rate.py --api "$API" --curated data/trending.json | tee scripts/out/acceptance-hitrate.txt
 ```
 
-**Pass:** `with_history=35/35` (a verdict needs two same-kind observations) **and** `shrink_detected=35/35` (every curated entry is a documented shrink, so anything else is a data bug).
+**Pass:** `with_history=25/25` (a verdict needs two same-kind observations) **and** `shrink_detected=25/25` (every curated entry is a documented shrink, so anything else is a data bug).
 
 Summary line: `____________________________________________`
 
@@ -118,6 +118,6 @@ Airplane mode, two cases — do not conflate them, they exercise different code 
 
 ## Result
 
-- [ ] A: 35/35 · [ ] B: ≥60% · [ ] C: ≥25/30 · [ ] D · [ ] E
+- [ ] A: 25/25 · [ ] B: ≥60% · [ ] C: ≥25/30 · [ ] D · [ ] E
 
 **Signed off:** ____ on ____

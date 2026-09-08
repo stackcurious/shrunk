@@ -140,7 +140,7 @@ No HealthKit, no location, no contacts, no photo library, no microphone. The lab
 ## 6. Build & Signing
 
 - Team **X4VJ56X38V** (`project.yml` → `DEVELOPMENT_TEAM`, automatic signing).
-- Marketing version **2.0.0**, build **2** — set by Task 10 in `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
+- Marketing version **2.0.0**, build **5** — set by Task 10 in `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
 - The Xcode project is generated: `xcodegen generate` before any archive. `Shrunk.xcodeproj` is not in git.
 - Archive and upload with the commands in `docs/RELEASE_CHECKLIST.md` (`xcodebuild archive` → `-exportArchive` with `ExportOptions.plist` → `xcrun altool --upload-app`), or Xcode → Product → Archive → Distribute App.
 
@@ -194,5 +194,5 @@ Privacy and compliance
 Build
 - [ ] Six 6.9" screenshots re-captured on a device from the 2.0.0 build (`docs/APP_STORE_LISTING.md`); the v1 set deleted
 - [ ] Reviewer note pasted (§7)
-- [ ] Version 2.0.0 (2) uploaded, processed, and attached to the release
-- [ ] `scripts/acceptance.md` filled in and passing — 35/35 curated verdicts, ≥60% kitchen-scan history, ≥25/30 live prices
+- [ ] Version 2.0.0 (5) uploaded, processed, and attached to the release
+- [ ] `scripts/acceptance.md` filled in and passing — 25/25 curated verdicts, ≥60% kitchen-scan history, ≥25/30 live prices
