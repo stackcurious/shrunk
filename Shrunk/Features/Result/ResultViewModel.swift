@@ -58,6 +58,15 @@ final class ResultViewModel: ObservableObject {
         case watch
     }
 
+    /// What to do with a Watch tap that opened the Pro paywall. Keeping this
+    /// decision pure prevents an entitlement refresh from either losing the
+    /// user's tap or adding a product they never asked to watch.
+    enum PendingWatchResolution: Equatable {
+        case wait
+        case add
+        case clear
+    }
+
     /// Precedence, deliberately:
     ///
     /// 1. `alreadyWatched` — a truthful "On your watchlist" beats both
@@ -74,6 +83,16 @@ final class ResultViewModel: ObservableObject {
         if record.currentSize == nil { return .needsLabel }
         if !isPro { return .paywall }
         return .watch
+    }
+
+    static func resolvePendingWatch(
+        isPending: Bool,
+        isPro: Bool,
+        isAlreadyWatched: Bool
+    ) -> PendingWatchResolution {
+        guard isPending else { return .clear }
+        if isAlreadyWatched { return .clear }
+        return isPro ? .add : .wait
     }
 
     @Published var state: State = .loading
@@ -191,20 +210,20 @@ final class ResultViewModel: ObservableObject {
             livePrice = .loaded(live)
             if case .loaded(let product, let record) = state {
                 liveSizeMismatch = Self.detectSizeMismatch(live: live, sizeHistory: product.sizeHistory)
-                // Spec rule 5 — a product we know no size or no price for
-                // adopts the live store row's, so the screen has a fact to
-                // show, the Watch button has a baseline, and the
-                // single-snapshot row can keep its "what you're paying per
-                // ounce today" promise. Re-runs the detector rather than
-                // patching the record so every derived number (cost per ounce
-                // especially) comes from one place; the detector lets stored
-                // data win, so only an actual gap is filled.
-                if record.currentSize == nil || record.priceNow == nil {
-                    let adopted = detector.analyze(
+                // Re-run when the live row can improve either half of the
+                // result. Stored observations still win for size, while a valid
+                // live price is authoritative for today's cost-per-unit. That
+                // prevents a cached snapshot or bundled editorial price from
+                // disagreeing with the live-price panel and alternatives.
+                if record.currentSize == nil || live.effectivePrice != nil {
+                    let analyzed = detector.analyze(
                         product: product,
                         liveSize: Self.sizeRecord(from: live),
                         livePrice: live.effectivePrice
                     )
+                    let adopted = liveSizeMismatch
+                        ? Self.withholdingUnitPricing(from: analyzed)
+                        : analyzed
                     adoptedLiveSize = record.currentSize == nil && adopted.currentSize != nil
                     state = .loaded(product, adopted)
                 }
@@ -212,6 +231,24 @@ final class ResultViewModel: ObservableObject {
         } catch {
             livePrice = .unavailable
         }
+    }
+
+    /// A live price cannot be divided by a conflicting documented size. Keep
+    /// the size verdict, but withhold all price-derived claims until the label
+    /// photo confirms which package is on shelf.
+    static func withholdingUnitPricing(from record: ShrinkRecord) -> ShrinkRecord {
+        ShrinkRecord(
+            product: record.product,
+            previousSize: record.previousSize,
+            currentSize: record.currentSize,
+            shrinkPercent: record.shrinkPercent,
+            priceThen: nil,
+            priceNow: nil,
+            costPerUnitThen: nil,
+            costPerUnitNow: nil,
+            priceIsFromStoreSnapshot: false,
+            verdict: record.verdict
+        )
     }
 
     /// The live store row as a `SizeRecord`, or nil when it carries no usable
@@ -228,11 +265,11 @@ final class ResultViewModel: ObservableObject {
         )
     }
 
-    /// Compares the live Kroger size against the newest **non-Kroger**
-    /// observation (spec §4 step 4). Ignoring `source == "kroger"` records is
-    /// what keeps this correct across repeated scans — a stale live fetch
-    /// should never be judged against a size Kroger itself supplied earlier.
-    private static func detectSizeMismatch(live: LivePrice, sizeHistory: [SizeRecord]) -> Bool {
+    /// Compares the live package size with the newest stored size — the exact
+    /// denominator the detector would otherwise use with today's live price.
+    /// A unit-kind conflict is itself a mismatch and must withhold derived
+    /// pricing until a label confirms which package is on shelf.
+    static func detectSizeMismatch(live: LivePrice, sizeHistory: [SizeRecord]) -> Bool {
         guard let quantity = live.quantity, let kind = live.unitKind, quantity > 0 else { return false }
         let unit: String
         switch kind {
@@ -245,12 +282,10 @@ final class ResultViewModel: ObservableObject {
         ).quantity
         guard liveNormalized > 0 else { return false }
 
-        guard let latest = sizeHistory
-            .filter({ $0.source != "kroger" })
-            .sorted(by: { $0.date < $1.date })
-            .last,
-            latest.unitKind == kind
-        else { return false }
+        guard let latest = sizeHistory.sorted(by: { $0.date < $1.date }).last else {
+            return false
+        }
+        guard latest.unitKind == kind else { return true }
 
         let latestNormalized = ShrinkDetector.normalize(latest).quantity
         guard latestNormalized > 0 else { return false }

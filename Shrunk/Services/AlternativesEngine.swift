@@ -88,9 +88,9 @@ struct AlternativesEngine {
 
         let verdict: String
         if let savings, savings > 0 {
-            verdict = "\(Int(savings.rounded()))% cheaper per oz at your store."
+            verdict = "\(Int(savings.rounded()))% cheaper \(Self.unitPriceLabel(for: result.unitKind)) at your store."
         } else if let price = result.effectivePrice {
-            verdict = "\(price.formattedPrice()) · \(costPerOz.formattedCostPerUnit()) per oz at your store."
+            verdict = "\(price.formattedPrice()) · \(costPerOz.formattedCostPerUnit()) \(Self.unitPriceLabel(for: result.unitKind)) at your store."
         } else {
             verdict = "In stock at your store."
         }
@@ -101,6 +101,7 @@ struct AlternativesEngine {
             brand: result.brand,
             size: result.size ?? "",
             costPerUnit: costPerOz,
+            unitKind: result.unitKind,
             savingsPercent: savings,
             imageURL: result.imageURL,
             verdict: verdict,
@@ -108,6 +109,14 @@ struct AlternativesEngine {
             price: result.effectivePrice,
             stockLabel: result.stockLabel
         )
+    }
+
+    static func unitPriceLabel(for unitKind: String?) -> String {
+        switch unitKind {
+        case "volume": return "per fl oz"
+        case "count": return "per item"
+        default: return "per oz"
+        }
     }
 
     // MARK: - Curated fallback
@@ -124,6 +133,7 @@ struct AlternativesEngine {
                     brand: entry.brand,
                     size: entry.history.last.map { $0.quantity.formattedQuantity(unit: $0.unit) } ?? "",
                     costPerUnit: nil,
+                    unitKind: nil,
                     savingsPercent: nil,
                     imageURL: entry.imageUrl,
                     verdict: "Verified shrink on record — tap for the evidence.",

@@ -80,38 +80,24 @@ describe("POST /v1/observations", () => {
     for (const key of await photoKeys()) await env.PHOTOS.delete(key);
   });
 
-  it("accepts a high-confidence submission, keeps no photo, and queues a size drop", async () => {
+  it("holds a high-confidence submission with its label for human review", async () => {
     await seedProduct("mass");
     await seedAccepted(907.184);
 
     const res = await post(body({}, jpeg()));
     expect(res.status).toBe(200);
     const json = await res.json<{ status: string; confidence: number; observation_id: number }>();
-    expect(json.status).toBe("accepted");
-    expect(json.confidence).toBe(1);
-    expect(json.observation_id).toBeGreaterThan(0);
+    expect(json).toMatchObject({ status: "pending", confidence: 1 });
 
     const observation = await env.DB.prepare(
-      "SELECT quantity, unit_kind, raw_text, source, source_ref, confidence, status FROM observations WHERE id = ?"
+      "SELECT source, confidence, status FROM observations WHERE id = ?"
     ).bind(json.observation_id).first<any>();
-    expect(observation).toMatchObject({
-      quantity: 793.786, unit_kind: "mass", raw_text: "NET WT 28 OZ (794g)",
-      source: "crowd", confidence: 1, status: "accepted",
-    });
+    expect(observation).toMatchObject({ source: "crowd", confidence: 1, status: "pending" });
 
-    const submission = await env.DB.prepare("SELECT id, status, photo_key, device_id, parsed_quantity FROM submissions").first<any>();
-    expect(submission).toMatchObject({ status: "accepted", photo_key: null, device_id: DEVICE, parsed_quantity: 793.786 });
-    expect(observation.source_ref).toBe(submission.id);
-
-    // Accepted rows never need a human, so the photo is never written (spec §6.3).
-    expect(await photoKeys()).toEqual([]);
-
-    const job = await env.DB.prepare("SELECT kind, gtin, brand, location_id, payload, sent_at FROM alert_jobs").first<any>();
-    expect(job).toMatchObject({ kind: "size_drop", gtin: GTIN, brand: "Gatorade", location_id: null, sent_at: null });
-    expect(JSON.parse(job.payload)).toEqual({
-      gtin: GTIN, unit_kind: "mass", previous_quantity: 907.184, quantity: 793.786,
-      percent_change: -12.5, source: "crowd",
-    });
+    const submission = await env.DB.prepare("SELECT id, status, photo_key FROM submissions").first<any>();
+    expect(submission).toMatchObject({ status: "pending", photo_key: `submissions/${submission.id}.jpg` });
+    expect(await photoKeys()).toEqual([submission.photo_key]);
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_jobs").first<{ n: number }>())!.n).toBe(0);
   });
 
   it("holds a low-confidence submission pending and stores its photo", async () => {
@@ -134,7 +120,7 @@ describe("POST /v1/observations", () => {
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_jobs").first<{ n: number }>())!.n).toBe(0);
   });
 
-  it("accepts a pending submission that arrives without a photo", async () => {
+  it("holds a submission pending when it arrives without a photo", async () => {
     await seedProduct(null);
     const res = await post(body({ ocr_confidence: "0.4" }));
     expect((await res.json<{ status: string }>()).status).toBe("pending");
@@ -143,37 +129,47 @@ describe("POST /v1/observations", () => {
     expect(await photoKeys()).toEqual([]);
   });
 
-  it("creates the product row when the barcode is unknown everywhere", async () => {
-    const res = await post(body({ gtin: "0099999999999", ocr_confidence: "0.4" }));
-    expect(res.status).toBe(200);
-    expect((await res.json<{ status: string }>()).status).toBe("pending");
-    const product = await env.DB.prepare("SELECT gtin, name, unit_kind FROM products WHERE gtin = '0099999999999'").first<any>();
-    expect(product).toMatchObject({ gtin: "0099999999999", name: "", unit_kind: null });
+  it("holds a high-scoring typed submission pending without label evidence", async () => {
+    await seedProduct("mass");
+    await seedAccepted(907.184);
+    const res = await post(body());
+    expect(await res.json<{ status: string; confidence: number }>()).toMatchObject({
+      status: "pending", confidence: 1,
+    });
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_jobs").first<{ n: number }>())!.n).toBe(0);
   });
 
-  it("backfills the product's dominant kind when a crowd row is accepted", async () => {
+  it("creates the product row when the barcode is unknown everywhere", async () => {
+    const res = await post(body({ gtin: "0099999999990", ocr_confidence: "0.4" }));
+    expect(res.status).toBe(200);
+    expect((await res.json<{ status: string }>()).status).toBe("pending");
+    const product = await env.DB.prepare("SELECT gtin, name, unit_kind FROM products WHERE gtin = '0099999999990'").first<any>();
+    expect(product).toMatchObject({ gtin: "0099999999990", name: "", unit_kind: null });
+  });
+
+  it("does not backfill the product kind before human review", async () => {
     await seedProduct(null);
     await seedAccepted(907.184);
-    // 0.5 parsed + 0.2 range + 0.1 ocr = 0.8 -> accepted with no dominant kind.
-    const res = await post(body());
-    expect(await res.json<{ status: string; confidence: number }>()).toMatchObject({ status: "accepted", confidence: 0.8 });
+    // A plausible row still remains pending until a reviewer accepts it.
+    const res = await post(body({}, jpeg()));
+    expect(await res.json<{ status: string; confidence: number }>()).toMatchObject({ status: "pending", confidence: 0.8 });
     const product = await env.DB.prepare("SELECT unit_kind FROM products WHERE gtin = ?").bind(GTIN).first<any>();
-    expect(product.unit_kind).toBe("mass");
+    expect(product.unit_kind).toBeNull();
   });
 
   it("does not queue a size drop for a change inside the 1% same-size band", async () => {
     await seedProduct("mass");
     await seedAccepted(907.184);
-    const res = await post(body({ quantity: "900" }));
-    expect((await res.json<{ status: string }>()).status).toBe("accepted");
+    const res = await post(body({ quantity: "900" }, jpeg()));
+    expect((await res.json<{ status: string }>()).status).toBe("pending");
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_jobs").first<{ n: number }>())!.n).toBe(0);
   });
 
   it("does not queue a size drop when the package grew", async () => {
     await seedProduct("mass");
     await seedAccepted(793.786);
-    const res = await post(body({ quantity: "907.184" }));
-    expect((await res.json<{ status: string }>()).status).toBe("accepted");
+    const res = await post(body({ quantity: "907.184" }, jpeg()));
+    expect((await res.json<{ status: string }>()).status).toBe("pending");
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM alert_jobs").first<{ n: number }>())!.n).toBe(0);
   });
 

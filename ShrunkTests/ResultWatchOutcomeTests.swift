@@ -114,4 +114,42 @@ final class ResultWatchOutcomeTests: XCTestCase {
             .watch
         )
     }
+
+    // MARK: - Watch intent across the paywall
+
+    func test_pendingWatchWaitsUntilEntitlementIsActive() {
+        XCTAssertEqual(
+            ResultViewModel.resolvePendingWatch(
+                isPending: true, isPro: false, isAlreadyWatched: false
+            ),
+            .wait
+        )
+    }
+
+    func test_pendingWatchAddsAfterSuccessfulUpgrade() {
+        XCTAssertEqual(
+            ResultViewModel.resolvePendingWatch(
+                isPending: true, isPro: true, isAlreadyWatched: false
+            ),
+            .add
+        )
+    }
+
+    func test_noPendingWatchNeverAddsOnAnUnrelatedEntitlementChange() {
+        XCTAssertEqual(
+            ResultViewModel.resolvePendingWatch(
+                isPending: false, isPro: true, isAlreadyWatched: false
+            ),
+            .clear
+        )
+    }
+
+    func test_pendingWatchClearsIfProductWasAlreadyAddedElsewhere() {
+        XCTAssertEqual(
+            ResultViewModel.resolvePendingWatch(
+                isPending: true, isPro: true, isAlreadyWatched: true
+            ),
+            .clear
+        )
+    }
 }

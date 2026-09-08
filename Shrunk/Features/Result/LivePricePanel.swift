@@ -71,7 +71,7 @@ struct LivePricePanel: View {
                     detail(label: "Size", value: size)
                 }
                 if let perOz = costPerOunce(live) {
-                    detail(label: "Cost / oz", value: perOz.formattedCostPerUnit())
+                    detail(label: unitCostLabel(live), value: perOz.formattedCostPerUnit())
                 }
             }
         }
@@ -122,6 +122,14 @@ struct LivePricePanel: View {
     /// (shared with `AlternativesEngine.costPerOunce` — Phase 3 review T17).
     private func costPerOunce(_ live: LivePrice) -> Double? {
         ShrinkDetector.costPerOunce(price: live.effectivePrice, quantity: live.quantity, unitKind: live.unitKind)
+    }
+
+    private func unitCostLabel(_ live: LivePrice) -> String {
+        switch live.unitKind {
+        case "volume": return "Cost / fl oz"
+        case "count": return "Cost / item"
+        default: return "Cost / oz"
+        }
     }
 
     private func detail(label: String, value: String) -> some View {

@@ -4,15 +4,15 @@ import XCTest
 @MainActor
 final class OnboardingViewModelTests: XCTestCase {
 
-    func test_flowIsExactlyFourSteps() {
-        XCTAssertEqual(OnboardingViewModel.Step.allCases.count, 4)
+    func test_flowIsExactlyThreeSetupStepsWithNoPaywall() {
+        XCTAssertEqual(OnboardingViewModel.Step.allCases.count, 3)
         XCTAssertEqual(
             OnboardingViewModel.Step.allCases,
-            [.welcome, .categories, .store, .paywall]
+            [.welcome, .categories, .store]
         )
     }
 
-    func test_startsOnWelcomeAndWalksToThePaywall() {
+    func test_startsOnWelcomeAndWalksToTheStore() {
         let vm = OnboardingViewModel()
         XCTAssertEqual(vm.step, .welcome)
         vm.advance()
@@ -21,9 +21,7 @@ final class OnboardingViewModelTests: XCTestCase {
         vm.advance()
         XCTAssertEqual(vm.step, .store)
         vm.advance()
-        XCTAssertEqual(vm.step, .paywall)
-        vm.advance()
-        XCTAssertEqual(vm.step, .paywall, "the paywall is the last step")
+        XCTAssertEqual(vm.step, .store, "setup finishes from the store screen")
     }
 
     func test_backWalksTheOtherWayAndStopsAtWelcome() {
@@ -45,15 +43,14 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertFalse(vm.canAdvance)
     }
 
-    func test_storeStepIsSkippable() {
+    func test_storeStepAllowsSkip() {
         let vm = OnboardingViewModel()
         vm.advance()
         vm.toggleCategory(.drinks)
         vm.advance()
         XCTAssertEqual(vm.step, .store)
         XCTAssertTrue(vm.canAdvance, "the store step never blocks")
-        vm.skipStore()
-        XCTAssertEqual(vm.step, .paywall)
+        XCTAssertTrue(vm.step.allowsSkip)
     }
 
     func test_shopFrequencyDefaultsToBiweeklyAndIsSettable() {
@@ -66,38 +63,8 @@ final class OnboardingViewModelTests: XCTestCase {
     func test_progressFractionRunsZeroToOne() {
         let vm = OnboardingViewModel()
         XCTAssertEqual(vm.progressFraction, 0, accuracy: 0.001)
-        vm.step = .paywall
+        vm.step = .store
         XCTAssertEqual(vm.progressFraction, 1, accuracy: 0.001)
-    }
-
-    // MARK: - I6: an already-Pro entitlement must not skip categories/store
-
-    func test_shouldAutoFinish_onlyWhenProOnThePaywallStep() {
-        let vm = OnboardingViewModel()
-
-        // Not Pro yet: never auto-finish, on any step.
-        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: false))
-
-        // Pro, but the entitlement resolved before the user picked
-        // categories or a store — e.g. StoreKitService.bootstrap() finishing
-        // right after `.welcome` renders. Must not skip the flow.
-        XCTAssertEqual(vm.step, .welcome)
-        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: true))
-
-        vm.advance()
-        XCTAssertEqual(vm.step, .categories)
-        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: true))
-
-        vm.toggleCategory(.snacks)
-        vm.advance()
-        XCTAssertEqual(vm.step, .store)
-        XCTAssertFalse(vm.shouldAutoFinish(becauseIsPro: true))
-
-        // Only once the user has actually reached the paywall (having
-        // purchased through it) does the entitlement finish the flow.
-        vm.advance()
-        XCTAssertEqual(vm.step, .paywall)
-        XCTAssertTrue(vm.shouldAutoFinish(becauseIsPro: true))
     }
 }
 

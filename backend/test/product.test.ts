@@ -140,7 +140,7 @@ describe("GET /v1/product/:gtin", () => {
     // used to hardcode for every OFF-created product.
     expect(await hit.json<any>()).toMatchObject({ name: "Doritos", brand: "Doritos", image_url: "https://img/x.jpg", category: "Snacks", observations: [] });
 
-    const miss = await app.request("/v1/product/0099999999999", {}, env);
+    const miss = await app.request("/v1/product/0099999999990", {}, env);
     expect(miss.status).toBe(404);
     expect(await miss.json()).toEqual({ error: "not_found" });
   });

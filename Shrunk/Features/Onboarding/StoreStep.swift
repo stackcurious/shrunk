@@ -11,7 +11,7 @@ struct StoreStep: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Where do you shop?")
                     .font(.largeTitle.bold())
-                Text("Pick your Kroger and every scan shows the shelf price and the real cost per ounce. You can change it any time in Settings.")
+                Text("Pick a Kroger to add available shelf price, promotion, stock, and unit cost to scans. You can change it any time in Settings.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }

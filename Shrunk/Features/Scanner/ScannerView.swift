@@ -7,6 +7,9 @@ struct ScannerView: View {
 
     @State private var pulseInner: CGFloat = 0.96
     @State private var scanLineY: CGFloat = -1
+    @State private var showManualEntry = false
+    @State private var pendingManualBarcode: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let reticleSize: CGFloat = 260
 
@@ -29,6 +32,14 @@ struct ScannerView: View {
             ResultView(barcode: wrapper.id)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showManualEntry, onDismiss: presentPendingManualBarcode) {
+            ManualBarcodeEntryView { barcode in
+                pendingManualBarcode = barcode
+                showManualEntry = false
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .alert("Couldn't start camera",
                isPresented: Binding(
@@ -113,13 +124,9 @@ struct ScannerView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-                pulseInner = 1.0
-            }
-            withAnimation(.linear(duration: 1.7).repeatForever(autoreverses: false)) {
-                scanLineY = 1
-            }
+            updateReticleMotion()
         }
+        .onChange(of: reduceMotion) { _, _ in updateReticleMotion() }
     }
 
     private var searchingPill: some View {
@@ -159,6 +166,18 @@ struct ScannerView: View {
             .background(.ultraThinMaterial, in: Capsule())
 
             Spacer()
+
+            Button {
+                showManualEntry = true
+            } label: {
+                Label("Enter barcode", systemImage: "keyboard")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                    .background(.ultraThinMaterial, in: Capsule())
+            }
+            .accessibilityHint("Type the digits printed beneath a product barcode")
 
             if processor.hasTorch {
                 Button {
@@ -241,6 +260,105 @@ struct ScannerView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
         }
+    }
+
+    private func presentPendingManualBarcode() {
+        guard let barcode = pendingManualBarcode else { return }
+        pendingManualBarcode = nil
+        vm.handle(barcode: barcode)
+    }
+
+    private func updateReticleMotion() {
+        if reduceMotion {
+            var transaction = Transaction()
+            transaction.animation = nil
+            withTransaction(transaction) {
+                pulseInner = 1
+                scanLineY = 0.5
+            }
+        } else {
+            pulseInner = 0.96
+            scanLineY = -1
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                pulseInner = 1
+            }
+            withAnimation(.linear(duration: 1.7).repeatForever(autoreverses: false)) {
+                scanLineY = 1
+            }
+        }
+    }
+}
+
+// MARK: - Manual barcode entry
+
+private struct ManualBarcodeEntryView: View {
+    let onLookup: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var barcode = ""
+    @State private var validationMessage: String?
+    @FocusState private var isFocused: Bool
+    @AccessibilityFocusState private var validationIsFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("UPC or EAN", text: $barcode)
+                        .keyboardType(.numberPad)
+                        .textContentType(.none)
+                        .monospacedDigit()
+                        .focused($isFocused)
+                        .accessibilityHint("Enter the 12 or 13 digits printed beneath the barcode")
+
+                    if let validationMessage {
+                        Label(validationMessage, systemImage: "exclamationmark.circle.fill")
+                            .font(.footnote)
+                            .foregroundStyle(Color.shrunkRedDark)
+                            .accessibilityFocused($validationIsFocused)
+                    }
+                } header: {
+                    Text("Product barcode")
+                } footer: {
+                    Text("Enter the digits printed beneath the barcode. A 12-digit UPC is converted to Shrunk's 13-digit format automatically.")
+                }
+
+                Section {
+                    Button {
+                        lookup()
+                    } label: {
+                        Label("Look up product", systemImage: "magnifyingglass")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .listRowBackground(Color.clear)
+                }
+            }
+            .navigationTitle("Enter barcode")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .onAppear { isFocused = true }
+            .onSubmit(lookup)
+            .onChange(of: barcode) { _, _ in
+                validationMessage = nil
+                validationIsFocused = false
+            }
+        }
+    }
+
+    private func lookup() {
+        guard let canonical = ScannerViewModel.canonicalBarcode(from: barcode) else {
+            validationMessage = "Enter a valid 8-, 12-, or 13-digit product barcode."
+            validationIsFocused = true
+            return
+        }
+        onLookup(canonical)
     }
 }
 

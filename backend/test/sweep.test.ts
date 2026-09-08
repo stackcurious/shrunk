@@ -11,6 +11,15 @@ function jsonResponse(body: unknown, status = 200, responseHeaders?: Record<stri
   return new Response(JSON.stringify(body), { status, headers: responseHeaders });
 }
 
+function validGTIN(index: number): string {
+  const body = `0000001${String(index).padStart(5, "0")}`;
+  const sum = [...body].reverse().reduce(
+    (total, digit, position) => total + Number(digit) * (position % 2 === 0 ? 3 : 1),
+    0,
+  );
+  return body + String((10 - (sum % 10)) % 10);
+}
+
 function stubBatch(size: string, perUnit: number, regular = 4.0) {
   vi.stubGlobal(
     "fetch",
@@ -146,7 +155,7 @@ describe("runKrogerSweep", () => {
 
   it("batches at most 50 productIds per Kroger call", async () => {
     for (let i = 0; i < 60; i++) {
-      const gtin = `00284006422${String(i).padStart(2, "0")}`;
+      const gtin = validGTIN(i);
       await env.DB.prepare("INSERT OR IGNORE INTO products (gtin, name, brand, category, image_url, unit_kind, created_at, updated_at) VALUES (?, 'x','x','x',NULL,'volume',1,1)").bind(gtin).run();
       await env.DB.prepare("INSERT INTO price_snapshots (gtin, location_id, regular, promo, per_unit_estimate, size_raw, stock_level, observed_at) VALUES (?, ?, 4.0, 0, 2.0, '32 fl oz', 'HIGH', ?)").bind(gtin, LOCATION, RECENT_OBSERVED_AT()).run();
     }

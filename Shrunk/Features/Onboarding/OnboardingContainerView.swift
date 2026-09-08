@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OnboardingContainerView: View {
     @StateObject private var vm = OnboardingViewModel()
-    @EnvironmentObject private var storeKit: StoreKitService
 
     @AppStorage("shrunk.onboarding_profile") private var persistedProfile: String = "{}"
 
@@ -23,13 +22,6 @@ struct OnboardingContainerView: View {
         }
         .onChange(of: vm.profile) { _, profile in
             persistedProfile = profile.encoded()
-        }
-        .onChange(of: storeKit.isProUser) { _, isPro in
-            // I6: don't bounce an already-Pro user out of onboarding before
-            // they've picked categories or a store — only an entitlement
-            // resolved on the paywall step (i.e. an actual purchase there)
-            // should finish the flow early.
-            if vm.shouldAutoFinish(becauseIsPro: isPro) { finish() }
         }
     }
 
@@ -57,7 +49,7 @@ struct OnboardingContainerView: View {
             }
             Spacer()
             if vm.step.allowsSkip {
-                Button("Skip") { vm.skipStore() }
+                Button("Skip") { finish() }
                     .font(.body)
             }
         }
@@ -85,8 +77,6 @@ struct OnboardingContainerView: View {
         case .welcome:    WelcomeStep()
         case .categories: CategoriesStep(vm: vm)
         case .store:      StoreStep()
-        case .paywall:
-            ProPaywallContent(skipTitle: "Continue with the free version") { finish() }
         }
     }
 
@@ -94,24 +84,22 @@ struct OnboardingContainerView: View {
 
     @ViewBuilder
     private var ctaSection: some View {
-        if vm.step == .paywall {
-            // ProPaywallContent owns its own CTA and free-tier exit.
-            Color.clear.frame(height: 0)
-        } else {
-            ShrunkButton(ctaTitle, icon: "arrow.right", isLoading: false) {
+        ShrunkButton(ctaTitle, icon: vm.step == .store ? "barcode.viewfinder" : "arrow.right", isLoading: false) {
+            if vm.step == .store {
+                finish()
+            } else {
                 vm.advance()
             }
-            .disabled(!vm.canAdvance)
-            .animation(.easeOut(duration: 0.15), value: vm.canAdvance)
         }
+        .disabled(!vm.canAdvance)
+        .animation(.easeOut(duration: 0.15), value: vm.canAdvance)
     }
 
     private var ctaTitle: String {
         switch vm.step {
         case .welcome:    return "Show me how"
         case .categories: return "Continue"
-        case .store:      return "Use this store"
-        case .paywall:    return "Continue"
+        case .store:      return "Start scanning"
         }
     }
 }
@@ -127,10 +115,10 @@ private struct WelcomeStep: View {
             illustration
                 .frame(maxWidth: .infinity)
             VStack(spacing: 12) {
-                Text("They're shrinking your groceries.")
+                Text("Know when packages get smaller.")
                     .font(.largeTitle.bold())
                     .multilineTextAlignment(.center)
-                Text("Same price. Less product. Scan a barcode and see exactly what changed.")
+                Text("Scan a barcode to check documented size history, then see current Kroger pricing when available.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -167,7 +155,7 @@ private struct WelcomeStep: View {
                             .fill(Color.shrunkRedLight)
                             .frame(width: 90, height: 24)
                             .overlay(
-                                Text("$1.89")
+                                Text("28 fl oz")
                                     .font(.footnote.weight(.semibold))
                                     .monospacedDigit()
                                     .foregroundStyle(Color.shrunkRedDark)
@@ -211,7 +199,7 @@ private struct CategoriesStep: View {
                     Text("What do you buy most?")
                         .font(.largeTitle.bold())
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("We'll watch these categories and send you the weekly digest.")
+                    Text("We'll use these choices for your weekly digest.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -292,5 +280,4 @@ private struct CategoryToggle: View {
 
 #Preview {
     OnboardingContainerView { }
-        .environmentObject(StoreKitService.shared)
 }

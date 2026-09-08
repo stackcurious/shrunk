@@ -142,15 +142,15 @@ struct AlertsFeedView: View {
         ContentUnavailableView {
             Label("No alerts yet", systemImage: "bell")
         } description: {
-            Text("Add products to your Watchlist from any scan result. We'll alert you the moment one shrinks.")
+            Text("Add products to your Watchlist from any scan result. We'll notify you when a background check finds a documented change.")
         }
     }
 
     private var proGate: some View {
         ContentUnavailableView {
-            Label("Real-time protection", systemImage: "shield.fill")
+            Label("Background monitoring", systemImage: "shield.fill")
         } description: {
-            Text("Get notified the second any watched product shrinks. We do the watching, you keep your money.")
+            Text("Get notified after our periodic checks find a documented size change or Kroger price jump.")
         } actions: {
             Button("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")") {
                 showPaywall = true

@@ -1,6 +1,6 @@
 # Shrunk — Privacy Policy
 
-**Last updated: 2026-08-26**
+**Last updated: 2026-09-08**
 
 Publish this document at `https://stackcurious.com/shrunk/privacy`. The app links to that exact URL from Settings and from the subscription paywall, and App Store Connect points at it too.
 
@@ -18,7 +18,7 @@ Shrunk has no accounts and no logins. We do not sell your data, we run no ads, w
 | The Kroger store you picked (a store id, not your location) | When you pick a store | On your device and in the `devices` row | Until you change or clear it |
 | Your category and notification preferences | Onboarding and Settings | On your device and in the `devices` row | Until you change them |
 | Your watchlist (product barcodes and brands) | When you add a product | On your device and in a `watches` row | Until you remove the item |
-| A label photo you choose to contribute | Uploaded to our server with every contribution | Held only in memory unless the reading needs a human check, in which case it is written to Cloudflare R2 | **Discarded immediately** (never stored) if accepted automatically; otherwise **deleted the moment it is reviewed**, accepted or rejected |
+| A label photo you choose to contribute | Uploaded to our server with every contribution | Written to Cloudflare R2 in a private human-review queue | **Deleted the moment it is reviewed**, whether accepted or rejected |
 | Your submission record (the barcode, the size you reported, the label text Shrunk read, your device id, and whether it was accepted) | When you contribute | In a `submissions` row in our database | Until you ask us to delete it |
 | The net weight read from a label | When you contribute | Stored as product data (`observations`) | Kept as part of the product's size history |
 | Your subscription status | After a purchase or restore | Apple's signed transaction is verified and reduced to an expiry date in the `devices` row | Until it expires or you ask us to delete it |
@@ -28,7 +28,7 @@ Shrunk has no accounts and no logins. We do not sell your data, we run no ads, w
 
 ## Label photos
 
-Contributing a photo is optional and free. On your phone, Shrunk reads the label with Apple's on-device Vision framework to make an initial read. When you submit, the photo is uploaded to our server along with that reading, **every time** — not only when the reading is unclear. If the reading is confident (a clear net-weight line that agrees with what we already know about the product), the submission is accepted automatically and the photo is **discarded immediately and never stored**. If it is not confident, the photo is written to storage so a human can check it, and it is deleted as soon as that check happens, whether the submission is accepted or rejected. The number that survives review becomes part of the product's public size history and is not attributed to you.
+Contributing a photo is optional and free. On your phone, Shrunk reads the label with Apple's on-device Vision framework to make an initial read. When you submit, the photo is uploaded to our server along with that reading, **every time** — not only when the reading is unclear. Every contribution is written to a private review queue so a human can compare the submitted reading with the label. The photo is deleted as soon as that review is accepted or rejected. No crowd reading becomes public and no alert is sent before this review. The number that survives review becomes part of the product's public size history and is not attributed to you.
 
 ## Notifications
 

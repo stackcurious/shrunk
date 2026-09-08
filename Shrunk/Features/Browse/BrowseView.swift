@@ -58,9 +58,9 @@ struct BrowseView: View {
 
     private var subtitle: String {
         if let updated = vm.lastUpdated {
-            return "Famous shrinkflation cases · updated \(Self.relativeTimeString(updated))"
+            return "Documented package changes · updated \(Self.relativeTimeString(updated))"
         }
-        return "Famous shrinkflation cases, with the receipts"
+        return "Documented package changes, with published evidence"
     }
 
     private static func relativeTimeString(_ date: Date) -> String {
@@ -92,7 +92,7 @@ struct BrowseView: View {
 
     private var trendingSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(title: "Trending shrinks", subtitle: "Tap any to see the receipts")
+            sectionHeader(title: "Documented downsizing", subtitle: "Tap any to inspect the size history")
                 .padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
@@ -121,7 +121,7 @@ struct BrowseView: View {
                 columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3),
                 spacing: 10
             ) {
-                ForEach(vm.categories) { cat in
+                ForEach(vm.categories.filter { !vm.records(in: $0).isEmpty }) { cat in
                     Button {
                         presentedCategory = cat
                     } label: {
@@ -134,11 +134,11 @@ struct BrowseView: View {
         }
     }
 
-    // MARK: - Hall of shame
+    // MARK: - Biggest package cuts
 
     private var hallOfShameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(title: "Hall of shame", subtitle: "Worst offenders, ranked")
+            sectionHeader(title: "Biggest package cuts", subtitle: "Largest documented reductions")
                 .padding(.horizontal, 20)
             VStack(spacing: 0) {
                 ForEach(Array(vm.hallOfShame.enumerated()), id: \.element.product.id) { idx, record in
@@ -235,7 +235,7 @@ private struct CategoryTile: View {
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
-            Text(count == 0 ? "Tap to scan" : "\(count) case\(count == 1 ? "" : "s")")
+            Text("\(count) case\(count == 1 ? "" : "s")")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -246,7 +246,7 @@ private struct CategoryTile: View {
     }
 }
 
-// MARK: - Hall of shame row
+// MARK: - Biggest package cuts row
 
 struct ShameRow: View {
     let rank: Int

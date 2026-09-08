@@ -11,7 +11,6 @@ import {
   type ProductRow,
 } from "../db";
 import { scoreSubmission } from "../gate";
-import { finalizeAcceptance } from "../crowd";
 import { canonicalDeviceId, hitRateLimit, isValidDeviceId, OBSERVATIONS_HOURLY_LIMIT } from "../ratelimit";
 
 export const observationsRoute = new Hono<{ Bindings: Env }>();
@@ -166,18 +165,7 @@ observationsRoute.post("/v1/observations", async (c) => {
     }
   }
 
-  if (gate.status === "accepted") {
-    await finalizeAcceptance(c.env.DB, {
-      gtin,
-      quantity,
-      unitKind,
-      previousQuantity: latest?.quantity ?? null,
-      previousObservedAt: latest?.observed_at ?? null,
-      observedAt: now,
-      brand: product.brand,
-      now,
-    });
-  }
+
 
   return c.json({ status: gate.status, confidence: gate.confidence, observation_id: observationId });
 });

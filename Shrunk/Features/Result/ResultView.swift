@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ResultView: View {
     let barcode: String
@@ -9,6 +10,10 @@ struct ResultView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showWatchPaywall = false
+    /// Set only by an explicit Watch tap. If the paywall purchase succeeds,
+    /// this preserves the user's intent and finishes the action automatically.
+    @State private var pendingWatchIntent = false
+    @State private var showNotificationGuidance = false
     @State private var showAlternatives = false
     @State private var showShareCard = false
     /// Seeded from the watchlist on appear, so re-opening a watched product
@@ -83,6 +88,31 @@ struct ResultView: View {
             // Minor #4: lift (or re-apply) the alternatives cap the moment
             // Pro status changes, rather than waiting for a reload.
             Task { await vm.refreshAlternatives(isPro: isPro) }
+            switch ResultViewModel.resolvePendingWatch(
+                isPending: pendingWatchIntent,
+                isPro: isPro,
+                isAlreadyWatched: isWatched
+            ) {
+            case .add:
+                pendingWatchIntent = false
+                if case .loaded(let product, let record) = vm.state {
+                    addToWatchlist(product: product, record: record)
+                }
+            case .clear:
+                pendingWatchIntent = false
+            case .wait:
+                break
+            }
+        }
+        .alert("Watch saved", isPresented: $showNotificationGuidance) {
+            Button("Open Notification Settings") {
+                if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Not now", role: .cancel) { }
+        } message: {
+            Text("This product is on your watchlist. Turn on notifications so Shrunk can tell you when it changes.")
         }
     }
 
@@ -168,7 +198,12 @@ struct ResultView: View {
             .padding(.bottom, 40)
         }
         .background(Color(.systemGroupedBackground))
-        .sheet(isPresented: $showWatchPaywall) { ProPaywallView() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            primaryActionBar(product: product, record: record)
+        }
+        .sheet(isPresented: $showWatchPaywall, onDismiss: {
+            if !storeKit.isProUser { pendingWatchIntent = false }
+        }) { ProPaywallView() }
         .sheet(isPresented: $showAlternatives) {
             AlternativesView(product: product, record: record, result: vm.alternativesResult)
         }
@@ -180,79 +215,83 @@ struct ResultView: View {
     // MARK: - Hero (meter + product header)
 
     private func heroSection(product: ShrunkProduct, record: ShrinkRecord) -> some View {
-        VStack(spacing: 16) {
-            ShrinkMeter(
-                percentChange: record.shrinkPercent,
-                verdict: record.verdict,
-                size: .hero
-            )
-            .padding(.top, 8)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ProductImage(url: product.imageURL, size: 64, cornerRadius: 12)
 
-            if product.imageURL != nil {
-                ProductImage(url: product.imageURL, size: 88, cornerRadius: 14)
-                    .padding(.top, -8)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(product.name)
+                        .font(.title2.bold())
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    let provenance = [product.brand, product.category]
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " · ")
+                    if !provenance.isEmpty {
+                        Text(provenance)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if ShareCardRenderer.canShare(record: record) {
+                    Button {
+                        showShareCard = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.circle)
+                    .accessibilityLabel("Share result")
+                }
             }
 
-            VStack(spacing: 6) {
-                Text(product.name)
-                    .font(.largeTitle.bold())
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.7)
+            Divider()
 
-                // One `Text`, not three in an `HStack`: separate cells each
-                // wrapped on their own at AX5 and read as "Gatorad e · Bever-
-                // ages" (review B3).
-                let provenance = [product.brand, product.category]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: " · ")
-                if !provenance.isEmpty {
-                    Text(provenance)
-                        .font(.subheadline)
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(verdictEyebrow(for: record))
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if let line = bannerSubline(for: record) {
-                    Text(line)
-                        .font(.subheadline.weight(.semibold))
+                        .textCase(.uppercase)
+                    Text(verdictHeadline(for: record))
+                        .font(.title.bold())
                         .monospacedDigit()
                         .foregroundStyle(verdictTextColor(record.verdict))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(verdictTintColor(record.verdict), in: Capsule())
-                        .padding(.top, 4)
-                }
-
-                // Rule 1 — every loaded result states at least one concrete
-                // fact. For the 98.5 % of products with a single snapshot that
-                // fact is the size itself and when we first saw it.
-                if let fact = sizeFactLine(for: record) {
-                    Text(fact)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(verdictDetail(for: record))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-            .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // §2 lists Share only on the shrink and unchanged/grew rows, which
-            // is exactly the set `comparisonRow` above will draw a Then→Now for
-            // — and that pair of sizes is the card's whole payload. One
-            // predicate answers both so the screen and the shared PNG can't
-            // contradict each other (review N4, residual 1).
-            if ShareCardRenderer.canShare(record: record) {
-                Button {
-                    showShareCard = true
-                } label: {
-                    Label("Share verdict", systemImage: "square.and.arrow.up")
+                if record.currentSize != nil {
+                    ShrinkMeter(
+                        percentChange: record.shrinkPercent,
+                        verdict: record.verdict,
+                        size: .compact
+                    )
+                } else {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.title.bold())
+                        .foregroundStyle(Color.shrunkRed)
+                        .frame(width: 72, height: 72)
+                        .background(Color.shrunkRedLight, in: Circle())
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
             }
+
+            Label(evidenceLine(for: record), systemImage: "checkmark.shield")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .groupedCard()
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Then → Now comparison row
@@ -359,7 +398,7 @@ struct ResultView: View {
                 // `product.currentPrice` with no snapshot history — e.g. curated
                 // Browse cards, whose price is not Kroger data (I6 regression fix).
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Real cost per ounce")
+                    Text(record.costPerUnitThen == nil ? "Current unit price" : "Observed unit-price change")
                         .font(.headline)
                     Spacer(minLength: 8)
                     // One attribution per screen: when the store card below is
@@ -379,13 +418,13 @@ struct ResultView: View {
                     // and the "% more per ounce" line was drawn on top of the
                     // bars. Each row now measures itself (review B3).
                     VStack(alignment: .leading, spacing: 8) {
-                        costBarRow(label: "Then", value: then.formattedCostPerUnit(),
+                        costBarRow(label: "Earlier", value: then.formattedCostPerUnit(),
                                    fraction: then / denom, fill: Color(.systemFill))
-                        costBarRow(label: "Now",  value: now.formattedCostPerUnit(),
+                        costBarRow(label: "Current", value: now.formattedCostPerUnit(),
                                    fraction: now / denom, fill: Color.shrunkRed)
                     }
 
-                    Text("\(pct.formattedPercentChange(decimals: 1)) more per ounce")
+                    Text(unitCostChangeLine(percent: pct, record: record))
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
                         .foregroundStyle(pct > 0 ? Color.shrunkRedDark : Color.verdictGoodDeep)
@@ -395,7 +434,7 @@ struct ResultView: View {
                         Text(now.formattedCostPerUnit())
                             .font(.title.bold())
                             .monospacedDigit()
-                        Text("per oz")
+                        Text(unitCostShortLabel(for: record))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -445,42 +484,59 @@ struct ResultView: View {
     /// with the action that moves *them* forward — watching, or the label photo
     /// that makes watching possible — rather than the alternatives button the
     /// shrink screen leads with.
+    private func primaryActionBar(product: ShrunkProduct, record: ShrinkRecord) -> some View {
+        let outcome = ResultViewModel.watchOutcome(
+            record: record, isPro: storeKit.isProUser, isAlreadyWatched: isWatched
+        )
+        return VStack(spacing: 0) {
+            Divider()
+            Group {
+                if record.verdict.isShrink && outcome != .needsLabel {
+                    ShrunkButton("Compare alternatives", icon: "arrow.left.arrow.right") {
+                        showAlternatives = true
+                    }
+                } else {
+                    watchButton(
+                        outcome: outcome,
+                        product: product,
+                        record: record,
+                        watchTitle: record.verdict == .insufficientData
+                            ? "Watch for the next change"
+                            : "Watch this product",
+                        variant: .primary
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+        }
+        .background(.ultraThinMaterial)
+    }
+
+    /// Secondary actions stay in the scroll content; the one decisive next
+    /// step is pinned above the sheet edge by `primaryActionBar`.
     private func ctaSection(product: ShrunkProduct, record: ShrinkRecord) -> some View {
         let outcome = ResultViewModel.watchOutcome(
             record: record, isPro: storeKit.isProUser, isAlreadyWatched: isWatched
         )
         return VStack(spacing: 8) {
             if outcome == .needsLabel {
-                // "We don't know this size yet": the label photo is the only
-                // thing that unblocks this product, so it is the primary CTA.
-                // Routed through `watchButton` like every other outcome, so
-                // there is exactly one path from outcome to action.
-                watchButton(outcome: outcome, product: product, record: record, variant: .primary)
-                ShrunkButton("See better-value alternatives", icon: "arrow.right", variant: .ghost) {
+                ShrunkButton("Compare alternatives", icon: "arrow.left.arrow.right", variant: .ghost) {
                     showAlternatives = true
                 }
             } else if record.verdict == .insufficientData {
-                watchButton(outcome: outcome, product: product, record: record,
-                            watchTitle: "Watch — we'll alert you if it shrinks", variant: .primary)
-                ShrunkButton("See better-value alternatives", icon: "arrow.right", variant: .ghost) {
+                ShrunkButton("Compare alternatives", icon: "arrow.left.arrow.right", variant: .ghost) {
                     showAlternatives = true
                 }
-                ShrunkButton("Snap the label to confirm", icon: "camera", variant: .ghost) {
+                ShrunkButton("Confirm size with a label", icon: "camera", variant: .ghost) {
                     showLabelCapture = true
                 }
             } else if record.verdict == .unchanged || record.verdict == .grew {
-                // §2's "Unchanged / grew" row: there is no shrink to escape,
-                // so the useful action is establishing the baseline — Watch is
-                // primary here, alternatives and Share secondary.
-                watchButton(outcome: outcome, product: product, record: record, variant:.primary)
-                ShrunkButton("See better-value alternatives", icon: "arrow.right", variant: .ghost) {
+                ShrunkButton("Compare alternatives", icon: "arrow.left.arrow.right", variant: .ghost) {
                     showAlternatives = true
                 }
             } else {
-                ShrunkButton("See better-value alternatives", icon: "arrow.right") {
-                    showAlternatives = true
-                }
-                watchButton(outcome: outcome, product: product, record: record, variant:.ghost)
+                watchButton(outcome: outcome, product: product, record: record, variant: .ghost)
             }
         }
     }
@@ -538,6 +594,7 @@ struct ResultView: View {
         case .needsLabel:
             showLabelCapture = true
         case .paywall:
+            pendingWatchIntent = true
             showWatchPaywall = true
         case .watch:
             addToWatchlist(product: product, record: record)
@@ -550,9 +607,10 @@ struct ResultView: View {
             isWatched = true
             toastIsError = false
             withAnimation {
-                toastMessage = "Watching \(product.name) — we'll alert you if it shrinks or its price per oz jumps"
+                toastMessage = "Added \(product.name) to your watchlist"
             }
             successHaptic += 1
+            Task { await configureNotificationsAfterWatch() }
         } catch {
             toastIsError = true
             withAnimation {
@@ -563,13 +621,28 @@ struct ResultView: View {
         }
     }
 
+    private func configureNotificationsAfterWatch() async {
+        let scheduler = NotificationScheduler.shared
+        let status = await scheduler.authorizationStatus()
+        switch NotificationScheduler.watchFollowUp(for: status) {
+        case .requestPermission:
+            if !(await scheduler.requestPermissionAndRegister()) {
+                showNotificationGuidance = true
+            }
+        case .register:
+            scheduler.registerForRemoteNotifications()
+        case .guideToSettings:
+            showNotificationGuidance = true
+        }
+    }
+
     // MARK: - Loading / not-found / error
 
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
                 .controlSize(.large)
-            Text("Looking up the shrink record…")
+            Text("Checking product history…")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -621,32 +694,78 @@ struct ResultView: View {
         return false
     }
 
-    private func bannerSubline(for record: ShrinkRecord) -> String? {
+    private func verdictEyebrow(for record: ShrinkRecord) -> String {
+        switch record.verdict {
+        case .significantShrink, .moderateShrink, .minorShrink: return "Documented downsizing"
+        case .unchanged: return "Package history"
+        case .grew: return "Package history"
+        case .insufficientData: return record.currentSize == nil ? "Help verify this product" : "Starting point"
+        }
+    }
+
+    private func verdictHeadline(for record: ShrinkRecord) -> String {
         switch record.verdict {
         case .significantShrink, .moderateShrink, .minorShrink:
-            guard let prev = record.previousSize, let curr = record.currentSize else { return nil }
-            let diff = abs(prev.quantity - curr.quantity)
-            return "They took \(Self.compact(diff)) \(curr.unit)"
+            return "\(abs(record.shrinkPercent).formattedPercent(decimals: record.shrinkPercent > -10 ? 1 : 0)) smaller"
+        case .unchanged: return "Size held steady"
+        case .grew: return "Package got larger"
+        case .insufficientData: return record.currentSize == nil ? "Size not verified" : "Baseline established"
+        }
+    }
+
+    private func verdictDetail(for record: ShrinkRecord) -> String {
+        switch record.verdict {
+        case .significantShrink, .moderateShrink, .minorShrink:
+            return "Two dated package sizes confirm a reduction. Price history is evaluated separately."
         case .unchanged:
-            // Unreachable from `ShrinkDetector.analyze` since size runs landed
-            // (`ShrinkDetector.swift:163`): adjacent runs differ by more than
-            // the ±1% tolerance by construction, so a held size collapses to
-            // one run and reports `.insufficientData` instead. Kept because
-            // this switch must be exhaustive and `.unchanged` is still what
-            // `WatchedProduct` and the alert models carry — if a size that
-            // held ever reaches this screen, §2's copy is here and correct.
-            //
-            // §2: "Same size since 2021" — the year of the *earliest*
-            // observation, which is how far back we can actually vouch for it,
-            // not the year of the latest one.
-            guard let since = record.product.sizeHistory.map(\.date).min() else { return "Held its size" }
-            return "Same size since \(since.formatted(.dateTime.year()))"
+            return "Comparable observations show the package holding its size."
         case .grew:
-            return "Grew \(record.shrinkPercent.formattedPercent(decimals: 0))"
+            return "The latest documented package size is larger than the previous one."
         case .insufficientData:
-            // Spec §2 — the single-snapshot screen is a first-class result,
-            // not a degraded shrink screen, and says what it actually knows.
-            return record.currentSize == nil ? "We don't know this size yet" : "No shrink on record"
+            if let fact = sizeFactLine(for: record) {
+                return "\(fact). Watch it and we'll compare the next verified change."
+            }
+            return "Photograph the net-weight line to create a reliable starting point."
+        }
+    }
+
+    private func evidenceLine(for record: ShrinkRecord) -> String {
+        let records = [record.previousSize, record.currentSize].compactMap { $0 }
+        guard !records.isEmpty else { return "No package-size evidence yet" }
+        let sources = Array(Set(records.map { sourceName($0.source) })).sorted()
+        let count = records.count
+        return "\(count) dated size record\(count == 1 ? "" : "s") · \(sources.joined(separator: " + "))"
+    }
+
+    private func sourceName(_ source: String) -> String {
+        switch source.lowercased() {
+        case "fdc", "usda": return "USDA data"
+        case "off", "openfoodfacts", "openfoodfacts_import": return "Open Food Facts"
+        case "kroger": return "Kroger listing"
+        case "crowd", "user_report": return "Community label"
+        case "curated", "trending_feed": return "Published documentation"
+        default: return "Recorded package data"
+        }
+    }
+
+    private func unitCostChangeLine(percent: Double, record: ShrinkRecord) -> String {
+        let direction = percent >= 0 ? "more" : "less"
+        return "\(abs(percent).formattedPercent(decimals: 1)) \(direction) \(unitCostLongLabel(for: record))"
+    }
+
+    private func unitCostShortLabel(for record: ShrinkRecord) -> String {
+        switch record.currentSize?.unitKind {
+        case "volume": return "per fl oz"
+        case "count": return "each"
+        default: return "per oz"
+        }
+    }
+
+    private func unitCostLongLabel(for record: ShrinkRecord) -> String {
+        switch record.currentSize?.unitKind {
+        case "volume": return "per fluid ounce"
+        case "count": return "per item"
+        default: return "per ounce"
         }
     }
 
@@ -669,7 +788,7 @@ struct ResultView: View {
     }
 
     /// The cheapest store alternative that actually beats what the scanned
-    /// product costs per ounce. Curated rows carry no `costPerUnit`, so they
+    /// product costs per normalized unit. Curated rows carry no `costPerUnit`, so they
     /// can never produce a false "cheaper" claim.
     private func cheapestAlternative(for record: ShrinkRecord) -> Alternative? {
         guard let scanned = record.costPerUnitNow, scanned > 0 else { return nil }
@@ -693,7 +812,7 @@ struct ResultView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        Label("Cheapest per oz at your store", systemImage: "arrow.down.circle.fill")
+                        Label("Cheapest \(unitCostLongLabel(for: record)) at your store", systemImage: "arrow.down.circle.fill")
                             .font(.headline)
                             .foregroundStyle(Color.verdictGoodDeep)
                         Spacer(minLength: 0)

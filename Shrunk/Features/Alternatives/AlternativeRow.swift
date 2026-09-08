@@ -97,14 +97,18 @@ struct AlternativeRow: View {
     }
 
     private var badgeBottom: String {
-        if isCheaper { return "¢/oz" }
-        return alternative.source == .curated ? "verified" : "per oz"
+        if alternative.source == .curated { return "verified" }
+        return unitPriceLabel
+    }
+
+    private var unitPriceLabel: String {
+        AlternativesEngine.unitPriceLabel(for: alternative.unitKind)
     }
 
     private var statRow: some View {
         HStack(spacing: 8) {
             if let cost = alternative.costPerUnit {
-                miniStat(label: "Cost / oz", value: cost.formattedCostPerUnit())
+                miniStat(label: "Cost \(unitPriceLabel.replacingOccurrences(of: "per", with: "/"))", value: cost.formattedCostPerUnit())
             }
             if let price = alternative.price {
                 miniStat(label: "Price", value: price.formattedPrice())

@@ -53,17 +53,17 @@ describe("scoreSubmission components", () => {
 });
 
 describe("scoreSubmission threshold", () => {
-  it("accepts at exactly 0.8 despite floating-point addition", () => {
+  it("scores exactly 0.8 despite floating-point addition and holds for review", () => {
     // 0.5 + 0.2 + 0.1 is 0.7999999999999999 in IEEE-754. It must still accept.
     const result = scoreSubmission({ ...base, productUnitKind: "mass", ocrConfidence: 0.95 });
     expect(result.confidence).toBe(0.8);
-    expect(result.status).toBe("accepted");
+    expect(result.status).toBe("pending");
   });
 
-  it("accepts at 0.8 from parsed + range + ocr when the product has no dominant kind", () => {
+  it("scores 0.8 from parsed + range + ocr and holds for review", () => {
     const result = scoreSubmission({ ...base, latestAcceptedQuantity: 907.184, ocrConfidence: 0.95 });
     expect(result.confidence).toBe(0.8);
-    expect(result.status).toBe("accepted");
+    expect(result.status).toBe("pending");
   });
 
   it("holds 0.7 pending", () => {
@@ -72,11 +72,19 @@ describe("scoreSubmission threshold", () => {
     expect(result.status).toBe("pending");
   });
 
-  it("scores a perfect submission 1.0", () => {
+  it("holds an otherwise acceptable typed submission pending without photo evidence", () => {
     const result = scoreSubmission({
       ...base, productUnitKind: "mass", latestAcceptedQuantity: 907.184, ocrConfidence: 0.97,
     });
     expect(result.confidence).toBe(1);
-    expect(result.status).toBe("accepted");
+    expect(result.status).toBe("pending");
+  });
+
+  it("scores a perfect submission 1.0 and holds for review", () => {
+    const result = scoreSubmission({
+      ...base, productUnitKind: "mass", latestAcceptedQuantity: 907.184, ocrConfidence: 0.97,
+    });
+    expect(result.confidence).toBe(1);
+    expect(result.status).toBe("pending");
   });
 });

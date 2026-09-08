@@ -21,7 +21,7 @@ Catch shrinking groceries
 ## Promotional Text (≤170 chars — editable any time without review)
 
 ```
-Same price, less product? Scan any grocery barcode and Shrunk shows the real size history, today's shelf price, and what to buy instead. No brand pays us.
+Packages change quietly. Scan a grocery barcode to check documented size history, available Kroger pricing, and better-value alternatives. No brand pays us.
 ```
 (154 chars)
 
@@ -45,34 +45,32 @@ The job-to-be-done is a purchase decision at the shelf — comparison, alternati
 ## Full Description
 
 ```
-They shrunk it. We caught them.
+Packages change quietly. Shrunk helps you check the evidence.
 
-Shrinkflation is when a brand quietly shrinks the package — fewer chips, less coffee, a smaller bottle — while the price stays exactly the same. Shrunk shows you the receipt.
+Scan a supported grocery barcode. When data is available, Shrunk shows:
 
-Point your camera at any grocery barcode. In seconds you get:
-
-• Whether the package shrank, and by how much
-• The size history behind that verdict, with dates
-• Today's price and cost per ounce at your Kroger store
-• Better value alternatives on the same shelf
+• Documented package-size changes and dated evidence
+• Available shelf price, promotion, stock, and unit cost at your selected Kroger
+• Better-value alternatives when comparable store products are available
+• A clear starting point when only one package size is documented
 
 WHERE THE DATA COMES FROM
-Shrunk is built on the USDA's public FoodData Central dataset, which records package sizes for hundreds of thousands of US grocery products going back years — that's the "before". Live prices and current sizes come from Kroger's official Products API for the store you choose. Verified shrinkflation cases are curated by hand with a published source for every one. And shoppers add what no database has: snap a label, and Shrunk reads the net weight on your phone.
+Package-size records come from USDA FoodData Central, Open Food Facts, published documentation, and shopper label photos after human review. Available local price, promotion, stock, and alternative data comes from Kroger's Products API for the store you choose.
 
-FREE, FOREVER
+FREE
 • Unlimited barcode scans
-• Shrink verdict and size history
-• Current price and cost per unit at your store
-• The browse feed of verified cases
-• Contribute label photos
-• 3 alternatives per scan
+• Available size evidence and package-change results
+• Available Kroger price, stock, and unit cost
+• Browse verified published cases
+• Contribute label photos for review
+• Up to 3 available alternatives per scan
 
 SHRUNK PRO
-• Watchlist alerts — a push the moment something you watch gets smaller, or its price per unit jumps 5%
-• Weekly "what shrank this week" digest for your categories
-• Unlimited ranked alternatives at your store, cheapest per unit first
-• Full price and size history charts
-• Savings dashboard built from what you actually scan — no invented numbers
+• Watchlist notifications after periodic checks find a documented size change or a 5% Kroger unit-price jump
+• Weekly category digest
+• All available ranked alternatives at your selected Kroger
+• Full available price and size history charts
+• Savings dashboard based on documented changes and your shopping profile
 
 $2.99/month or $14.99/year. New subscribers get a 7-day free trial on the yearly plan.
 
@@ -107,12 +105,12 @@ The in-app paywall already shows plan length, price and both links (Phase 5, Tas
 ## What's New (v2.0.0)
 
 ```
-Shrunk v2 — every verdict now comes from real, dated observations.
+Shrunk v2 — results now separate documented size evidence from current store pricing.
 
-• Real size history: hundreds of thousands of US products from the USDA's public FoodData Central dataset, plus verified cases and shopper contributions
-• Live prices: pick your Kroger store and see today's price, cost per unit, and stock, right on the result screen
-• Snap a label: Shrunk reads the net weight on your phone and adds it to a product's history
-• Alternatives that are actually on the shelf at your store, ranked by price per unit
+• Clear size evidence: dated records from USDA FoodData Central, Open Food Facts, verified published cases, and reviewed shopper contributions
+• Kroger prices: pick a store and see available current price, promotion, stock, and unit cost on the result screen
+• Snap a label: Shrunk reads the net weight on your phone and sends it for human review before it joins product history
+• Available Kroger alternatives ranked by comparable unit price, with stock status shown as reported
 • Shrunk Pro is now a subscription — $2.99/month or $14.99/year with a 7-day free trial — and every Pro feature is backed by observed data: watchlist alerts, the weekly digest, unlimited alternatives, full history charts, and a savings dashboard computed from what you scan
 
 The onboarding quiz and its guessed "yearly exposure" number are gone. We would rather show you one real number than five invented ones.

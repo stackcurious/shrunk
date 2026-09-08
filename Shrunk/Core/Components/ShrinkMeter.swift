@@ -165,7 +165,7 @@ struct ShrinkMeter: View {
         case .grew:
             return "+" + percentString(abs(percentChange), withSign: false)
         case .insufficientData:
-            return "?"
+            return "1"
         }
     }
 
@@ -182,12 +182,12 @@ struct ShrinkMeter: View {
     private var subtitle: String? {
         guard size != .mini else { return nil }
         switch verdict {
-        case .significantShrink: return "Shrunk"
-        case .moderateShrink:    return "Shrunk"
-        case .minorShrink:       return "Shrunk"
+        case .significantShrink: return "Smaller"
+        case .moderateShrink:    return "Smaller"
+        case .minorShrink:       return "Smaller"
         case .unchanged:         return "Held"
         case .grew:              return "Grew"
-        case .insufficientData:  return "First scan"
+        case .insufficientData:  return "Baseline"
         }
     }
 
@@ -208,13 +208,13 @@ struct ShrinkMeter: View {
         let magnitude = String(format: "%.1f", abs(percentChange))
         switch verdict {
         case .significantShrink, .moderateShrink, .minorShrink:
-            return "Shrunk \(magnitude) percent"
+            return "Package size decreased \(magnitude) percent"
         case .grew:
             return "Grew \(magnitude) percent"
         case .unchanged:
             return "Held its size"
         case .insufficientData:
-            return "No shrink on record — first scan"
+            return "One package size on record — baseline established"
         }
     }
 

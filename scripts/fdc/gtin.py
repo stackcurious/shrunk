@@ -1,20 +1,32 @@
 """Canonical barcode form: 13-digit zero-padded GTIN with check digit.
 
-Mirror of backend/src/gtin.ts.
+Mirror of backend/src/gtin.ts and ScannerViewModel.canonicalBarcode.
 """
 import re
 
-_DIGITS = re.compile(r"\D")
+_SEPARATORS = re.compile(r"[\s-]")
 
 
 def normalize_gtin(raw: str) -> str | None:
-    if raw is None:
+    if not raw:
         return None
-    digits = _DIGITS.sub("", raw)
-    if len(digits) == 12:
-        return "0" + digits
-    if len(digits) == 13:
-        return digits
-    if len(digits) == 14 and digits.startswith("0"):
-        return digits[1:]
-    return None
+    compact = _SEPARATORS.sub("", raw)
+    if not compact.isascii() or not compact.isdigit():
+        return None
+
+    if len(compact) == 8:
+        canonical = "00000" + compact
+    elif len(compact) == 12:
+        canonical = "0" + compact
+    elif len(compact) == 13:
+        canonical = compact
+    elif len(compact) == 14 and compact.startswith("0"):
+        canonical = compact[1:]
+    else:
+        return None
+
+    digits = [int(value) for value in canonical]
+    total = sum(value * (3 if index % 2 == 0 else 1)
+                for index, value in enumerate(reversed(digits[:-1])))
+    expected = (10 - total % 10) % 10
+    return canonical if expected == digits[-1] else None

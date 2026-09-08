@@ -102,7 +102,8 @@ final class AlternativesEngineTests: XCTestCase {
 
         let savings = try! XCTUnwrap(result.alternatives[0].savingsPercent)
         XCTAssertEqual(savings, ((1.89 - 1.00) / 1.89) * 100, accuracy: 0.01)
-        XCTAssertTrue(result.alternatives[0].verdict.contains("cheaper per oz"))
+        XCTAssertEqual(result.alternatives[0].unitKind, "volume")
+        XCTAssertTrue(result.alternatives[0].verdict.contains("cheaper per fl oz"))
     }
 
     func test_noStoreFallsBackToCuratedCasesInTheSameCategory() async {

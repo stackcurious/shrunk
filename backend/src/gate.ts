@@ -2,9 +2,6 @@ import type { UnitKind } from "./normalize";
 
 const VALID_KINDS: string[] = ["mass", "volume", "count"] satisfies UnitKind[];
 
-/** Spec §5.2: crowd rows at or above this land `accepted`, the rest `pending`. */
-export const ACCEPT_THRESHOLD = 0.8;
-
 export interface GateInput {
   /** Normalized quantity the device parsed (grams / millilitres / count). */
   quantity: number;
@@ -19,7 +16,7 @@ export interface GateInput {
 
 export interface GateResult {
   confidence: number;
-  status: "accepted" | "pending";
+  status: "pending";
   components: { parsed: number; kindMatch: number; range: number; ocr: number };
 }
 
@@ -29,6 +26,8 @@ export interface GateResult {
  *   accepted observation + 0.1 OCR confidence >= 0.9.
  *
  * Always recomputed server-side — the device's own score is advisory only.
+ * A score describes plausibility and review priority only. Crowd claims
+ * always remain pending until a human verifies the stored label photo.
  */
 export function scoreSubmission(input: GateInput): GateResult {
   const parsed =
@@ -52,7 +51,7 @@ export function scoreSubmission(input: GateInput): GateResult {
 
   return {
     confidence,
-    status: confidence >= ACCEPT_THRESHOLD ? "accepted" : "pending",
+    status: "pending",
     components: { parsed, kindMatch, range, ocr },
   };
 }

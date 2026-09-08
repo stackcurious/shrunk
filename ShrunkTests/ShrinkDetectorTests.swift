@@ -48,7 +48,7 @@ final class ShrinkDetectorTests: XCTestCase {
         let record = detector.analyze(product: product)
         XCTAssertEqual(record.verdict, .insufficientData)
         XCTAssertNil(record.previousSize)
-        XCTAssertEqual(record.currentSize?.quantity, 999, "the run's latest observation is the current size")
+        XCTAssertEqual(record.currentSize?.quantity, 1000, "the opening observation supplies the dated baseline")
     }
 
     func test_grew_whenSizeIncreasedAboveOnePercent() {
@@ -282,6 +282,43 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
     }
 
+    func test_priceHistory_unalignedHistoricalSnapshotHasNoThen() {
+        let day: TimeInterval = 86_400
+        // The older size was observed at t=0, but this snapshot is more than a
+        // month later. It cannot support a claim about what the old size cost.
+        let product = makePriced(
+            sizes: [(32, "oz"), (28, "oz")],
+            prices: [(31 * day, 1.79), (32 * day, 1.89)]
+        )
+        let record = detector.analyze(product: product)
+
+        XCTAssertNil(record.priceThen)
+        XCTAssertNil(record.costPerUnitThen)
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+    }
+
+    func test_priceHistory_snapshotAtSevenDayBoundaryMaySupplyThen() {
+        let day: TimeInterval = 86_400
+        let product = makePriced(
+            sizes: [(32, "oz"), (28, "oz")],
+            prices: [(7 * day, 1.79), (8 * day, 1.89)]
+        )
+        let record = detector.analyze(product: product)
+
+        XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitThen ?? 0, 1.79 / 32, accuracy: 0.0001)
+    }
+
+    func test_invalidLivePriceDoesNotOverrideStoredCurrentPrice() {
+        let product = makePriced(
+            sizes: [(32, "oz"), (28, "oz")],
+            prices: [(0, 1.79), (86_400, 1.89)]
+        )
+
+        XCTAssertEqual(detector.analyze(product: product, livePrice: 0).priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(detector.analyze(product: product, livePrice: -2).priceNow ?? 0, 1.89, accuracy: 0.0001)
+    }
+
     func test_priceHistory_isSortedByDate() {
         let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(86_400, 1.89), (0, 1.79)])
         let record = detector.analyze(product: product)
@@ -499,7 +536,7 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertNil(record.currentSize, "a zero quantity is not a size")
     }
 
-    // MARK: - Adopting the live store price (spec rule 5, price half)
+    // MARK: - Using the live store price
     //
     // `ProductDTO.toProduct` sets `currentPrice: prices.last?.price`, so a
     // product with no `price_snapshots` has no price at all — which is every
@@ -529,20 +566,21 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertTrue(record.priceIsFromStoreSnapshot)
     }
 
-    func test_aStoredPriceWinsOverTheLivePrice() {
+    func test_livePriceWinsOverEditorialCurrentPrice() {
         let record = detector.analyze(
             product: makeProduct(history: [.init(quantity: 28, unit: "oz")], price: 2.49),
             livePrice: 1.89
         )
-        XCTAssertEqual(record.priceNow ?? 0, 2.49, accuracy: 0.0001)
-        XCTAssertFalse(record.priceIsFromStoreSnapshot,
-                       "a currentPrice fallback with no snapshot history is still not store-observed")
+        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / 28, accuracy: 0.0001)
+        XCTAssertTrue(record.priceIsFromStoreSnapshot)
     }
 
-    func test_aPriceSnapshotWinsOverTheLivePrice() {
+    func test_livePriceWinsOverCachedPriceSnapshot() {
         let product = makePriced(sizes: [(32, "oz"), (28, "oz")], prices: [(0, 1.79), (86_400, 1.89)])
         let record = detector.analyze(product: product, livePrice: 9.99)
-        XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.priceNow ?? 0, 9.99, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 9.99 / 28, accuracy: 0.0001)
         XCTAssertEqual(record.priceThen ?? 0, 1.79, accuracy: 0.0001)
     }
 
@@ -626,20 +664,22 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(record.currentSize?.quantity, 450)
     }
 
-    func test_previousAndCurrentDatesAreTheRunsLatestObservations() {
-        // "Then 2019 -> Now 2022" has to stay meaningful: the previous run's
-        // date is its *last* observation, the current run's its latest.
+    func test_previousAndCurrentKeepTheOpeningEvidenceDateAndSource() {
+        // Quantity, date, and source must come from the same observation;
+        // later confirmations remain supporting sources, not replacement dates.
         let product = makeRunHistory([
             (500, "g", "curated"),   // day 0
-            (500, "g", "fdc"),       // day 1  <- previousSize.date
-            (450, "g", "curated"),   // day 2
-            (450, "g", "fdc")        // day 3  <- currentSize.date
+            (500, "g", "fdc"),       // day 1 confirmation
+            (450, "g", "curated"),   // day 2 opens current run
+            (450, "g", "fdc")        // day 3 confirmation
         ])
         let record = detector.analyze(product: product)
         let base = Date(timeIntervalSince1970: 1_600_000_000)
 
-        XCTAssertEqual(record.previousSize?.date, base.addingTimeInterval(86_400))
-        XCTAssertEqual(record.currentSize?.date, base.addingTimeInterval(3 * 86_400))
+        XCTAssertEqual(record.previousSize?.date, base)
+        XCTAssertEqual(record.previousSize?.source, "curated")
+        XCTAssertEqual(record.currentSize?.date, base.addingTimeInterval(2 * 86_400))
+        XCTAssertEqual(record.currentSize?.source, "curated")
     }
 
     func test_threeRunsCompareTheLastTwo() {
@@ -727,4 +767,3 @@ final class ShrinkDetectorTests: XCTestCase {
         XCTAssertEqual(detector.analyze(product: product).verdict, .significantShrink)
     }
 }
-

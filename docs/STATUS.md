@@ -1,12 +1,14 @@
-# Shrunk — where we stopped (2026-08-28)
+# Shrunk — where we stopped (2026-09-08)
 
 Read this first in a new session. Memory/ledgers may lag; this file and `git log` are the truth.
 
 ## Headline
 
-**Shrunk 2.0.0 (build 4) is submitted to App Review** — review submission `bdce0306-43d6-4ee5-a243-ef81193a575d` (submitted 2026-08-28 14:42 UTC), containing the app version, the "Shrunk Pro" subscription group and both subscriptions (`com.shrunk.pro.yearly` $14.99 w/ 7-day trial, `com.shrunk.pro.monthly` $2.99). All four items `WAITING_FOR_REVIEW`. Release type: automatic after approval.
+**Shrunk 2.0.0 build 5 is prepared locally for the evidence-first scan update.** App Store Connect version `5f72dc64-9424-49a8-80b9-b18eeca085ba` is `DEVELOPER_REJECTED`; its former review submission `bdce0306-43d6-4ee5-a243-ef81193a575d` is complete with every item removed. There is no active review submission, so build 5 is safe to finish and upload when approved.
 
-The same build (2.0.0 / 4, ASC build id `c12af38f-24e2-4360-9124-494f00e8125c`) is on TestFlight for the internal group "Shrunk Internal" (tester: oakley801@gmail.com — the only tester Apple ID; do not add others).
+Build 5 changes the common scan path: Result identifies documented package downsizing separately from price evidence, shows the evidence source and current unit price above the fold, uses correct mass/volume/count units, and pins the next useful action. Scanner adds prominent manual entry and validates the GS1 check digit for camera and typed barcodes. Onboarding reaches value before purchase, Watch intent survives the Pro sheet, and notification permission is requested only after a successful Watch action. Every crowd observation remains pending for human label review before it can publish or alert. Build 5 also adds the Scanned Delta app icon and a matching static launch screen.
+
+Validated 2026-09-08: generic iOS Simulator build passed; focused iOS logic suites passed; Result and Scan screenshot UI tests passed; Worker TypeScript passed; all **391 Worker tests** passed. Screenshot result bundle: `/tmp/shrunk-build5-evidence-2.xcresult`. Backend integrity changes are local and are **not deployed**. Build 5 is **not uploaded** to TestFlight or App Store Connect.
 
 ## What shipped since the first TestFlight build (2.0.0 / 2)
 
@@ -24,7 +26,7 @@ Spec for all of it: `docs/superpowers/specs/2026-08-27-scan-value-and-native-ui.
 | ASC metadata | Version 2.0.0, subtitle, promo, keywords, description + subscription disclosure, support/marketing URLs, review contact + notes, categories Shopping / Food & Drink, age rating 4+, privacy published | `docs/ASC_SETUP.md`, `.submission-report.md` |
 | Legal | Governing law is **Florida** (decided 2026-08-28) in `docs/TERMS.md` and the site | commit `b61eb0f` |
 
-Tests at HEAD: 305 iOS unit + 6 UI (StoreKit daemon tests skipped — machine bug FB22237318), 387 Worker, 93 Python.
+Previous release baseline: 305 iOS unit + 6 UI (StoreKit daemon tests skipped — machine bug FB22237318), 387 Worker, 93 Python. Build 5 adds focused iOS coverage and brings the Worker suite to 391 tests.
 
 Worker: `https://shrunk-api.stackcurious.workers.dev` (last deploy `c03ffc3f-7780-40b2-8dae-1ea1436a8af3`). Secrets/keys: `~/.config/shrunk/`, `~/.appstoreconnect/private_keys/AuthKey_Q32YKM5PDY.p8`.
 
@@ -42,8 +44,8 @@ User-only:
 5. Kroger written-permission reply (Gmail thread `1a043dfa17862f3c`, sent 2026-08-27) — none yet; `KROGER_PERSIST=on` until then, `POST /v1/admin/purge-kroger` is the retraction.
 
 Engineering, next:
-- If App Review rejects: read the resolution-center message, fix, bump build, and resubmit **with the subscriptions in the same submission** (see lesson below).
-- A build 5 would need: `CURRENT_PROJECT_VERSION` bump in `project.yml`, archive from a clean worktree (`.build3-report.md` has the exact xcodebuild/export commands), attach via `PATCH /v1/appStoreVersions/5f72dc64-…/relationships/build`.
+- Complete an on-device acceptance run for build 5, then archive/upload from a clean worktree (`.build3-report.md` has the commands). Attach the new build to version `5f72dc64-…` and resubmit it with both subscriptions.
+- Deploy the evidence-gate Worker change before releasing build 5 so typed crowd submissions cannot publish without label evidence.
 - Optional value work: import archived FDC releases (2019–2025) for more "before" points; the digest/sweep run-collapse question in spec §5.1.
 - Hygiene: `ProductThumb.swift`/`StatBox` were deleted; the `.claude/worktrees/agent-a13336e8bb2ff43b9` worktree is merged and harness-locked — safe to remove.
 

@@ -158,7 +158,8 @@ enum ShareCardRenderer {
         let costLineY: CGFloat = 184
         if let then = record.costPerUnitThen, let now = record.costPerUnitNow, then > 0 {
             let pct = ((now - then) / then) * 100
-            let line = "Then: \(then.formattedCostPerUnit())  →  Now: \(now.formattedCostPerUnit())  (\(pct.formattedPercentChange(decimals: 1)) more)"
+            let direction = pct >= 0 ? "more" : "less"
+            let line = "Then: \(then.formattedCostPerUnit())  →  Now: \(now.formattedCostPerUnit())  (\(abs(pct).formattedPercent(decimals: 1)) \(direction))"
             line.draw(
                 at: CGPoint(x: topPad, y: costLineY),
                 withAttributes: [
@@ -170,7 +171,13 @@ enum ShareCardRenderer {
                 drawAttribution(smoke: smoke, topPad: topPad)
             }
         } else if let now = record.costPerUnitNow {
-            "Now: \(now.formattedCostPerUnit()) per ounce".draw(
+            let denominator: String
+            switch record.currentSize?.unitKind {
+            case "volume": denominator = "per fl oz"
+            case "count": denominator = "per item"
+            default: denominator = "per oz"
+            }
+            "Now: \(now.formattedCostPerUnit()) \(denominator)".draw(
                 at: CGPoint(x: topPad, y: costLineY),
                 withAttributes: [
                     .font: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold),

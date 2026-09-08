@@ -58,11 +58,19 @@ struct CategoryDetailView: View {
     }
 
     private var summarySubtitle: String {
+        Self.summarySubtitle(for: records)
+    }
+
+    /// `ShrinkRecord.shrinkPercent` is already expressed in percentage points
+    /// (`-12.5` means a 12.5% shrink), so formatting it must not multiply by
+    /// another 100. Kept as a pure helper so the user-visible copy is covered
+    /// directly by a unit test.
+    static func summarySubtitle(for records: [ShrinkRecord]) -> String {
         if records.isEmpty {
             return "No documented cases yet in this category."
         }
         let avgShrink = records.reduce(0) { $0 + abs($1.shrinkPercent) } / Double(records.count)
-        let avgPctString = String(format: "%.1f%%", avgShrink * 100)
+        let avgPctString = String(format: "%.1f%%", avgShrink)
         return "\(records.count) tracked case\(records.count == 1 ? "" : "s") · avg \(avgPctString) shrink"
     }
 
@@ -90,7 +98,7 @@ struct CategoryDetailView: View {
         ContentUnavailableView {
             Label("Nothing tracked here yet", systemImage: "doc.text.magnifyingglass")
         } description: {
-            Text("We haven't documented shrinkflation in \(category.rawValue.lowercased()) yet. Scan a product in this category and we'll start tracking.")
+            Text("We haven't documented a package-size change in \(category.rawValue.lowercased()) yet.")
         }
     }
 }

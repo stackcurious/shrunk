@@ -84,7 +84,7 @@ struct StorePickerView: View {
                 }
             }
             Section {
-                Text("Pick a Kroger store to see live prices and cost per ounce on every scan.")
+                Text("Pick a Kroger store to add available shelf prices, stock, and unit costs to scans.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } footer: {

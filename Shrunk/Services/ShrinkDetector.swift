@@ -14,16 +14,12 @@ struct ShrinkDetector {
     ///   no size to show and the Watch button no baseline to watch. A stored
     ///   observation always wins — this is a stand-in for having none, never
     ///   an override.
-    /// - Parameter livePrice: the effective shelf price at the user's live
-    ///   store, used on the same terms: only when the product has no price of
-    ///   its own. `ProductDTO.toProduct` sets `currentPrice` from the newest
-    ///   `price_snapshots` row, so a fresh on-miss product has neither, and
-    ///   without this the single-snapshot row keeps its size promise but
-    ///   breaks its per-ounce one — the cost/oz card hides, the
-    ///   cheapest-per-oz callout cannot render, and `AlternativesEngine` has
-    ///   no `scannedCostPerOz` to say "N % cheaper" against. An adopted live
-    ///   price is real store data, so it sets `priceIsFromStoreSnapshot` and
-    ///   carries `LivePrice.attribution` with it.
+    /// - Parameter livePrice: the effective shelf price from the just-fetched
+    ///   live store row. A valid positive live value is authoritative for
+    ///   `priceNow`; a cached snapshot or editorial `currentPrice` is only a
+    ///   fallback when live pricing is absent or unusable. This keeps the
+    ///   result's cost-per-unit and alternatives comparison in step with the
+    ///   live-price panel.
     func analyze(
         product: ShrunkProduct,
         liveSize: SizeRecord? = nil,
@@ -42,21 +38,20 @@ struct ShrinkDetector {
             return sorted.filter { $0.unitKind == latestKind }
         }()
 
-        // The two most recent store snapshots, oldest first.
+        // Store snapshots, oldest first. A valid just-fetched live price is the
+        // best statement of what the product costs now; stored snapshots and
+        // editorial `currentPrice` are fallbacks only.
         let prices = product.priceHistory.sorted { $0.date < $1.date }
         let storedPriceNow = prices.last?.price ?? product.currentPrice
-        // Spec rule 5, price half — adopted only into a gap, exactly like the
-        // size above. A stored price always wins.
-        let adoptedPrice: Double? = storedPriceNow == nil ? livePrice.flatMap { $0 > 0 ? $0 : nil } : nil
-        let priceNow = storedPriceNow ?? adoptedPrice
-        let priceThen = prices.count >= 2 ? prices[prices.count - 2].price : nil
+        let validLivePrice = livePrice.flatMap { $0 > 0 ? $0 : nil }
+        let priceNow = validLivePrice ?? storedPriceNow
         // True when priceNow came from a price_snapshots-backed PricePoint or
         // from the live store row — both are real store observations that may
         // (and must) carry Kroger attribution. False for the
         // product.currentPrice fallback used when there's no snapshot history
         // at all (e.g. curated Browse cards from trending.json), which is
         // editorial and must never be labelled Kroger.
-        let priceIsFromStoreSnapshot = prices.last != nil || adoptedPrice != nil
+        let priceIsFromStoreSnapshot = prices.last != nil || validLivePrice != nil
 
         // Spec §5.1 — the verdict compares the last two *size runs*, not the
         // last two observations.
@@ -64,7 +59,7 @@ struct ShrinkDetector {
 
         // Fewer than two comparable runs — no verdict is possible, but
         // the record still has to carry what we *do* know (spec §2): the one
-        // size on file and what it costs per ounce. `previousSize` is
+        // size on file and its normalized unit cost. `previousSize` is
         // deliberately nil rather than a copy of the current record: there is
         // no "then", and reporting one made the Result screen draw a Then→Now
         // row comparing a size with itself.
@@ -74,14 +69,7 @@ struct ShrinkDetector {
             // second source confirming that same 946 ml in 2024 must not move
             // that year forward. (The Then→Now row, which wants each run's
             // latest date, only draws when there are two runs.)
-            let current = sorted.last.map { latest in
-                SizeRecord(
-                    date: runs.first?.opened.date ?? latest.date,
-                    quantity: latest.quantity,
-                    unit: latest.unit,
-                    source: latest.source
-                )
-            }
+            let current = runs.first?.opened ?? sorted.last
             return ShrinkRecord(
                 product: product,
                 previousSize: nil,
@@ -106,6 +94,17 @@ struct ShrinkDetector {
         let currentSize  = currentRun.reported
         let current  = Self.normalize(currentSize)
         let previous = Self.normalize(previousSize)
+        // A price becomes "then" only when it was actually observed near the
+        // previous size observation. The old implementation blindly used the
+        // penultimate snapshot, which could be years newer than the historical
+        // package size and produced a counterfactual cost comparison. When no
+        // live price is present, reserve the newest snapshot for `priceNow` so
+        // one observation can never serve as both then and now.
+        let historicalPriceCandidates = validLivePrice == nil ? Array(prices.dropLast()) : prices
+        let priceThen = Self.alignedHistoricalPrice(
+            in: historicalPriceCandidates,
+            to: previousSize.date
+        )
 
         // Guard against zero-quantity records that would explode the percentage math.
         guard previous.quantity > 0 else {
@@ -191,6 +190,22 @@ struct ShrinkDetector {
 
     // MARK: - Size runs (spec §5.1)
 
+    /// Retail prices can move within days, so a snapshot more than one week
+    /// from the size observation does not support a historical unit-cost claim.
+    /// Seven days is intentionally conservative while still tolerating a
+    /// weekly watch/sweep cadence and small timestamp differences between data
+    /// providers.
+    static let historicalPriceAlignmentTolerance: TimeInterval = 7 * 24 * 60 * 60
+
+    private static func alignedHistoricalPrice(in prices: [PricePoint], to date: Date) -> Double? {
+        prices
+            .filter { $0.price > 0 && abs($0.date.timeIntervalSince(date)) <= historicalPriceAlignmentTolerance }
+            .min { lhs, rhs in
+                abs(lhs.date.timeIntervalSince(date)) < abs(rhs.date.timeIntervalSince(date))
+            }?
+            .price
+    }
+
     /// Spec §5.1 — two observations that normalize within 1% are the same size.
     static let sameSizeTolerance = 0.01
 
@@ -203,10 +218,8 @@ struct ShrinkDetector {
         /// The run's most recent observation. Only its `date` is reported.
         fileprivate(set) var latest: SizeRecord
         fileprivate(set) var sources: [String]
-        /// `opened`'s size carrying `latest`'s date (spec §5.1).
-        var reported: SizeRecord {
-            SizeRecord(date: latest.date, quantity: opened.quantity, unit: opened.unit, source: opened.source)
-        }
+        /// The exact observation that established the run.
+        var reported: SizeRecord { opened }
     }
 
     /// Collapses same-kind observations, oldest first, into size runs.

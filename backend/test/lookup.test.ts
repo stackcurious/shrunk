@@ -290,7 +290,7 @@ describe("on-miss lookup keeps the size (spec §1 rule 6)", () => {
   });
 
   it("creates the product with no observation when the size is unparseable", async () => {
-    const gtin = "0011111111117";
+    const gtin = "0011111111110";
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {

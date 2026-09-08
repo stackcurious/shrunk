@@ -57,9 +57,9 @@ final class ResultViewModelTests: XCTestCase {
     }
 
     /// Two observations: an older `fdc` one at 946.353 ml (32 fl oz) and a
-    /// *newer* `kroger` one at 828.058 ml (28 fl oz) — the newest observation
-    /// overall is Kroger-sourced, but the newest **non-Kroger** one is the fdc
-    /// row, which is what the mismatch check must compare against.
+    /// *newer* `kroger` one at 828.058 ml (28 fl oz). The detector uses the
+    /// newest row as its current-size denominator, so a matching live row is
+    /// compatible even though an older FDC row differs.
     private func productJSONWithNewerKrogerObservation(gtin: String = "0028400642255") -> String {
         """
         {"gtin":"\(gtin)","name":"Gatorade","brand":"Gatorade","category":"Beverages","image_url":null,"unit_kind":"volume",
@@ -78,6 +78,14 @@ final class ResultViewModelTests: XCTestCase {
         """
         {"gtin":"\(gtin)","name":"Gatorade Thirst Quencher","brand":"Gatorade","category":"Beverages",
          "image_url":null,"unit_kind":null,"observations":[],"price_snapshots":[]}
+        """
+    }
+
+    private func productJSONWithStalePrice(gtin: String = "0028400642255") -> String {
+        """
+        {"gtin":"\(gtin)","name":"Gatorade","brand":"Gatorade","category":"Beverages","image_url":null,"unit_kind":"volume",
+         "observations":[{"quantity":946.353,"unit_kind":"volume","raw_text":"32 fl oz","observed_at":1517443200,"source":"fdc","source_ref":"1","confidence":0.9}],
+         "price_snapshots":[{"location_id":"01400943","regular":1.49,"promo":0,"per_unit_estimate":0.05,"size_raw":"32 fl oz","stock_level":"HIGH","observed_at":1717443200}]}
         """
     }
 
@@ -158,8 +166,8 @@ final class ResultViewModelTests: XCTestCase {
     // observation, so it's one scan late (written after the response that
     // needed it) and dead entirely when `KROGER_PERSIST=off` never writes
     // one. These compute the mismatch client-side, on the very first scan,
-    // from the just-fetched `LivePrice` against the newest non-Kroger
-    // `SizeRecord` — independent of whatever the server flag says.
+    // from the just-fetched `LivePrice` against the newest stored
+    // `SizeRecord` — the same denominator used for current unit pricing.
 
     func test_load_liveSizeMismatchesLatestObservation_setsFlagEvenWhenServerFlagIsFalse() async {
         defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
@@ -177,9 +185,12 @@ final class ResultViewModelTests: XCTestCase {
         let vm = makeVM()
         await vm.load(barcode: "0028400642255")
 
-        guard case .loaded(let product, _) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
+        guard case .loaded(let product, let record) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
         XCTAssertFalse(product.needsConfirmation)
         XCTAssertTrue(vm.liveSizeMismatch)
+        XCTAssertNil(record.priceNow)
+        XCTAssertNil(record.costPerUnitNow)
+        XCTAssertNil(record.costPerUnitThen)
     }
 
     func test_load_liveSizeMatchesLatestObservation_doesNotSetFlag() async {
@@ -197,7 +208,7 @@ final class ResultViewModelTests: XCTestCase {
         XCTAssertFalse(vm.liveSizeMismatch)
     }
 
-    func test_load_comparesAgainstNewestNonKrogerObservation_ignoringNewerKrogerOne() async {
+    func test_load_comparesAgainstNewestStoredObservation_usedForPricing() async {
         defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
         StubURLProtocol.handler = { request in
             if request.url!.path.contains("/v1/kroger/product") {
@@ -210,10 +221,22 @@ final class ResultViewModelTests: XCTestCase {
         let vm = makeVM()
         await vm.load(barcode: "0028400642255")
 
-        // Must still flag a mismatch — the comparison is against the newest
-        // *non-Kroger* observation (fdc, 946.353 ml), not whichever
-        // observation happens to be chronologically last.
-        XCTAssertTrue(vm.liveSizeMismatch)
+        // Live and current stored size agree, so derived pricing is safe.
+        XCTAssertFalse(vm.liveSizeMismatch)
+    }
+
+    func test_detectSizeMismatch_treatsDifferentUnitKindsAsIncompatible() {
+        let live = LivePrice(
+            gtin: "0000096385074", locationId: "01400943", brand: "Brand",
+            description: "Ten ounces", size: "10 oz", quantity: 283.495,
+            unitKind: "mass", regular: 2.99, promo: nil,
+            perUnitEstimate: nil, stockLevel: "HIGH"
+        )
+        let stored = SizeRecord(
+            date: Date(), quantity: 12, unit: "count", source: "fdc"
+        )
+
+        XCTAssertTrue(ResultViewModel.detectSizeMismatch(live: live, sizeHistory: [stored]))
     }
 
     // MARK: - Live size/price adoption (spec rule 5)
@@ -300,8 +323,28 @@ final class ResultViewModelTests: XCTestCase {
         XCTAssertEqual(record.currentSize?.quantity, 946.353)
         XCTAssertEqual(record.currentSize?.source, "fdc")
         XCTAssertFalse(vm.adoptedLiveSize)
-        // The price half is still adopted — productJSON() has no snapshots.
+        // A live price cannot be divided by the conflicting stored size.
+        // The live panel keeps the shelf facts while derived pricing waits
+        // for the label confirmation.
+        XCTAssertNil(record.priceNow)
+        XCTAssertNil(record.costPerUnitNow)
+    }
+
+    func test_load_livePriceOverridesCachedSnapshotForCurrentCost() async {
+        defaults.set("01400943", forKey: StorePickerViewModel.locationIdKey)
+        StubURLProtocol.handler = { request in
+            if request.url!.path.contains("/v1/kroger/product") {
+                return (200, Data(self.liveJSONMatchingProductSize().utf8))
+            }
+            return (200, Data(self.productJSONWithStalePrice().utf8))
+        }
+
+        let vm = makeVM()
+        await vm.load(barcode: "0028400642255")
+
+        guard case .loaded(_, let record) = vm.state else { return XCTFail("expected .loaded, got \(vm.state)") }
         XCTAssertEqual(record.priceNow ?? 0, 1.89, accuracy: 0.0001)
+        XCTAssertEqual(record.costPerUnitNow ?? 0, 1.89 / (946.353 * 0.033814), accuracy: 0.0001)
     }
 
     // MARK: - prebake(product:record:)

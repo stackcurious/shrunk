@@ -186,13 +186,14 @@ extension BarcodeProcessor: AVCaptureMetadataOutputObjectsDelegate {
         // to a GTIN-13 before it ever reaches the API (I2). If expansion fails
         // (malformed read), drop the detection rather than emit a barcode the
         // backend can never resolve.
-        let value: String
+        let candidate: String
         if object.type == .upce {
             guard let expanded = Self.expandUPCEToGTIN13(raw) else { return }
-            value = expanded
+            candidate = expanded
         } else {
-            value = raw
+            candidate = raw
         }
+        guard let value = ScannerViewModel.canonicalBarcode(from: candidate) else { return }
 
         Task { @MainActor [weak self] in
             guard let self else { return }

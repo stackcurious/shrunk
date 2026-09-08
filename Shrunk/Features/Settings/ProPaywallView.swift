@@ -309,7 +309,7 @@ struct ProPaywallContent: View {
         VStack(spacing: 0) {
             valueRow(icon: "bell.badge.fill", color: .shrunkRed,
                      title: "Watchlist alerts",
-                     body: "Push the moment a watched product shrinks or its price per unit jumps 5%.",
+                     body: "Notifications after periodic checks find a documented size change or a 5% Kroger unit-price jump.",
                      isLast: false)
             valueRow(icon: "calendar.badge.clock", color: .verdictWarn,
                      title: "Weekly digest",

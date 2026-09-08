@@ -45,9 +45,6 @@ struct WatchlistView: View {
             if vm == nil {
                 vm = WatchlistViewModel(service: WatchlistService(context: modelContext))
             }
-            // Asking here rather than at launch: the user is looking at the
-            // feature the permission is for. Already-answered prompts no-op.
-            await NotificationScheduler.shared.requestPermissionAndRegister()
         }
         .sheet(isPresented: $showPaywall) {
             ProPaywallView()
@@ -166,7 +163,7 @@ struct WatchlistView: View {
         ContentUnavailableView {
             Label("Nothing watched yet", systemImage: "eye.slash")
         } description: {
-            Text("Watch products from any scan result. We'll alert you the moment one shrinks.")
+            Text("Watch products from any scan result. We'll notify you when a background check finds a documented change.")
         }
     }
 
@@ -174,7 +171,7 @@ struct WatchlistView: View {
         ContentUnavailableView {
             Label("Watching is a Pro feature", systemImage: "bell.badge")
         } description: {
-            Text("Watch any product. We check Kroger in the background and alert you the moment it shrinks.")
+            Text("Watch supported products. Periodic background checks look for documented size changes and Kroger price jumps.")
         } actions: {
             Button("Unlock Shrunk Pro · \(storeKit.yearlyProduct?.displayPrice ?? "$14.99")") {
                 showPaywall = true

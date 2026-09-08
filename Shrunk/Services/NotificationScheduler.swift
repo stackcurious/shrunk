@@ -7,6 +7,12 @@ import BackgroundTasks
 final class NotificationScheduler {
     static let shared = NotificationScheduler()
 
+    enum WatchFollowUp: Equatable {
+        case requestPermission
+        case register
+        case guideToSettings
+    }
+
     // Must match BGTaskSchedulerPermittedIdentifiers in Info.plist.
     nonisolated static let backgroundTaskID = "com.shrunk.refresh-watchlist"
 
@@ -26,12 +32,27 @@ final class NotificationScheduler {
         await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
+    /// Notification prompts belong immediately after an explicit Watch action,
+    /// never on passive navigation to a gated screen.
+    static func watchFollowUp(for status: UNAuthorizationStatus) -> WatchFollowUp {
+        switch status {
+        case .notDetermined: return .requestPermission
+        case .authorized, .provisional, .ephemeral: return .register
+        case .denied: return .guideToSettings
+        @unknown default: return .guideToSettings
+        }
+    }
+
+    func registerForRemoteNotifications() {
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
     /// Asks for permission and, if granted, registers for APNs. The token
     /// arrives asynchronously in `AppDelegate`.
     @discardableResult
     func requestPermissionAndRegister() async -> Bool {
         let granted = await requestPermission()
-        if granted { UIApplication.shared.registerForRemoteNotifications() }
+        if granted { registerForRemoteNotifications() }
         return granted
     }
 

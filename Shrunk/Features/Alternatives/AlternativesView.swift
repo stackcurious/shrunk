@@ -85,7 +85,7 @@ struct AlternativesView: View {
     /// not that the app is unconfigured (review S3).
     private var emptyMessage: String {
         storeName.isEmpty
-            ? "Set your store in Settings to see in-stock alternatives ranked by cost per ounce."
+            ? "Set your Kroger in Settings to see available in-stock alternatives ranked by unit price."
             : "No cheaper option at \(storeName) right now. We'll keep checking."
     }
 

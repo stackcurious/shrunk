@@ -10,7 +10,8 @@ struct Alternative: Identifiable, Hashable {
     let name: String
     let brand: String
     let size: String            // human-readable: "32 fl oz"
-    let costPerUnit: Double?    // $/oz-equivalent — nil for curated rows
+    let costPerUnit: Double?    // normalized $/oz, $/fl oz, or $/item; nil for curated rows
+    let unitKind: String?       // mass | volume | count; nil for curated rows
     let savingsPercent: Double? // vs the scanned product; nil when we can't compare
     let imageURL: URL?
     let verdict: String
