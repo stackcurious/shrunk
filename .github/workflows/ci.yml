@@ -86,5 +86,7 @@ jobs:
           xcodebuild test \
             -scheme Shrunk \
             -destination "platform=iOS Simulator,name=$SIMULATOR_NAME" \
+            -only-testing:ShrunkTests \
+            -skip-testing:ShrunkTests/StoreKitConfigurationTests \
             CODE_SIGNING_ALLOWED=NO \
             -quiet

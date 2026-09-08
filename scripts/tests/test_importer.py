@@ -43,7 +43,7 @@ def test_build_rows_versions_and_dedupe(tmp_path):
             _branded("2", "028400642255", "32 oz/907 g", "2019-01-01", "2019-02-01"),   # same size -> deduped
             _branded("3", "028400642255", "28 oz/794 g", "2021-06-01", "2021-07-01"),   # shrink
             _branded("4", "028400642255", "", "2022-01-01", "2022-02-01"),              # no weight -> skipped
-            _branded("5", "099999999999", "12 oz/500 g", "2020-01-01", "2020-02-01"),   # malformed -> skipped
+            _branded("5", "099999999998", "12 oz/500 g", "2020-01-01", "2020-02-01"),   # bad check digit -> skipped
             _branded("6", "077777777777", "6 EA", "2020-01-01", "2020-02-01", country="Canada"),  # not US -> skipped
         ],
         food_rows=[
@@ -72,7 +72,8 @@ def test_build_rows_versions_and_dedupe(tmp_path):
 
     assert result.stats["rows_read"] == 6
     assert result.stats["rows_with_weight"] == 5
-    assert result.stats["rows_malformed"] == 1
+    assert result.stats["rows_malformed"] == 0
+    assert result.stats["rows_bad_gtin"] == 1
     assert result.stats["rows_non_us"] == 1
     assert result.stats["gtins_with_multiple_sizes"] == 1
 
