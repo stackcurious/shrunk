@@ -22,18 +22,18 @@ export const RED = "#E24B4A";
 
 export const FREE_FEATURES = [
   "Unlimited barcode scans",
-  "Shrink verdict and size history",
-  "Current price and cost per unit at your store",
+  "Available size evidence and package-change results",
+  "Available current price and cost per unit at your selected Kroger",
   "The browse feed of verified cases",
   "Contribute label photos",
-  "3 alternatives per scan",
+  "Up to 3 available alternatives per scan",
 ];
 
 export const PRO_FEATURES = [
-  "Watchlist alerts — a push the moment something you watch gets smaller, or its price per unit jumps 5%",
+  "Watchlist alerts after periodic checks find a documented size change or a 5% Kroger unit-price jump",
   "Weekly “what shrank this week” digest for your categories",
   "Unlimited ranked alternatives at your store, cheapest per unit first",
-  "Full price and size history charts",
+  "Full available price and size history charts",
   "Savings dashboard built from what you actually scan — no invented numbers",
 ];
 
@@ -41,12 +41,12 @@ export const DATA_SOURCES = [
   {
     name: "USDA FoodData Central",
     url: "https://fdc.nal.usda.gov/",
-    body: "The federal government's public nutrition and packaging dataset. It records net-weight package sizes for hundreds of thousands of US grocery products going back years — the historical \"before\" size behind most verdicts.",
+    body: "The federal government's public nutrition and packaging dataset. Its dated branded-food records can provide package sizes used as evidence in Shrunk.",
   },
   {
     name: "Kroger Products API",
     url: "https://developer.kroger.com/",
-    body: "Kroger's official developer API. Once you pick your store, Shrunk reads today's shelf price, current package size, and stock status directly from it — not a scrape, not an estimate.",
+    body: "Kroger's official developer API. Once you pick a store, Shrunk shows available current shelf price, package size, promotion, and stock status as Kroger reports them.",
   },
   {
     name: "Open Food Facts",

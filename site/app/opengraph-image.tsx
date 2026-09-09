@@ -31,22 +31,7 @@ export default function Image() {
             marginBottom: 40,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              width: 64,
-              height: 64,
-              borderRadius: 18,
-              backgroundColor: RED,
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 34,
-              fontWeight: 800,
-              color: "#fff",
-            }}
-          >
-            S
-          </div>
+          <ScannedDeltaMark />
           <div style={{ display: "flex", fontSize: 32, fontWeight: 700, color: "#fafafa" }}>
             Shrunk
           </div>
@@ -72,7 +57,7 @@ export default function Image() {
             maxWidth: 880,
           }}
         >
-          Scan a barcode. See the real size history, today&apos;s shelf price, and what to buy instead.
+          Check documented size changes, available current pricing, and better-value alternatives.
         </div>
         <div
           style={{
@@ -111,5 +96,42 @@ export default function Image() {
       </div>
     ),
     { ...size }
+  );
+}
+
+function ScannedDeltaMark() {
+  const bars = [28, 23, 18, 13, 9];
+  const corner = {
+    position: "absolute" as const,
+    width: 16,
+    height: 16,
+    borderColor: "#fffaf3",
+    borderStyle: "solid",
+  };
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        width: 64,
+        height: 64,
+        flexShrink: 0,
+        borderRadius: 16,
+        backgroundColor: RED,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div style={{ ...corner, left: 10, top: 10, borderWidth: "4px 0 0 4px", borderRadius: "7px 0 0 0" }} />
+      <div style={{ ...corner, right: 10, top: 10, borderWidth: "4px 4px 0 0", borderRadius: "0 7px 0 0" }} />
+      <div style={{ ...corner, left: 10, bottom: 10, borderWidth: "0 0 4px 4px", borderRadius: "0 0 0 7px" }} />
+      <div style={{ ...corner, right: 10, bottom: 10, borderWidth: "0 4px 4px 0", borderRadius: "0 0 7px 0" }} />
+      <div style={{ display: "flex", height: 30, alignItems: "flex-end", gap: 3 }}>
+        {bars.map((height) => (
+          <div key={height} style={{ width: 4, height, borderRadius: 2, backgroundColor: "#fffaf3" }} />
+        ))}
+      </div>
+    </div>
   );
 }

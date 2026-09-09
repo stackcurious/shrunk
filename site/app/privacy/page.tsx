@@ -5,7 +5,7 @@ import { SHRUNK_URL, SUPPORT_EMAIL } from "../_lib/constants";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
-    "Shrunk has no accounts, no analytics, no ad tracking, and no advertising SDK. Here is exactly what the app stores, where it goes, and how long it is kept.",
+    "The Shrunk iOS app has no accounts, in-app analytics, ad tracking, or advertising SDK. This policy also explains the limited measurement used on the Shrunk website.",
   alternates: { canonical: `${SHRUNK_URL}/privacy` },
 };
 
@@ -149,10 +149,25 @@ export default function ShrunkPrivacy() {
       <div className="space-y-10 text-[15px] leading-relaxed">
         <Section title="The short version">
           <p>
-            Shrunk has no accounts and no logins. We do not sell your data, we run no ads, we
-            use no analytics or advertising SDKs, and we do not track you across other apps or
-            websites. We store the minimum needed to look up a product, alert you about
-            something you asked us to watch, and honour a subscription you bought from Apple.
+            The Shrunk iOS app has no accounts or logins, analytics or advertising SDKs, ads, or
+            cross-app tracking. The app stores the minimum needed to look up a product, alert you
+            about something you asked us to watch, and honour a subscription you bought from
+            Apple. This website uses the limited, non-advertising measurement described below.
+          </p>
+        </Section>
+
+        <Section title="Website measurement">
+          <p>
+            The Shrunk website uses Vercel Web Analytics and Speed Insights to measure page
+            views, web performance, and whether an App Store call to action was clicked. Our
+            custom CTA events contain the page path, CTA placement, and outbound destination
+            with its query string and fragment removed. They never contain barcodes, store or
+            location data, email addresses, form input, the app&apos;s device id, or app activity.
+          </p>
+          <p className="mt-3">
+            These tools run only on this website. They are not included in the Shrunk iOS app,
+            are not used for advertising, and are not used to follow you across other apps or
+            websites.
           </p>
         </Section>
 
@@ -228,6 +243,11 @@ export default function ShrunkPrivacy() {
               photo storage and cache (United States).
             </li>
             <li>
+              <strong className="text-foreground">Vercel</strong> — hosts this website and
+              provides the page-view, performance, and CTA measurement described above. It does
+              not receive activity from the Shrunk iOS app.
+            </li>
+            <li>
               <strong className="text-foreground">Apple</strong> — delivers push notifications,
               processes subscriptions, and resolves an optional one-time location or typed place
               on your device into a ZIP and coordinate. The coordinate ranks stores on-device and
@@ -252,8 +272,8 @@ export default function ShrunkPrivacy() {
             </li>
           </ul>
           <p className="mt-4">
-            Nobody else. We do not sell, rent or share data with advertisers, data brokers or
-            analytics companies.
+            We do not sell or rent data, or share it with advertisers or data brokers. Website
+            measurement is limited to the Vercel services described above.
           </p>
         </Section>
 

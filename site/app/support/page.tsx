@@ -63,11 +63,11 @@ export default function ShrunkSupport() {
             />
             <FAQ
               q="What do I get for free?"
-              a="Unlimited barcode scans, the shrink verdict with size history, current price and cost per unit at your store, the full Browse feed of verified cases, label contributions, and 3 alternatives per scan — no account required."
+              a="Unlimited barcode scans, available size evidence and package-change results, available current Kroger pricing, the full Browse feed of verified cases, label contributions, and up to 3 available alternatives per scan — no account required."
             />
             <FAQ
               q="What does Pro unlock?"
-              a="Watchlist alerts (a push the moment something you watch gets smaller, or its price per unit jumps 5%), a weekly digest of what shrank in your categories, unlimited ranked alternatives at your store, full price and size history charts, and a savings dashboard built from what you actually scan."
+              a="Watchlist alerts after periodic checks find a documented size change or a 5% Kroger unit-price jump, a weekly category digest, all available ranked alternatives at your store, full available price and size history charts, and a savings dashboard built from observed data."
             />
             <FAQ
               q="Where does the data come from?"
@@ -79,7 +79,7 @@ export default function ShrunkSupport() {
             />
             <FAQ
               q="Is my data private?"
-              a="Shrunk has no account, no login, and no analytics or advertising SDKs, and we never sell or share data with advertisers, data brokers or analytics companies. Your watchlist, store choice and notification preferences are stored on your device and in a row in our database keyed to a random device id — never your name, email or Apple Account. Your recent scans stay on your device only. See the privacy policy for the full list of what is stored and for how long."
+              a="The Shrunk iOS app has no account, login, in-app analytics, or advertising SDKs. We never sell or share app data with advertisers or data brokers. Your watchlist, store choice and notification preferences are stored on your device and in a row in our database keyed to a random device id — never your name, email or Apple Account. Your recent scans stay on your device only. The website uses the limited page-view, performance, and CTA measurement described in the privacy policy."
             />
             <FAQ
               q="How do I restore my purchase on a new device?"
@@ -87,7 +87,7 @@ export default function ShrunkSupport() {
             />
             <FAQ
               q="Which store do live prices come from?"
-              a="Kroger, via its official Products API. Pick your store once during onboarding (by ZIP code) or in Settings, and every result screen shows that store's current price, cost per unit, and stock."
+              a="Kroger, via its official Products API. During onboarding or in Settings, tap Use Current Location or search by city, neighborhood, store name, ZIP, or ZIP+4. When Kroger returns data for a product, its current price, unit cost, promotion, and stock appear on the result screen."
             />
             <FAQ
               q="Can I suggest a shrinkflation case I noticed?"
@@ -119,8 +119,8 @@ export default function ShrunkSupport() {
               a="If you previously denied camera access, iOS won't re-prompt. Go to iOS Settings → Privacy & Security → Camera → enable Shrunk."
             />
             <FAQ
-              q="No stores show up when I enter my ZIP code"
-              a="Double-check the ZIP is 5 digits and covers a Kroger-operated banner (Kroger, Ralphs, Fred Meyer, King Soopers, and others). If Kroger doesn't operate near you, scanning and size history still work — you just won't see live pricing."
+              q="No nearby stores appear"
+              a="Tap Use Current Location or search by city, neighborhood, store name, 5-digit ZIP, or ZIP+4. If location access is off, typed search still works. If no Kroger-family store operates nearby, scanning and available size evidence still work without local pricing."
             />
           </div>
         </Section>

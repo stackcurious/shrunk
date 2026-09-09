@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 const TITLE = "Shrunk — Catch shrinkflation before checkout";
 const DESCRIPTION =
-  "Scan grocery barcodes to see exactly which products have shrunk in size at the same price — real size history, today's shelf price, and what to buy instead. Free to scan. Independent: no brand pays us.";
+  "Scan supported grocery barcodes to check documented package-size changes, available current Kroger pricing, and better-value alternatives. Free to scan. Independent: no brand pays us.";
 
 export const metadata: Metadata = {
   title: {
@@ -43,6 +43,10 @@ export const metadata: Metadata = {
   ],
   alternates: { canonical: SHRUNK_URL },
   itunes: { appId: APP_STORE_ID },
+  icons: {
+    icon: "/shrunk/app-icon.png",
+    apple: "/shrunk/app-icon.png",
+  },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,

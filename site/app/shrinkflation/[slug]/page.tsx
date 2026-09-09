@@ -33,7 +33,7 @@ export async function generateMetadata({
   if (!c) return {};
 
   const title = caseTitle(c);
-  const description = `${c.brand}'s ${c.name} shrank from ${formatQuantity(c.before)} to ${formatQuantity(c.after)} (${pct(c.percentSmaller)}% smaller) at the same shelf price — verified with a cited source. See the full size history and today's price.`;
+  const description = `${c.brand}'s ${c.name} shrank from ${formatQuantity(c.before)} to ${formatQuantity(c.after)} (${pct(c.percentSmaller)}% smaller), documented by a cited public source. See the dated size evidence and available current price.`;
   const url = `${SHRUNK_URL}/shrinkflation/${c.slug}`;
 
   return {
@@ -84,7 +84,7 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
     "@context": "https://schema.org",
     "@type": "Article",
     headline: caseTitle(c),
-    description: `${c.brand}'s ${c.name} shrank from ${formatQuantity(c.before)} to ${formatQuantity(c.after)}, a ${pct(c.percentSmaller)}% reduction, at the same shelf price.`,
+    description: `${c.brand}'s ${c.name} shrank from ${formatQuantity(c.before)} to ${formatQuantity(c.after)}, a documented ${pct(c.percentSmaller)}% package-size reduction.`,
     image: c.image_url ? [c.image_url] : undefined,
     datePublished: c.added_at,
     dateModified: c.added_at,
@@ -117,8 +117,8 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
           </h1>
           <p className="mt-4 text-lg leading-relaxed text-muted">
             {c.brand}&apos;s {c.name} went from {formatQuantity(c.before)} to{" "}
-            {formatQuantity(c.after)} at the same shelf price — first observed shipping at the
-            reduced size around {monthYear(c.after.date)}.
+            {formatQuantity(c.after)} — first documented at the reduced size around{" "}
+            {monthYear(c.after.date)}. Price history is evaluated separately.
           </p>
         </header>
 
@@ -154,35 +154,36 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
             />
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted">
-            <span>Filled bar = {formatQuantity(c.after)} today</span>
-            <span>Full bar = {formatQuantity(c.before)}</span>
+            <span>Reduced size = {formatQuantity(c.after)}</span>
+            <span>Earlier size = {formatQuantity(c.before)}</span>
           </div>
         </section>
 
         {/* PRICE PER UNIT */}
         {c.current_price !== null &&
-          c.pricePerUnitBefore !== null &&
-          c.pricePerUnitAfter !== null &&
-          c.pricePerUnitIncreasePercent !== null && (
+          c.pricePerUnitAtEarlierSize !== null &&
+          c.pricePerUnitAtReducedSize !== null &&
+          c.unitPriceDifferencePercent !== null && (
             <section className="mt-6 rounded-2xl border border-border bg-card p-6">
               <p className="text-sm font-semibold text-foreground">
-                Effective price-per-unit increase
+                Unit-price effect at the current price
               </p>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                At the tracked shelf price of ${c.current_price.toFixed(2)}, that&apos;s{" "}
+                At the available tracked price of ${c.current_price.toFixed(2)}, the earlier
+                package quantity works out to{" "}
                 <strong className="text-foreground">
-                  {money(c.pricePerUnitBefore)} per {c.before.unit}
-                </strong>{" "}
-                before, versus{" "}
+                  {money(c.pricePerUnitAtEarlierSize)} per {c.before.unit}
+                </strong>
+                {", compared with "}
                 <strong className="text-foreground">
-                  {money(c.pricePerUnitAfter)} per {c.after.unit}
+                  {money(c.pricePerUnitAtReducedSize)} per {c.after.unit}
                 </strong>{" "}
-                after — a{" "}
+                for the reduced size — a{" "}
                 <strong className="text-rose-400">
-                  {pct(c.pricePerUnitIncreasePercent)}% jump in cost per unit
-                </strong>{" "}
-                even though the sticker price never moved. This assumes the price held constant
-                across the resize, which is the defining trait of shrinkflation.
+                  {pct(c.unitPriceDifferencePercent)}% difference in cost per unit
+                </strong>
+                . This applies one current price to both documented package sizes to make them
+                comparable; it is not historical price evidence.
               </p>
             </section>
           )}
@@ -211,8 +212,8 @@ export default async function CasePage({ params }: { params: Promise<{ slug: str
             Check your own pantry
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Scan any grocery barcode and Shrunk checks it against USDA FoodData Central and
-            Open Food Facts for you — free, no account needed.
+            Scan or enter a supported grocery barcode to check available dated size evidence —
+            free, with no account needed.
           </p>
           <div className="mt-6 flex justify-center">
             <AppStoreCTA location="hero" />

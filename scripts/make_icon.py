@@ -1,146 +1,71 @@
 #!/usr/bin/env python3
-"""Generate the Shrunk 1024x1024 App Store icon.
+"""Generate Shrunk's flat Scanned Delta App Store icon.
 
-Brand palette (from Shrunk/Core/Theme/ShrunkTheme.swift):
-  shrunkRed     #E24B4A
-  shrunkRedDeep #B0302F
-  shrunkRedDark #791F1F
-  paper         #FAFAF7
-
-Concept: a premium "shrinking package" mark — a box that steps down in size
-with a downward chevron arrow, over a warm-to-deep red diagonal gradient.
-Flat, opaque, no rounded corners (Apple masks automatically).
+The mark combines four scan corners with five descending bars: scan a package,
+then see its size change. The output is an opaque 1024×1024 RGB PNG; iOS adds
+the platform-specific corner mask.
 """
-from PIL import Image, ImageDraw, ImageFilter
-import math
 
-S = 1024
+from argparse import ArgumentParser
+from pathlib import Path
 
-def hex_rgb(h):
-    h = h.lstrip("#")
-    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+from PIL import Image, ImageDraw
 
-RED       = hex_rgb("E24B4A")
-RED_DEEP  = hex_rgb("B0302F")
-RED_DARK  = hex_rgb("791F1F")
-PAPER     = hex_rgb("FAFAF7")
-PAPER_DIM = hex_rgb("F0E9E3")
 
-def lerp(a, b, t):
-    return tuple(round(a[i] + (b[i] - a[i]) * t) for i in range(3))
-
-# --- Background: diagonal gradient shrunkRed -> shrunkRedDeep -> a touch of dark
-bg = Image.new("RGB", (S, S), RED)
-px = bg.load()
-for y in range(S):
-    for x in range(S):
-        # diagonal position 0..1 (top-left -> bottom-right)
-        t = (x + y) / (2 * (S - 1))
-        if t < 0.55:
-            c = lerp(RED, RED_DEEP, t / 0.55)
-        else:
-            c = lerp(RED_DEEP, RED_DARK, (t - 0.55) / 0.45)
-        px[x, y] = c
-
-draw = ImageDraw.Draw(bg, "RGBA")
-
-# --- Subtle radial vignette for depth (darken corners slightly)
-vig = Image.new("L", (S, S), 0)
-vd = ImageDraw.Draw(vig)
-cx = cy = S / 2
-maxd = math.hypot(cx, cy)
-vpx = vig.load()
-for y in range(0, S, 2):
-    for x in range(0, S, 2):
-        d = math.hypot(x - cx, y - cy) / maxd
-        v = int(max(0, (d - 0.45)) * 150)
-        vpx[x, y] = v
-        if x + 1 < S: vpx[x + 1, y] = v
-        if y + 1 < S:
-            vpx[x, y + 1] = v
-            if x + 1 < S: vpx[x + 1, y + 1] = v
-vig = vig.filter(ImageFilter.GaussianBlur(40))
-shadow_layer = Image.new("RGB", (S, S), (0, 0, 0))
-bg = Image.composite(shadow_layer, bg, vig.point(lambda p: int(p * 0.55)))
-draw = ImageDraw.Draw(bg, "RGBA")
-
-# ---------------------------------------------------------------------------
-# Glyph: three stacked boxes, each smaller than the one below — "shrinking" —
-# rendered in warm paper. A downward arrow runs through them.
-# ---------------------------------------------------------------------------
-
-def rrect(d, box, r, **kw):
-    d.rounded_rectangle(box, radius=r, **kw)
-
-# Drop shadow for the whole mark (soft, offset down)
-mark = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-md = ImageDraw.Draw(mark)
-
-# Geometry: three nested/stacked rounded boxes, decreasing width, going UP.
-# Bottom (largest) sits low; top (smallest) sits high — reads as shrinking.
-cxp = S / 2
-boxes = [
-    # (half_width, height, center_y)
-    (300, 150, 690),  # bottom, biggest
-    (224, 134, 512),  # middle
-    (150, 118, 352),  # top, smallest
-]
-fills = [PAPER, lerp(PAPER, PAPER_DIM, 0.35), lerp(PAPER, PAPER_DIM, 0.7)]
-
-for (hw, h, cyb), fill in zip(boxes, fills):
-    box = (cxp - hw, cyb - h / 2, cxp + hw, cyb + h / 2)
-    rad = h * 0.30
-    md.rounded_rectangle(box, radius=rad, fill=fill + (255,))
-
-# Add a soft inner shadow line between stacked boxes for separation
-for (hw, h, cyb) in boxes[1:]:
-    box = (cxp - hw, cyb - h / 2, cxp + hw, cyb + h / 2)
-    rad = h * 0.30
-    md.rounded_rectangle(box, radius=rad, outline=RED_DEEP + (70,), width=3)
-
-# Downward chevron arrow centered, in brand red, sitting in front
-arrow_w = 150
-arrow_top = 300
-arrow_bottom = 760
-shaft_w = 64
-# shaft
-md.rounded_rectangle(
-    (cxp - shaft_w / 2, arrow_top, cxp + shaft_w / 2, arrow_bottom - 120),
-    radius=shaft_w / 2, fill=RED + (255,)
-)
-# arrowhead (triangle) pointing down
-md.polygon(
-    [
-        (cxp - arrow_w, arrow_bottom - 230),
-        (cxp + arrow_w, arrow_bottom - 230),
-        (cxp, arrow_bottom),
-    ],
-    fill=RED + (255,)
-)
-# white keyline around arrow so it pops against paper boxes
-md.line(
-    [(cxp - arrow_w, arrow_bottom - 230), (cxp, arrow_bottom), (cxp + arrow_w, arrow_bottom - 230)],
-    fill=PAPER + (255,), width=10, joint="curve"
+SIZE = 1024
+SCALE = 4
+RED = "#E24B4A"
+PAPER = "#FFF9F2"
+DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / (
+    "Shrunk/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
 )
 
-# Build shadow from mark alpha
-alpha = mark.split()[3]
-shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-sh = Image.new("L", (S, S), 0)
-sh.paste(alpha, (0, 18))
-sh = sh.filter(ImageFilter.GaussianBlur(22)).point(lambda p: int(p * 0.30))
-shadow.putalpha(sh)
-shadow_rgb = Image.new("RGBA", (S, S), (50, 10, 10, 0))
-shadow_rgb.putalpha(sh)
 
-bg = bg.convert("RGBA")
-bg.alpha_composite(shadow_rgb)
-bg.alpha_composite(mark)
+def rounded_line(draw: ImageDraw.ImageDraw, points: list[tuple[int, int]], width: int) -> None:
+    scaled = [(x * SCALE, y * SCALE) for x, y in points]
+    draw.line(scaled, fill=PAPER, width=width * SCALE, joint="curve")
+    radius = width * SCALE // 2
+    for x, y in (scaled[0], scaled[-1]):
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=PAPER)
 
-# Flatten to opaque RGB (no alpha — App Store requirement)
-final = Image.new("RGB", (S, S), PAPER)
-final.paste(bg.convert("RGB"), (0, 0))
 
-out = "/Users/drao/Projects/shrunk/Shrunk/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
-final.save(out, "PNG")
-print("wrote", out, final.size, final.mode)
+def generate(output: Path) -> None:
+    canvas = Image.new("RGB", (SIZE * SCALE, SIZE * SCALE), RED)
+    draw = ImageDraw.Draw(canvas)
+
+    # Scan corners. The open center keeps the mark legible at App Store sizes.
+    rounded_line(draw, [(190, 335), (190, 190), (335, 190)], 60)
+    rounded_line(draw, [(689, 190), (834, 190), (834, 335)], 60)
+    rounded_line(draw, [(190, 689), (190, 834), (335, 834)], 60)
+    rounded_line(draw, [(689, 834), (834, 834), (834, 689)], 60)
+
+    # A barcode-like sequence that steps down in height: the Scanned Delta.
+    bars = [
+        (295, 302, 357, 702),
+        (382, 344, 444, 702),
+        (469, 397, 531, 702),
+        (556, 448, 618, 702),
+        (643, 499, 705, 702),
+    ]
+    for left, top, right, bottom in bars:
+        draw.rounded_rectangle(
+            (left * SCALE, top * SCALE, right * SCALE, bottom * SCALE),
+            radius=18 * SCALE,
+            fill=PAPER,
+        )
+
+    icon = canvas.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    icon.save(output, "PNG", optimize=True)
+    print(f"wrote {output} {icon.size} {icon.mode}")
+
+
+def main() -> None:
+    parser = ArgumentParser()
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    args = parser.parse_args()
+    generate(args.output)
+
+
+if __name__ == "__main__":
+    main()

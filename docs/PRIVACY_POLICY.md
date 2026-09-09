@@ -6,7 +6,13 @@ Publish this document at `https://stackcurious.com/shrunk/privacy`. The app link
 
 ## The short version
 
-Shrunk has no accounts and no logins. We do not sell your data, we run no ads, we use no analytics or advertising SDKs, and we do not track you across other apps or websites. We store the minimum needed to look up a product, alert you about something you asked us to watch, and honour a subscription you bought from Apple.
+The Shrunk iOS app has no accounts or logins, analytics or advertising SDKs, ads, or cross-app tracking. The app stores the minimum needed to look up a product, alert you about something you asked us to watch, and honour a subscription you bought from Apple. The Shrunk website uses the limited, non-advertising measurement described below.
+
+## Website measurement
+
+The Shrunk website uses Vercel Web Analytics and Speed Insights to measure page views, web performance, and whether an App Store call to action was clicked. Our custom CTA events contain the page path, CTA placement, and outbound destination with its query string and fragment removed. They never contain barcodes, store or location data, email addresses, form input, the app's device id, or app activity.
+
+These tools run only on the website. They are not included in the Shrunk iOS app, are not used for advertising, and are not used to follow you across other apps or websites.
 
 ## What Shrunk stores
 
@@ -42,12 +48,13 @@ Shrunk Pro is an auto-renewable subscription sold by Apple. Apple handles paymen
 ## Who else sees this data
 
 - **Cloudflare** — hosts our API, database, photo storage and cache (United States).
+- **Vercel** — hosts the Shrunk website and provides the page-view, performance, and CTA measurement described above. It does not receive activity from the Shrunk iOS app.
 - **Apple** — delivers push notifications and processes subscriptions.
 - **Apple Location Services and MapKit** — only after you tap “Use Current Location” or search for a place, Apple resolves that location or search text on the device to a ZIP and coordinate. The coordinate is used on the device to rank returned stores and is then discarded.
 - **Kroger** — when you have a store selected, we ask Kroger's Products API for that store's price and size for the barcode you scanned; we send the barcode and the store id. To find stores, we send only the ZIP resolved from your location or place search to Kroger's Locations API. To find alternatives, we send the product's category as a search term to Kroger's Products API. Neither the ZIP nor the category is stored by us, and **we never send Kroger your device id, push token, coordinate, or search text.**
 - **USDA FoodData Central** and **Open Food Facts** — queried by barcode when a product is new to us, to fill in a name and image.
 
-Nobody else. We do not sell, rent or share data with advertisers, data brokers or analytics companies.
+We do not sell or rent data, or share it with advertisers or data brokers. Website measurement is limited to the Vercel services described above.
 
 ## Data sources and attribution
 

@@ -34,12 +34,12 @@ export interface Case extends RawCase {
   after: CaseHistoryPoint;
   /** How much smaller the package got, 0-100. (32oz -> 28oz = 12.5) */
   percentSmaller: number;
-  /** Price per unit at current_price, using the pre-shrink size. Null when we have no price. */
-  pricePerUnitBefore: number | null;
-  /** Price per unit at current_price, using the post-shrink size. Null when we have no price. */
-  pricePerUnitAfter: number | null;
-  /** How much more expensive per unit the same shelf price now buys, 0-100+. */
-  pricePerUnitIncreasePercent: number | null;
+  /** Current price divided by the earlier documented size; a comparison, not price history. */
+  pricePerUnitAtEarlierSize: number | null;
+  /** Current price divided by the reduced documented size; a comparison, not price history. */
+  pricePerUnitAtReducedSize: number | null;
+  /** Difference between those two same-current-price comparisons, 0-100+. */
+  unitPriceDifferencePercent: number | null;
   sourceDomain: string;
 }
 
@@ -61,12 +61,14 @@ function toCase(raw: RawCase): Case {
   // where we don't — never a stand-in. Every derived per-unit figure is null in
   // that case rather than silently reading as $0.00.
   const price = raw.current_price;
-  const pricePerUnitBefore = price === null ? null : price / before.quantity;
-  const pricePerUnitAfter = price === null ? null : price / after.quantity;
-  const pricePerUnitIncreasePercent =
-    pricePerUnitBefore === null || pricePerUnitAfter === null
+  const pricePerUnitAtEarlierSize = price === null ? null : price / before.quantity;
+  const pricePerUnitAtReducedSize = price === null ? null : price / after.quantity;
+  const unitPriceDifferencePercent =
+    pricePerUnitAtEarlierSize === null || pricePerUnitAtReducedSize === null
       ? null
-      : ((pricePerUnitAfter - pricePerUnitBefore) / pricePerUnitBefore) * 100;
+      : ((pricePerUnitAtReducedSize - pricePerUnitAtEarlierSize) /
+          pricePerUnitAtEarlierSize) *
+        100;
   let sourceDomain = raw.evidence_url;
   try {
     sourceDomain = new URL(raw.evidence_url).hostname.replace(/^www\./, "");
@@ -79,9 +81,9 @@ function toCase(raw: RawCase): Case {
     before,
     after,
     percentSmaller,
-    pricePerUnitBefore,
-    pricePerUnitAfter,
-    pricePerUnitIncreasePercent,
+    pricePerUnitAtEarlierSize,
+    pricePerUnitAtReducedSize,
+    unitPriceDifferencePercent,
     sourceDomain,
   };
 }

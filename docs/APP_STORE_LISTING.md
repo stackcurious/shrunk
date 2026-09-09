@@ -14,25 +14,25 @@ Shrunk: Shrinkflation Scanner
 ## Subtitle (≤30 chars)
 
 ```
-Catch shrinking groceries
+Grocery sizes & unit prices
 ```
-(25 chars)
+(27 chars)
 
 ## Promotional Text (≤170 chars — editable any time without review)
 
 ```
-Packages change quietly. Scan a grocery barcode to check documented size history, available Kroger pricing, and better-value alternatives. No brand pays us.
+Packages shrink quietly. Scan a grocery barcode to see documented size changes, available Kroger unit prices, and better-value alternatives. No ads. No brand pays us.
 ```
-(154 chars)
+(166 chars)
 
 ## Keyword Field (≤100 chars, comma-separated, no spaces after commas)
 
 ```
-shrinkflation,grocery savings,barcode scanner,price tracker,unit price,inflation,groceries,deals
+barcode,tracker,inflation,cost,package,history,savings,alerts,weight,compare,supermarket,budget,deal
 ```
-(96 chars)
+(100 UTF-8 bytes)
 
-> Do not repeat words already in the App Name or Subtitle ("Shrunk", "scanner") — Apple indexes those automatically.
+> The indexed fields deliberately avoid repeating words from the App Name and Subtitle. Together they cover shrinkflation scanner, grocery barcode, unit price, package history, inflation tracker, savings, alerts, comparison, supermarket, budget and deal intent.
 
 ## Categories
 
@@ -45,14 +45,19 @@ The job-to-be-done is a purchase decision at the shelf — comparison, alternati
 ## Full Description
 
 ```
-Packages change quietly. Shrunk helps you check the evidence.
+Scan a supported grocery barcode to uncover documented package-size changes, compare size history, and check available local prices before you buy.
 
-Scan a supported grocery barcode. When data is available, Shrunk shows:
+Shrunk separates size evidence from current store pricing, so you can see what changed and what the evidence actually supports.
+
+WHEN DATA IS AVAILABLE, SHRUNK SHOWS
 
 • Documented package-size changes and dated evidence
-• Available shelf price, promotion, stock, and unit cost at your selected Kroger
-• Better-value alternatives when comparable store products are available
+• Current price, promotion, stock, and unit cost at your selected Kroger-family store
+• Better-value alternatives ranked by comparable unit price
 • A clear starting point when only one package size is documented
+
+FIND YOUR STORE
+Use Current Location or search by store name, city, neighborhood, ZIP, or ZIP+4. Location and search text are resolved on your device. Shrunk sends only the derived ZIP to find nearby stores.
 
 WHERE THE DATA COMES FROM
 Package-size records come from USDA FoodData Central, Open Food Facts, published documentation, and shopper label photos after human review. Available local price, promotion, stock, and alternative data comes from Kroger's Products API for the store you choose.
@@ -68,14 +73,14 @@ FREE
 SHRUNK PRO
 • Watchlist notifications after periodic checks find a documented size change or a 5% Kroger unit-price jump
 • Weekly category digest
-• All available ranked alternatives at your selected Kroger
+• All available ranked alternatives at your selected Kroger-family store
 • Full available price and size history charts
 • Savings dashboard based on documented changes and your shopping profile
 
 $2.99/month or $14.99/year. New subscribers get a 7-day free trial on the yearly plan.
 
 INDEPENDENT BY DESIGN
-No brand pays us. No sponsors. No ads. No account, no login, no tracking. Our only job is to be on your side at the shelf.
+No brand pays us. No sponsors. No ads. No account, no login, no in-app analytics, and no tracking. Our only job is to be on your side at the shelf.
 
 Prices from Kroger. Size data from USDA FoodData Central. Product names and images from Open Food Facts (ODbL). Shrunk is not affiliated with any brand or retailer.
 

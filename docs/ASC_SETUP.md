@@ -10,6 +10,7 @@ Copy-paste checklist for creating the Shrunk record in App Store Connect (ASC). 
 |---|---|
 | Platform | iOS |
 | Name | `Shrunk: Shrinkflation Scanner` |
+| Subtitle | `Grocery sizes & unit prices` |
 | Primary language | English (U.S.) |
 | Bundle ID | `com.shrunk.app` |
 | SKU | `shrunk-ios-001` (any internal string; not user-visible) |
@@ -141,7 +142,7 @@ No HealthKit, background location, contacts, photo library, or microphone. Foreg
 ## 6. Build & Signing
 
 - Team **X4VJ56X38V** (`project.yml` → `DEVELOPMENT_TEAM`, automatic signing).
-- Marketing version **2.0.0**, build **5** — set by Task 10 in `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
+- Marketing version **2.0.0**, build **6** — set in `project.yml`; `Info.plist` reads them through `$(MARKETING_VERSION)` / `$(CURRENT_PROJECT_VERSION)`.
 - The Xcode project is generated: `xcodegen generate` before any archive. `Shrunk.xcodeproj` is not in git.
 - Archive and upload with the commands in `docs/RELEASE_CHECKLIST.md` (`xcodebuild archive` → `-exportArchive` with `ExportOptions.plist` → `xcrun altool --upload-app`), or Xcode → Product → Archive → Distribute App.
 
@@ -197,5 +198,5 @@ Privacy and compliance
 Build
 - [x] Six 6.9" screenshots re-captured from build 5, uploaded and COMPLETE; the v1 ASC set was deleted
 - [x] Reviewer note pasted (§7)
-- [x] Version 2.0.0 (5) uploaded, processed as VALID, and attached to the release
+- [x] Version 2.0.0 (6) uploaded, processed as VALID, and attached to the release
 - [ ] `scripts/acceptance.md` filled in and passing — 25/25 curated verdicts, ≥60% kitchen-scan history, ≥25/30 live prices

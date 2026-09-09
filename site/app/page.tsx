@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { AppStoreCTA } from "./_components/AppStoreCTA";
 import { StickyCta } from "./_components/StickyCta";
@@ -20,8 +21,8 @@ const FAQS: { q: string; a: React.ReactNode; plain: string }[] = [
   {
     q: "What is shrinkflation?",
     plain:
-      "Shrinkflation is when a manufacturer shrinks a product's size or quantity while keeping the price the same. The sticker price looks unchanged; you're paying more per ounce, per sheet, or per serving, and nothing on the label announces it.",
-    a: "Shrinkflation is when a manufacturer shrinks a product's size or quantity while keeping the price the same. The sticker price looks unchanged; you're paying more per ounce, per sheet, or per serving, and nothing on the label announces it.",
+      "Shrinkflation is when a product's size or quantity falls while its price stays the same or does not fall in proportion. The result is a higher cost per ounce, sheet, or serving.",
+    a: "Shrinkflation is when a product's size or quantity falls while its price stays the same or does not fall in proportion. The result is a higher cost per ounce, sheet, or serving.",
   },
   {
     q: "What are some examples of shrinkflation in 2026?",
@@ -42,25 +43,25 @@ const FAQS: { q: string; a: React.ReactNode; plain: string }[] = [
   {
     q: "How do I spot shrinkflation at the store?",
     plain:
-      "Compare the cost-per-unit printed on the shelf tag, not the sticker price, and check whether the package dimensions or count changed since your last purchase. Scanning the barcode with Shrunk does this automatically by pulling that product's size history.",
-    a: "Compare the cost-per-unit printed on the shelf tag, not the sticker price, and check whether the package dimensions or count changed since your last purchase. Scanning the barcode with Shrunk does this automatically by pulling that product's size history.",
+      "Compare the cost per unit on the shelf tag and check whether package dimensions or count changed. For supported barcodes, Shrunk shows the dated size evidence available for that product and keeps current store pricing separate.",
+    a: "Compare the cost per unit on the shelf tag and check whether package dimensions or count changed. For supported barcodes, Shrunk shows the dated size evidence available for that product and keeps current store pricing separate.",
   },
   {
     q: "Is there an app that detects shrinkflation?",
     plain:
-      "Yes — Shrunk. Point your camera at a grocery barcode and it checks the product's package-size history against USDA FoodData Central and Open Food Facts, then tells you whether it shrank, when, and by how much.",
-    a: "Yes — Shrunk. Point your camera at a grocery barcode and it checks the product's package-size history against USDA FoodData Central and Open Food Facts, then tells you whether it shrank, when, and by how much.",
+      "Yes — Shrunk. Scan or enter a supported grocery barcode to check available dated package-size records from public datasets, published documentation, and reviewed shopper contributions.",
+    a: "Yes — Shrunk. Scan or enter a supported grocery barcode to check available dated package-size records from public datasets, published documentation, and reviewed shopper contributions.",
   },
   {
     q: "Is Shrunk free?",
-    plain: `Yes. Scanning, verdicts, size history, current price and cost per unit, the browse feed, and label contributions are all free with no account required. Shrunk Pro ($${PRICE_MONTHLY}/month or $${PRICE_YEARLY}/year, with a ${TRIAL_DAYS}-day free trial on the yearly plan) adds the watchlist, alerts, unlimited alternatives, full history charts, and the savings dashboard.`,
-    a: `Yes. Scanning, verdicts, size history, current price and cost per unit, the browse feed, and label contributions are all free with no account required. Shrunk Pro ($${PRICE_MONTHLY}/month or $${PRICE_YEARLY}/year, with a ${TRIAL_DAYS}-day free trial on the yearly plan) adds the watchlist, alerts, unlimited alternatives, full history charts, and the savings dashboard.`,
+    plain: `Yes. Scanning, available size evidence, available current Kroger pricing, the browse feed, and label contributions are free with no account required. Shrunk Pro ($${PRICE_MONTHLY}/month or $${PRICE_YEARLY}/year, with a ${TRIAL_DAYS}-day free trial on the yearly plan) adds the watchlist, alerts, unlimited alternatives, full available history charts, and the savings dashboard.`,
+    a: `Yes. Scanning, available size evidence, available current Kroger pricing, the browse feed, and label contributions are free with no account required. Shrunk Pro ($${PRICE_MONTHLY}/month or $${PRICE_YEARLY}/year, with a ${TRIAL_DAYS}-day free trial on the yearly plan) adds the watchlist, alerts, unlimited alternatives, full available history charts, and the savings dashboard.`,
   },
   {
     q: "Which stores show live prices in Shrunk?",
     plain:
-      "Live pricing, current package size, and stock come from the Kroger Products API for the store you pick. Every other feature — scanning, size history, the browse feed — works regardless of where you shop.",
-    a: "Live pricing, current package size, and stock come from the Kroger Products API for the store you pick. Every other feature — scanning, size history, the browse feed — works regardless of where you shop.",
+      "Available current pricing, package size, promotion, and stock come from the Kroger Products API for the store you pick. Scanning, available size evidence, and the browse feed work without a selected store.",
+    a: "Available current pricing, package size, promotion, and stock come from the Kroger Products API for the store you pick. Scanning, available size evidence, and the browse feed work without a selected store.",
   },
   {
     q: "Does Shrunk track me?",
@@ -98,7 +99,7 @@ const appJsonLd = {
   operatingSystem: "iOS",
   applicationCategory: "ShoppingApplication",
   description:
-    "Scan grocery barcodes to see exactly which products have shrunk in size at the same price — real size history, today's shelf price at your Kroger store, and better-value alternatives.",
+    "Scan supported grocery barcodes to check documented package-size changes, available current pricing at your selected Kroger, and better-value alternatives.",
   url: SHRUNK_URL,
   offers: [
     { "@type": "Offer", name: "Free", price: "0", priceCurrency: "USD", category: "free" },
@@ -141,6 +142,14 @@ export default function ShrunkPage() {
         <div className="dot-grid absolute inset-0" />
         <div className="relative mx-auto max-w-6xl px-6 pb-24 pt-24 md:pb-32 md:pt-32">
           <div className="max-w-3xl">
+            <Image
+              src="/shrunk/app-icon.png"
+              width={72}
+              height={72}
+              priority
+              alt="Shrunk app icon"
+              className="animate-fade-up mb-6 rounded-2xl shadow-xl"
+            />
             <div className="animate-fade-up mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-1.5">
               <span
                 className="h-2 w-2 rounded-full animate-glow-pulse"
@@ -159,9 +168,9 @@ export default function ShrunkPage() {
             </h1>
 
             <p className="animate-fade-up-delay-1 mt-6 max-w-xl text-lg leading-relaxed text-muted md:text-xl">
-              Same price tag. Less product inside. Most people never notice. Scan a barcode
-              and Shrunk shows you exactly when the package shrunk, by how much, today&apos;s
-              price at your store, and what to buy instead.
+              Packages change quietly. Scan a supported grocery barcode to check documented
+              size history, see available current pricing at your selected Kroger, and compare
+              better-value alternatives.
             </p>
 
             <div className="animate-fade-up-delay-2 mt-10 flex flex-col gap-4 sm:flex-row">
@@ -184,17 +193,17 @@ export default function ShrunkPage() {
           <Step
             number="01"
             title="Scan"
-            body="Point your camera at any grocery barcode. No account, no sign-up — you're scanning in seconds."
+            body="Scan or enter a supported grocery barcode. No account or sign-up required."
           />
           <Step
             number="02"
             title="Get the verdict"
-            body="Shrunk checks the package's size history against USDA FoodData Central and Open Food Facts and tells you whether it shrank, when, and by how much — with dates."
+            body="When enough dated evidence is available, Shrunk shows whether the package changed, when, and by how much."
           />
           <Step
             number="03"
             title="Compare & switch"
-            body="See today's price and cost per unit at your Kroger store, plus better-value alternatives ranked from the same shelf."
+            body="See available current price and unit cost at your selected Kroger, plus comparable alternatives when available."
           />
         </div>
       </section>
@@ -234,8 +243,8 @@ export default function ShrunkPage() {
       <section id="pricing" className="mx-auto max-w-6xl px-6 py-20 md:py-28">
         <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Free vs. Pro</h2>
         <p className="mt-2 max-w-xl text-muted">
-          Scanning is free, forever. Pro is an optional subscription for people who want to be
-          watched over, not just answered once.
+          Scanning is free. Pro adds ongoing monitoring, deeper available history, and more
+          ranked alternatives.
         </p>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">
