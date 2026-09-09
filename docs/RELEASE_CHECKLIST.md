@@ -333,7 +333,7 @@ Work through `docs/ASC_SETUP.md` **§2** in App Store Connect: the `Shrunk Pro` 
 `com.shrunk.pro.yearly` ($14.99, subscription level 1) and `com.shrunk.pro.monthly`
 ($2.99, level 2), the 7-day Free Trial introductory offer on the **yearly product
 only**, and App Store Server Notifications **Version 2** with both the Production
-and Sandbox URLs set to `$API/v1/appstore/notifications`.
+and Sandbox URLs set to `https://pulse.stackcurious.com/api/assn/shrunk`, which verifies and forwards valid notifications to `$API/v1/appstore/notifications`.
 
 Then press ASC's **Test Notification** button and confirm it returns 200:
 

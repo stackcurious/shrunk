@@ -2,7 +2,7 @@
 
 Run this on the TestFlight build, on a real iPhone, before submitting. Fill in the tables; the filled file is the evidence, and `docs/ASC_SETUP.md`'s pre-submission checklist refuses to pass without it.
 
-**Build:** 2.0.0 (5) · **Date:** ____ · **Device:** ____ · **Store:** Kroger ____ (Cincinnati), locationId ____ · **API:** ____
+**Build:** 2.0.0 (5) · **Date:** 2026-09-08 · **Device:** paired iPhone 11 (human checks pending) · **Store:** Kroger Hyde Park (Cincinnati), locationId 01400355 · **API:** https://shrunk-api.stackcurious.workers.dev
 
 ---
 
@@ -14,7 +14,7 @@ python3 scripts/hit_rate.py --api "$API" --curated data/trending.json | tee scri
 
 **Pass:** `with_history=25/25` (a verdict needs two same-kind observations) **and** `shrink_detected=25/25` (every curated entry is a documented shrink, so anything else is a data bug).
 
-Summary line: `____________________________________________`
+Summary line: `found=25/25 with_history=25/25 shrink_detected=25/25` (production API, 2026-09-08)
 
 | Failure | Barcode | What the observations looked like | Fix |
 |---|---|---|---|

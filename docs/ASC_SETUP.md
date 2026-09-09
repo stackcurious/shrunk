@@ -76,10 +76,10 @@ ASC → app → **General → App Information → App Store Server Notifications
 | Field | Value |
 |---|---|
 | Version | **Version 2** |
-| Production Server URL | `https://<worker>/v1/appstore/notifications` |
-| Sandbox Server URL | `https://<worker>/v1/appstore/notifications` |
+| Production Server URL | `https://pulse.stackcurious.com/api/assn/shrunk` |
+| Sandbox Server URL | `https://pulse.stackcurious.com/api/assn/shrunk` |
 
-Replace `<worker>` with the origin printed by `wrangler deploy` (for example `shrunk-api.stackcurious.workers.dev`). The endpoint verifies Apple's signature against a pinned copy of Apple Root CA - G3, needs no shared secret, and answers `401 {"error":"invalid_signature"}` to anything it cannot verify — which is what ASC's **Test Notification** button will surface if the URL is wrong.
+Pulse verifies Apple's signature against Apple Root CA - G3, records the event, and forwards the unchanged signed payload to `https://shrunk-api.stackcurious.workers.dev/v1/appstore/notifications`. The Worker verifies it again before changing entitlement state. Neither endpoint uses a shared secret.
 
 - Upload a screenshot of the paywall for review (capture on a real device).
 - The removed `com.shrunk.pro.lifetime` non-consumable has no purchases; delete it in ASC if it was ever created, or leave it marked "Removed from Sale". The app no longer references it.
@@ -176,25 +176,25 @@ If a build ever prompts for encryption answers anyway, the correct chain is: "Do
 ## Pre-submission checklist
 
 App record
-- [ ] App record exists with bundle id `com.shrunk.app`, team X4VJ56X38V, Push Notifications capability enabled
-- [ ] Name, subtitle, promotional text, keywords, description **including the subscription disclosure**, and What's New pasted from `docs/APP_STORE_LISTING.md`
-- [ ] Support, Marketing, Privacy Policy and EULA/Terms URLs set, and all four load in a browser
-- [ ] Age rating completed → 4+
+- [x] App record exists with bundle id `com.shrunk.app`, team X4VJ56X38V, Push Notifications capability enabled
+- [x] Name, subtitle, promotional text, keywords, description **including the subscription disclosure**, and applicable version metadata are current
+- [x] Support, Marketing, Privacy Policy and EULA/Terms URLs set, and all four load in a browser
+- [x] Age rating completed → 4+
 
 Subscriptions (details in §2)
-- [ ] Subscription group `Shrunk Pro` created
-- [ ] `com.shrunk.pro.yearly` ($14.99/yr, level 1) and `com.shrunk.pro.monthly` ($2.99/mo, level 2) created and submitted **with the build**
-- [ ] 7-day Free Trial introductory offer on the yearly product only
-- [ ] Paywall screenshot uploaded for subscription review
-- [ ] App Store Server Notifications set to Version 2, both URLs pointing at `https://<worker>/v1/appstore/notifications`, and ASC's **Test Notification** returns 200
+- [x] Subscription group `Shrunk Pro` created and staged in review submission `43c80ddb-…`
+- [x] `com.shrunk.pro.yearly` ($14.99/yr, level 1) and `com.shrunk.pro.monthly` ($2.99/mo, level 2) created and staged **with the build**
+- [x] 7-day Free Trial introductory offer on the yearly product only
+- [x] Paywall screenshot uploaded and COMPLETE for both subscription products
+- [x] App Store Server Notifications set to Version 2 for production and sandbox at `https://pulse.stackcurious.com/api/assn/shrunk`; Pulse verifies and forwards valid notifications to the Worker (Apple test notification previously verified)
 
 Privacy and compliance
 - [ ] App Privacy re-answered per §4 — **"Yes, we collect data"**, five data types, all *not linked* and *not used for tracking*
-- [ ] `ITSAppUsesNonExemptEncryption=false` present in the built Info.plist (§8)
-- [ ] `https://stackcurious.com/shrunk/privacy` and `/terms` publish the current `docs/PRIVACY_POLICY.md` and `docs/TERMS.md`
+- [x] `ITSAppUsesNonExemptEncryption=false` present in the built Info.plist (§8)
+- [x] `https://stackcurious.com/shrunk/privacy` and `/terms` publish the current `docs/PRIVACY_POLICY.md` and `docs/TERMS.md`
 
 Build
-- [ ] Six 6.9" screenshots re-captured on a device from the 2.0.0 build (`docs/APP_STORE_LISTING.md`); the v1 set deleted
-- [ ] Reviewer note pasted (§7)
-- [ ] Version 2.0.0 (5) uploaded, processed, and attached to the release
+- [x] Six 6.9" screenshots re-captured from build 5, uploaded and COMPLETE; the v1 ASC set was deleted
+- [x] Reviewer note pasted (§7)
+- [x] Version 2.0.0 (5) uploaded, processed as VALID, and attached to the release
 - [ ] `scripts/acceptance.md` filled in and passing — 25/25 curated verdicts, ≥60% kitchen-scan history, ≥25/30 live prices

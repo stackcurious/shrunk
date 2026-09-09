@@ -137,9 +137,9 @@ Capture six on a physical device running the 2.0.0 build, signed into a StoreKit
 
 | # | File | Screen | Why |
 |---|---|---|---|
-| 1 | `01_result_shrunk.png` | Result view for a curated product with a clear shrink verdict, size history chart and the live-price panel showing "Prices from Kroger" | The core promise, in one shot |
-| 2 | `02_scan.png` | Scanner with the reticle over a real package | Shows the interaction |
-| 3 | `03_live_price.png` | Result view scrolled to the live-price panel: regular/promo, cost per unit, stock, attribution | The v2 differentiator |
+| 1 | `01_result_shrunk.png` | Result view for a curated product with a clear shrink verdict, dated before/after sizes, unit price, and Kroger regular/promo pricing | The core promise and the evidence behind it |
+| 2 | `02_scan.png` | Scanner with the reticle, live searching state, manual barcode entry, and recent scans | Shows both ways to start a scan |
+| 3 | `03_live_price.png` | Result view with the current package size, current unit price, Kroger price, stock and attribution | The live store-price experience |
 | 4 | `04_contribute.png` | Label capture confirm sheet with a parsed net weight | The growth loop, and it is free |
 | 5 | `05_alerts.png` | Alerts feed with a `sizeDrop` and a `priceHike` entry | What Pro delivers |
 | 6 | `06_paywall.png` | Paywall with yearly preselected, "Save 58%", the 7-day trial, and the terms/privacy links | Also the screenshot ASC asks for when reviewing the subscription |
