@@ -4,9 +4,11 @@ Read this first in a new session. Memory/ledgers may lag; this file and `git log
 
 ## Headline
 
-**Shrunk 2.0.0 build 6 is being prepared for final acceptance.** Build 5 remains processed as `VALID`, attached to version `5f72dc64-9424-49a8-80b9-b18eeca085ba`, and available to the all-builds internal TestFlight group. Review submission `43c80ddb-1645-4a11-bfe3-15e0b050c386` is `READY_FOR_REVIEW` with four ready items: the app version, Shrunk Pro group, yearly plan, and monthly plan. It has not been submitted.
+**Shrunk 2.0.0 build 6 is uploaded and ready for final device acceptance.** App Store Connect processed build `86b2c0a9-ac66-41e7-89b0-73e60c801e85` as `VALID`, selected it for version `5f72dc64-9424-49a8-80b9-b18eeca085ba`, and includes it in the all-builds internal TestFlight group. Review submission `43c80ddb-1645-4a11-bfe3-15e0b050c386` remains `READY_FOR_REVIEW` with four ready items: the app version, Shrunk Pro group, yearly plan, and monthly plan. It has not been submitted.
 
 Build 6 removes the ZIP-only setup friction. Store selection now accepts a city, neighborhood, store name, five-digit ZIP, or ZIP+4, and offers an explicit **Use Current Location** action. Apple Maps resolves place text and current location on-device; Shrunk sends only the derived ZIP to its existing Kroger endpoint, never the coordinate or search text. Returned Kroger-family stores retain their coordinates, are ranked by distance on-device, and show distance plus a clear **Nearest** marker. Denied location permission leaves typed search available. Privacy disclosures and the public policy now describe this transient on-device use.
+
+Validated for build 6: focused store-picker and Kroger DTO tests passed; the complete deterministic non-StoreKit unit suite passed before release versioning; the generic Release simulator build and signed device archive passed. A later broad XCTest rerun hit the machine's known simulator worker-launch stall before executing tests and was cancelled; it produced no app test failure. The signed development build is installed and open on the paired iPhone 11 for the remaining location/search acceptance. The public privacy update is live in Vercel deployment `dpl_7gd6jLzbpfUvtymciRc1U22WD3TG` and verified through `stackcurious.com/shrunk/privacy`.
 
 Build 5 changes the common scan path: Result identifies documented package downsizing separately from price evidence, shows the evidence source and current unit price above the fold, uses correct mass/volume/count units, and pins the next useful action. Scanner adds prominent manual entry and validates the GS1 check digit for camera and typed barcodes. Onboarding reaches value before purchase, Watch intent survives the Pro sheet, and notification permission is requested only after a successful Watch action. Every crowd observation remains pending for human label review before it can publish or alert. Build 5 also adds the Scanned Delta app icon and a matching static launch screen.
 
@@ -45,7 +47,7 @@ User-only:
 4. Kroger written-permission reply (Gmail thread `1a043dfa17862f3c`, sent 2026-08-27) — none yet; `KROGER_PERSIST=on` until then, `POST /v1/admin/purge-kroger` is the retraction.
 
 Engineering, next:
-- Finish build 6 validation, upload it, attach it to version 2.0.0, and test store search/current location on the paired iPhone 11. After on-device acceptance passes, submit the already-prepared four-item review submission `43c80ddb-…`.
+- On the paired iPhone 11, test **Use Current Location**, a word search such as `Kroger`, and a ZIP search. Confirm that the closest result is first and a selected store supplies live Kroger pricing. After acceptance passes, submit the already-prepared four-item review submission `43c80ddb-…`.
 - Optional value work: import archived FDC releases (2019–2025) for more "before" points; the digest/sweep run-collapse question in spec §5.1.
 - Hygiene: `ProductThumb.swift`/`StatBox` were deleted; the `.claude/worktrees/agent-a13336e8bb2ff43b9` worktree is merged and harness-locked — safe to remove.
 
