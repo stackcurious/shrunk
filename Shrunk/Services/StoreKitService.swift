@@ -57,6 +57,17 @@ final class StoreKitService: ObservableObject {
     }
 
     func bootstrap() async {
+        // UI tests must never attach to StoreKit's transaction stream. On
+        // simulator hosts where storekitd is unhealthy, merely creating that
+        // listener can keep the app's main actor busy and make XCTest unable
+        // to take an accessibility snapshot. The screenshot entitlement is
+        // deterministic and compile-time disabled in Release builds.
+        if UITestingOverrides.isActive {
+            loadError = nil
+            isTrialEligible = true
+            isProUser = UITestingOverrides.forcesPro
+            return
+        }
         if transactionListener == nil {
             transactionListener = listenForTransactions()
         }

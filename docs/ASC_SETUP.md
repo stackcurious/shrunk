@@ -112,13 +112,14 @@ Answer **None** to every content question. Shrunk has no objectionable content, 
 
 Answer **No** to tracking on every data type, and **No** to "Do you use data for tracking purposes?" — there is no advertising SDK, no analytics SDK, no ad identifier, and nothing is shared with data brokers. App Tracking Transparency is therefore not required and the app never shows the ATT prompt.
 
-Not collected, and must stay unticked: Contact Info, Health & Fitness, Financial Info (Apple handles payment — we never see it), **Location** (the app asks for a *store*, never the device's location, and requests no location permission), Contacts, Search History, Browsing History, Sensitive Info, Diagnostics, Usage Data.
+Not collected, and must stay unticked: Contact Info, Health & Fitness, Financial Info (Apple handles payment — we never see it), **Location** (the optional one-time location is processed and discarded on-device; no coordinate is transmitted to Shrunk), Contacts, Search History, Browsing History, Sensitive Info, Diagnostics, Usage Data.
 
 Supporting facts if a reviewer asks:
 
 - **No account, no login.** There is no user identity to link anything to.
 - **Scan history stays on the device** (`UserDefaults`) and is never uploaded.
-- **Kroger-proxied requests** (`/v1/kroger/*`) carry the barcode/ZIP and store id, plus the same `X-Device-Id` header every API call carries (used for rate limiting) — never the push token.
+- **Store search** resolves typed places and an optional one-time location through Apple on-device, sends only the resulting ZIP through `/v1/kroger/locations`, and ranks Kroger's returned store coordinates on-device. Exact coordinates and search text are never sent to Shrunk.
+- **Kroger-proxied product requests** carry the barcode/ZIP and store id, plus the same `X-Device-Id` header every Shrunk API call carries (used for rate limiting) — never the location coordinate or push token.
 - **Photos are transient.** They exist in R2 only while a submission is pending human review and are deleted on accept and on reject alike.
 
 ---
@@ -133,7 +134,7 @@ These are declared in `Shrunk/Resources/Info.plist` — confirm they survive the
 - Push Notifications — remote alerts from the Worker (watchlist, digest, verified cases) plus local notifications.
 - `NSAppTransportSecurity` → `NSAllowsLocalNetworking` — development only, so the app can talk to `wrangler dev` on `localhost:8787`. It permits **local** connections only, does not weaken ATS for any remote host, and needs no justification to review.
 
-No HealthKit, no location, no contacts, no photo library, no microphone. The label-capture flow uses the camera, never the photo library, so `NSPhotoLibraryUsageDescription` is deliberately absent.
+No HealthKit, background location, contacts, photo library, or microphone. Foreground location is requested only after “Use Current Location” and is discarded after ranking nearby stores. The label-capture flow uses the camera, never the photo library, so `NSPhotoLibraryUsageDescription` is deliberately absent.
 
 ---
 

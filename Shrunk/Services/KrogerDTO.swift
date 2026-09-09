@@ -17,10 +17,16 @@ struct StoreLocationDTO: Decodable {
         let zipCode: String
     }
 
+    struct GeolocationDTO: Decodable {
+        let latitude: Double?
+        let longitude: Double?
+    }
+
     let locationId: String
     let chain: String
     let name: String
     let address: AddressDTO
+    let geolocation: GeolocationDTO?
 
     func toModel() -> StoreLocation {
         StoreLocation(
@@ -30,7 +36,9 @@ struct StoreLocationDTO: Decodable {
             addressLine1: address.addressLine1,
             city: address.city,
             state: address.state,
-            zipCode: address.zipCode
+            zipCode: address.zipCode,
+            latitude: geolocation?.latitude,
+            longitude: geolocation?.longitude
         )
     }
 }

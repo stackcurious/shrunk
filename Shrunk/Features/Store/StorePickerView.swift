@@ -5,7 +5,6 @@ struct StorePickerView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(StorePickerViewModel.storeNameKey) private var storeName: String = ""
 
-    /// Onboarding embeds the picker without navigation chrome.
     let embedded: Bool
 
     init(embedded: Bool = false) {
@@ -13,78 +12,83 @@ struct StorePickerView: View {
     }
 
     var body: some View {
-        if embedded {
-            // No `NavigationStack` around this one, so `.searchable` has no bar
-            // to live in — the ZIP gets a numeric field in its own section
-            // instead, which is what a `Form` would do anyway.
-            List {
-                Section {
-                    zipField
-                }
-                storeSections
-            }
-            .listStyle(.insetGrouped)
-            .scrollDismissesKeyboard(.interactively)
-        } else {
-            NavigationStack {
-                List {
-                    storeSections
-                }
-                .listStyle(.insetGrouped)
-                .searchable(text: $vm.zip, placement: .navigationBarDrawer(displayMode: .always),
-                            prompt: "ZIP code")
-                .onSubmit(of: .search) {
-                    Task { await vm.search() }
-                }
-                .navigationTitle("Your store")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Done") { dismiss() }
-                            .fontWeight(.semibold)
-                    }
+        Group {
+            if embedded {
+                storeList
+            } else {
+                NavigationStack {
+                    storeList
+                        .navigationTitle("Choose a store")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") { dismiss() }
+                                    .fontWeight(.semibold)
+                            }
+                        }
                 }
             }
         }
     }
 
-    // MARK: - ZIP entry (embedded only)
+    private var storeList: some View {
+        List {
+            findSection
+            if !storeName.isEmpty { selectedSection }
+            resultSections
+        }
+        .listStyle(.insetGrouped)
+        .scrollDismissesKeyboard(.interactively)
+    }
 
-    private var zipField: some View {
-        HStack(spacing: 12) {
-            TextField("ZIP code", text: $vm.zip)
-                .keyboardType(.numberPad)
-                .monospacedDigit()
-                .submitLabel(.search)
-            Button("Find") { Task { await vm.search() } }
-                .buttonStyle(.borderedProminent)
-                .disabled(!vm.canSearch)
+    private var findSection: some View {
+        Section {
+            Button {
+                Task { await vm.useCurrentLocation() }
+            } label: {
+                Label("Use Current Location", systemImage: "location.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .disabled(vm.state == .loading)
+
+            HStack(spacing: 10) {
+                TextField("City, neighborhood, store, or ZIP", text: $vm.query)
+                    .textContentType(.location)
+                    .submitLabel(.search)
+                    .onSubmit { Task { await vm.search() } }
+                    .accessibilityLabel("Search location")
+
+                Button("Search") { Task { await vm.search() } }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!vm.canSearch || vm.state == .loading)
+            }
+        } header: {
+            Text("Find nearby Kroger-family stores")
+        } footer: {
+            Text("Use your location once, or search by place. Shrunk saves only the store you choose.")
         }
     }
 
-    // MARK: - Results
+    private var selectedSection: some View {
+        Section("Your store") {
+            HStack(spacing: 12) {
+                Text(storeName)
+                Spacer(minLength: 8)
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.verdictGoodDeep)
+                    .accessibilityHidden(true)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue("Selected")
+        }
+    }
 
     @ViewBuilder
-    private var storeSections: some View {
+    private var resultSections: some View {
         switch vm.state {
         case .idle:
-            // The screen used to give no sign a store was already chosen
-            // (review S10) — so it read as unconfigured every time it opened.
-            if !storeName.isEmpty {
-                Section("Your store") {
-                    HStack(spacing: 12) {
-                        Text(storeName)
-                            .font(.body)
-                        Spacer(minLength: 8)
-                        Image(systemName: "checkmark")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Color.shrunkRed)
-                            .accessibilityLabel("Selected")
-                    }
-                }
-            }
             Section {
-                Text("Pick a Kroger store to add available shelf prices, stock, and unit costs to scans.")
+                Text("Choose a store to add available shelf prices, promotions, stock, and unit costs to scans.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } footer: {
@@ -92,15 +96,17 @@ struct StorePickerView: View {
             }
         case .loading:
             Section {
-                HStack {
-                    Spacer()
+                HStack(spacing: 10) {
                     ProgressView()
-                    Spacer()
+                    Text("Finding nearby stores…")
+                        .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .accessibilityElement(children: .combine)
             }
         case .empty:
             Section {
-                Text("No Kroger stores within 15 miles of that ZIP.")
+                Text("No Kroger-family stores were found nearby. Try another city or ZIP.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } footer: {
@@ -116,12 +122,12 @@ struct StorePickerView: View {
             }
         case .loaded(let stores):
             Section {
-                ForEach(stores) { store in
-                    Button { vm.select(store) } label: { row(store) }
+                ForEach(Array(stores.enumerated()), id: \.element.id) { index, store in
+                    Button { vm.select(store) } label: { row(store, isNearest: index == 0) }
                         .buttonStyle(.plain)
                 }
             } header: {
-                Text("Nearby stores")
+                Text(stores.first?.distanceMiles == nil ? "Nearby stores" : "Closest stores")
             } footer: {
                 attribution
             }
@@ -134,23 +140,42 @@ struct StorePickerView: View {
             .padding(.top, 8)
     }
 
-    private func row(_ store: StoreLocation) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.displayName)
-                    .font(.body)
+    private func row(_ store: StoreLocation, isNearest: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(store.displayName)
+                        .font(.body)
+                    if isNearest, store.distanceMiles != nil {
+                        Text("Nearest")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Color.verdictGoodDeep)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.verdictGoodDeep.opacity(0.12), in: Capsule())
+                    }
+                }
                 Text(store.addressLine)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let distance = store.distanceText {
+                    Text(distance)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 8)
             if vm.selectedId == store.id {
-                Image(systemName: "checkmark")
+                Image(systemName: "checkmark.circle.fill")
                     .font(.body.weight(.semibold))
-                    .foregroundStyle(Color.shrunkRed)
+                    .foregroundStyle(Color.verdictGoodDeep)
+                    .accessibilityHidden(true)
             }
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([store.displayName, store.addressLine, store.distanceText].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityValue(vm.selectedId == store.id ? "Selected" : "")
     }
 }

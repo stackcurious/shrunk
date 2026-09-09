@@ -34,9 +34,33 @@ final class StubTrendingFeed: TrendingFeedProviding, @unchecked Sendable {
     func fetch() async -> TrendingFeed { feed }
 }
 
+@MainActor
+final class StubStoreLocationResolver: StoreLocationResolving {
+    var currentResult: Result<ResolvedStorePlace, Error> = .failure(StoreLocationResolutionError.unavailable)
+    var namedResult: Result<ResolvedStorePlace, Error> = .failure(StoreLocationResolutionError.placeNotFound)
+    private(set) var currentRequests = 0
+    private(set) var namedQueries: [String] = []
+
+    func currentPlace() async throws -> ResolvedStorePlace {
+        currentRequests += 1
+        return try currentResult.get()
+    }
+
+    func resolvePlace(named query: String) async throws -> ResolvedStorePlace {
+        namedQueries.append(query)
+        return try namedResult.get()
+    }
+}
+
 extension StoreLocation {
-    static func fixture(id: String = "01400943", name: String = "Hyde Park") -> StoreLocation {
+    static func fixture(
+        id: String = "01400943",
+        name: String = "Hyde Park",
+        latitude: Double? = nil,
+        longitude: Double? = nil
+    ) -> StoreLocation {
         StoreLocation(id: id, chain: "KROGER", name: name, addressLine1: "3760 Paxton Ave",
-                      city: "Cincinnati", state: "OH", zipCode: "45209")
+                      city: "Cincinnati", state: "OH", zipCode: "45209",
+                      latitude: latitude, longitude: longitude)
     }
 }

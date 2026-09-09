@@ -4,7 +4,9 @@ Read this first in a new session. Memory/ledgers may lag; this file and `git log
 
 ## Headline
 
-**Shrunk 2.0.0 build 5 is uploaded and ready for final acceptance, with its matching production services deployed.** App Store Connect has processed build 5 as `VALID`, attached it to version `5f72dc64-9424-49a8-80b9-b18eeca085ba`, and made it available to the all-builds internal TestFlight group. Review submission `43c80ddb-1645-4a11-bfe3-15e0b050c386` is `READY_FOR_REVIEW` with four ready items: the app version, Shrunk Pro group, yearly plan, and monthly plan. It has not been submitted.
+**Shrunk 2.0.0 build 6 is being prepared for final acceptance.** Build 5 remains processed as `VALID`, attached to version `5f72dc64-9424-49a8-80b9-b18eeca085ba`, and available to the all-builds internal TestFlight group. Review submission `43c80ddb-1645-4a11-bfe3-15e0b050c386` is `READY_FOR_REVIEW` with four ready items: the app version, Shrunk Pro group, yearly plan, and monthly plan. It has not been submitted.
+
+Build 6 removes the ZIP-only setup friction. Store selection now accepts a city, neighborhood, store name, five-digit ZIP, or ZIP+4, and offers an explicit **Use Current Location** action. Apple Maps resolves place text and current location on-device; Shrunk sends only the derived ZIP to its existing Kroger endpoint, never the coordinate or search text. Returned Kroger-family stores retain their coordinates, are ranked by distance on-device, and show distance plus a clear **Nearest** marker. Denied location permission leaves typed search available. Privacy disclosures and the public policy now describe this transient on-device use.
 
 Build 5 changes the common scan path: Result identifies documented package downsizing separately from price evidence, shows the evidence source and current unit price above the fold, uses correct mass/volume/count units, and pins the next useful action. Scanner adds prominent manual entry and validates the GS1 check digit for camera and typed barcodes. Onboarding reaches value before purchase, Watch intent survives the Pro sheet, and notification permission is requested only after a successful Watch action. Every crowd observation remains pending for human label review before it can publish or alert. Build 5 also adds the Scanned Delta app icon and a matching static launch screen.
 
@@ -43,7 +45,7 @@ User-only:
 4. Kroger written-permission reply (Gmail thread `1a043dfa17862f3c`, sent 2026-08-27) — none yet; `KROGER_PERSIST=on` until then, `POST /v1/admin/purge-kroger` is the retraction.
 
 Engineering, next:
-- After on-device acceptance passes, submit the already-prepared four-item review submission `43c80ddb-…`.
+- Finish build 6 validation, upload it, attach it to version 2.0.0, and test store search/current location on the paired iPhone 11. After on-device acceptance passes, submit the already-prepared four-item review submission `43c80ddb-…`.
 - Optional value work: import archived FDC releases (2019–2025) for more "before" points; the digest/sweep run-collapse question in spec §5.1.
 - Hygiene: `ProductThumb.swift`/`StatBox` were deleted; the `.claude/worktrees/agent-a13336e8bb2ff43b9` worktree is merged and harness-locked — safe to remove.
 

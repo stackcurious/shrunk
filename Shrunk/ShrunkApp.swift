@@ -98,7 +98,9 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if hasCompletedOnboarding {
+            if UITestingOverrides.showsStorePicker {
+                StorePickerView()
+            } else if hasCompletedOnboarding {
                 MainTabsView()
             } else {
                 OnboardingContainerView {

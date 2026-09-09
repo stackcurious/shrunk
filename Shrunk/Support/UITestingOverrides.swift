@@ -47,6 +47,12 @@ enum UITestingOverrides {
     /// off, which is how the paywall pass reaches the paywall at all.
     static var forcesPro: Bool { isActive && value(for: "-ui-testing-pro") != "0" }
 
+    /// Opens the real store picker as the root view for a deterministic local
+    /// design capture without navigating through the UI-test runner.
+    static var showsStorePicker: Bool {
+        isActive && ProcessInfo.processInfo.arguments.contains("-ui-testing-store-picker")
+    }
+
     // MARK: - Fixture content
 
     /// A real OCR-shaped label line. The confirm sheet's quantity is whatever

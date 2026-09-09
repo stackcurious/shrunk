@@ -44,8 +44,10 @@
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
-    <key>NSCameraUsageDescription</key>
-    <string>Shrunk uses your camera to scan product barcodes and, when you choose to contribute, to photograph a product label so we can read its net weight.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Shrunk uses your camera to scan product barcodes and, when you choose to contribute, to photograph a product label so we can read its net weight.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Shrunk uses your location only when you ask to find nearby Kroger stores. Your location is not stored.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

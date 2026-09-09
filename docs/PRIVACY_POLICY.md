@@ -16,6 +16,7 @@ Shrunk has no accounts and no logins. We do not sell your data, we run no ads, w
 | A random device id (a UUID generated on your phone at first launch) | First launch | On your device, and in a `devices` row in our database | Until you ask us to delete it |
 | Your Apple push token | Only if you allow notifications | Same `devices` row | Until you turn notifications off or ask us to delete it |
 | The Kroger store you picked (a store id, not your location) | When you pick a store | On your device and in the `devices` row | Until you change or clear it |
+| Your approximate location | Only when you tap “Use Current Location” to find stores | Processed transiently on your device through Apple Location Services; never sent to or stored by Shrunk | Discarded after nearby stores are ranked |
 | Your category and notification preferences | Onboarding and Settings | On your device and in the `devices` row | Until you change them |
 | Your watchlist (product barcodes and brands) | When you add a product | On your device and in a `watches` row | Until you remove the item |
 | A label photo you choose to contribute | Uploaded to our server with every contribution | Written to Cloudflare R2 in a private human-review queue | **Deleted the moment it is reviewed**, whether accepted or rejected |
@@ -24,7 +25,7 @@ Shrunk has no accounts and no logins. We do not sell your data, we run no ads, w
 | Your subscription status | After a purchase or restore | Apple's signed transaction is verified and reduced to an expiry date in the `devices` row | Until it expires or you ask us to delete it |
 | Your recent scans | Every scan | **On your device only** (`UserDefaults`), never uploaded | Until you tap "Clear scan history" or delete the app |
 
-**Shrunk never collects:** your name, email address, postal address, phone number, precise location, contacts, photo library, health data, payment details, or any advertising identifier. There is no advertising SDK and no analytics SDK in the app.
+**Shrunk never collects:** your name, email address, postal address, phone number, device location, contacts, photo library, health data, payment details, or any advertising identifier. If you tap “Use Current Location,” Apple Location Services processes a one-time location on your device to find and rank nearby stores; Shrunk does not transmit or retain the coordinate. There is no advertising SDK and no analytics SDK in the app.
 
 ## Label photos
 
@@ -42,7 +43,8 @@ Shrunk Pro is an auto-renewable subscription sold by Apple. Apple handles paymen
 
 - **Cloudflare** — hosts our API, database, photo storage and cache (United States).
 - **Apple** — delivers push notifications and processes subscriptions.
-- **Kroger** — when you have a store selected, we ask Kroger's Products API for that store's price and size for the barcode you scanned; we send the barcode and the store id. To find stores near you, we send the ZIP code you type to Kroger's Locations API. To find alternatives, we send the product's category as a search term to Kroger's Products API. Neither the ZIP code nor the category is stored by us, and **we never send your device id, push token, or anything else about you.**
+- **Apple Location Services and MapKit** — only after you tap “Use Current Location” or search for a place, Apple resolves that location or search text on the device to a ZIP and coordinate. The coordinate is used on the device to rank returned stores and is then discarded.
+- **Kroger** — when you have a store selected, we ask Kroger's Products API for that store's price and size for the barcode you scanned; we send the barcode and the store id. To find stores, we send only the ZIP resolved from your location or place search to Kroger's Locations API. To find alternatives, we send the product's category as a search term to Kroger's Products API. Neither the ZIP nor the category is stored by us, and **we never send Kroger your device id, push token, coordinate, or search text.**
 - **USDA FoodData Central** and **Open Food Facts** — queried by barcode when a product is new to us, to fill in a name and image.
 
 Nobody else. We do not sell, rent or share data with advertisers, data brokers or analytics companies.

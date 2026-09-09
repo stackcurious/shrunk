@@ -19,6 +19,8 @@ final class KrogerDTOTests: XCTestCase {
         XCTAssertEqual(store.displayName, "Kroger Hyde Park")
         XCTAssertEqual(store.addressLine, "3760 Paxton Ave · Cincinnati, OH")
         XCTAssertEqual(store.zipCode, "45209")
+        XCTAssertEqual(store.latitude, 39.14)
+        XCTAssertEqual(store.longitude, -84.42)
     }
 
     func test_liveProduct_decodesAndMaps() throws {

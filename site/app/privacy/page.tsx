@@ -53,6 +53,12 @@ const STORED: {
     howLong: "Until you change or clear it",
   },
   {
+    what: "Your approximate location",
+    when: "Only when you tap Use Current Location to find stores",
+    where: "Processed transiently on your device through Apple Location Services; never sent to or stored by Shrunk",
+    howLong: "Discarded after nearby stores are ranked",
+  },
+  {
     what: "Your category and notification preferences",
     when: "Onboarding and Settings",
     where: (
@@ -166,9 +172,11 @@ export default function ShrunkPrivacy() {
 
           <p className="mt-5">
             <strong className="text-foreground">Shrunk never collects:</strong> your name, email
-            address, postal address, phone number, precise location, contacts, photo library,
-            health data, payment details, or any advertising identifier. There is no advertising
-            SDK and no analytics SDK in the app.
+            address, postal address, phone number, device location, contacts, photo library,
+            health data, payment details, or any advertising identifier. If you tap Use Current
+            Location, Apple Location Services processes a one-time location on your device to
+            find and rank nearby stores; Shrunk does not transmit or retain the coordinate. There
+            is no advertising SDK and no analytics SDK in the app.
           </p>
         </Section>
 
@@ -220,19 +228,21 @@ export default function ShrunkPrivacy() {
               photo storage and cache (United States).
             </li>
             <li>
-              <strong className="text-foreground">Apple</strong> — delivers push notifications
-              and processes subscriptions.
+              <strong className="text-foreground">Apple</strong> — delivers push notifications,
+              processes subscriptions, and resolves an optional one-time location or typed place
+              on your device into a ZIP and coordinate. The coordinate ranks stores on-device and
+              is then discarded.
             </li>
             <li>
               <strong className="text-foreground">Kroger</strong> — when you have a store
               selected, we ask Kroger&apos;s Products API for that store&apos;s price and size
-              for the barcode you scanned; we send the barcode and the store id. To find stores
-              near you, we send the ZIP code you type to Kroger&apos;s Locations API. To find
-              alternatives, we send the product&apos;s category as a search term to
-              Kroger&apos;s Products API. Neither the ZIP code nor the category is stored by us,
+              for the barcode you scanned; we send the barcode and the store id. To find stores,
+              we send only the ZIP resolved from your location or place search to Kroger&apos;s
+              Locations API. To find alternatives, we send the product&apos;s category as a search
+              term to Kroger&apos;s Products API. Neither the ZIP nor the category is stored by us,
               and{" "}
               <strong className="text-foreground">
-                we never send your device id, push token, or anything else about you.
+                we never send Kroger your device id, push token, coordinate, or search text.
               </strong>
             </li>
             <li>
